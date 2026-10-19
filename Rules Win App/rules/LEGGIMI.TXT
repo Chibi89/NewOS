@@ -1,0 +1,18 @@
+================================================================================
+CARTELLA DELLE REGOLE UFFICIALI DI SISTEMA (C:\NewOS\Rules\)
+================================================================================
+I file con estensione .NOR (NewOS Official Rule) sono file protetti e cifrati
+proprietari del sistema operativo NewOS V1.
+
+MODALITA' DI ACCESSO:
+1. Ambiente NewOS:
+   - Accessibili ESCLUSIVAMENTE all'interno dell'ambiente Desktop autenticato
+     tramite l'applicazione RULES.EXE ("Regole di Sistema" nel menu Avvio o
+     facendo doppio clic sul file .NOR in Risorse del Computer / Explorer).
+   - In fase pre-desktop o riga di comando shell il file rifiuta l'apertura grezza.
+
+2. Ambiente Microsoft Windows:
+   - Visualizzabili e verificabili tramite l'applicazione dedicata fornita
+     nella cartella del pacchetto:
+     "Rules Win App\NewOS_Rules_Viewer.exe" (o script RulesViewer.bat).
+================================================================================

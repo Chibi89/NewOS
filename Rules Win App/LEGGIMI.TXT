@@ -1,0 +1,43 @@
+================================================================================
+NEWOS V1 - SUITE APPLICAZIONE WINDOWS PER REGOLE PROPRIETARIE (.NOR)
+Cartella: Rules Win App\
+================================================================================
+
+Questa cartella contiene gli strumenti ufficiali per Microsoft Windows per
+aprire, verificare l'integrita' crittografica e visualizzare le regole di
+sistema ufficiali di NewOS V1 (.NOR - NewOS Official Rule).
+
+CONTENUTO DELLA CARTELLA:
+1. NewOS_Rules_Viewer.exe
+   - Applicazione nativa Windows (GUI Windows Forms x64/AnyCpu compilata con .NET 4.0).
+   - Interfaccia con barra laterale del catalogo regole, metadati completi
+     (Magic NOSR, Versione, Categoria, Severita, Tag Autore).
+   - Controllo automatico di integrita' e validazione CRC32 in tempo reale (badge verde).
+   - Funzionalita' di apertura file esterno, Copia negli Appunti ed Esportazione in chiaro .TXT.
+   - Supporto Drag & Drop e associazione file da riga di comando.
+
+2. RulesViewer.bat
+   - Script di avvio rapido per eseguire NewOS_Rules_Viewer.exe con un doppio clic.
+
+3. decoder_cli.js / rules_cli.bat
+   - Utilità a riga di comando multipiattaforma Node.js per decodifica da terminale.
+   - Uso: rules_cli.bat <percorso_regola.nor>
+          rules_cli.bat --all
+
+4. rules\
+   - Copia sincronizzata delle 5 regole ufficiali di sistema di NewOS V1:
+     * 01_SYSTEM_HIERARCHY.NOR (Architettura File System - CRITICA)
+     * 02_REGISTRY_SECURITY.NOR (Sicurezza e Registro - MASSIMA)
+     * 03_INSTALL_POLICY.NOR (Policy Installatori App - ALTA)
+     * 04_USER_PRIVILEGES.NOR (Privilegi e Sessioni - SICUREZZA)
+     * 05_NETWORK_AND_DEVICES.NOR (Rete e Connettivita' - MEDIA)
+
+5. src\Program.cs
+   - Codice sorgente C# completo dell'applicazione Windows Forms.
+
+VINCOLO ARCHITETTURALE E SICUREZZA:
+In NewOS V1, i file .NOR sono formati proprietari binari cifrati che possono essere
+aperti esclusivamente all'interno dell'ambiente Desktop (tramite RULES.EXE) o su
+Windows tramite questa applicazione. In fase di avvio pre-desktop (Boot/Logon) o
+tramite comandi raw da shell l'accesso in chiaro viene rigorosamente rifiutato.
+================================================================================

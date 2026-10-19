@@ -1,0 +1,55 @@
+# ==============================================================================
+# NewOS V1 64-bit - Git Ignore Configuration
+# ==============================================================================
+
+# Build Output e Binari Intermedi
+build/
+obj/
+bin/
+*.o
+*.obj
+*.elf
+*.bin
+!resources/icons.bin
+
+# Immagini Disco e Archivi Pesanti (Superiori a 100 MB - Limite Rigido GitHub)
+*.iso
+*.img
+*.vdi
+*.vmdk
+*.qcow2
+*.rar
+*.zip
+*.7z
+*.tar
+*.gz
+NewOS_V1.iso
+NewOS_V1.img
+NewOS_V1.vdi
+myos.iso
+myos.img
+myos.vdi
+newos.iso
+
+# Dump Grafici Grezzi Temporanei (Mantenere solo i file .PNG leggeri)
+*.ppm
+*.bmp
+*.tmp
+
+# File di Log e Tracce Seriali
+*.log
+serial*.log
+
+# Toolchain di Compilazione Esterna (Installata automaticamente via setup_tools.ps1)
+tools/llvm-mingw/
+tools/qemu*
+tools/share/
+tools/*.exe
+!tools/ppm2bmp.js
+
+# File Temporanei di Sistema e IDE
+.gemini/
+scratch/
+Thumbs.db
+Desktop.ini
+.DS_Store
