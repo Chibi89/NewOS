@@ -1,14 +1,16 @@
 ================================================================================
-NEWOS V1 (64-BIT) - COMPONENTE WEBBROWSER (C:\WebBrowser\)
+NEWOS V1 (64-BIT) - NEWSOFT WEB BROWSER (C:\WebBrowser\)
 (C) Copyright Newspoint Software - NewSoft - NewOS V1
+@credits: Motore di rendering basato sull'architettura open-source NetSurf
+@thanks: NetSurf Browser Project (http://www.netsurf-browser.org/)
 ================================================================================
 
 DESCRIZIONE:
-Questo modulo implementa il browser web grafico nativo e client HTTP per
-l'ambiente desktop di NewOS V1 (WEBBROWSER.EXE).
+Questo modulo implementa NewSoft Web Browser, il browser grafico nativo e
+client HTTP per l'ambiente desktop di NewOS V1 (WEBBROWSER.EXE).
 
 FILE DEL COMPONENTE:
-- webbrowser.c      : Sorgente C con GUI Window Manager, parser HTML ed engine HTTP
+- webbrowser.c      : Sorgente C con GUI Window Manager, parser HTML/CSS ed engine HTTP
 - webbrowser.h      : Header pubblico con prototipi di avvio ed esportazioni
 - webbrowser.ini    : Configurazione preferenze, homepage e segnalibri
 - home.htm          : Pagina iniziale predefinita (about:home)

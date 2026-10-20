@@ -261,6 +261,7 @@ function organizeBuildBin(rootDir, binDir) {
     const webFiles = [
         { src: 'WebBrowser/home.htm', dst: 'HOME.HTM' },
         { src: 'WebBrowser/about.htm', dst: 'ABOUT.HTM' },
+        { src: 'WebBrowser/youtube.htm', dst: 'YOUTUBE.HTM' },
         { src: 'WebBrowser/webbrowser.ini', dst: 'BROWSER.INI' }
     ];
     for (const wf of webFiles) {

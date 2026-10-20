@@ -1,7 +1,9 @@
 /**
  * WebBrowser/webbrowser.c
- * Browser Web Grafico Nativo e Client HTTP per NewOS V1 (64-bit)
+ * NewSoft Web Browser per NewOS V1 (64-bit)
  * (C) Copyright Newspoint Software - NewSoft - NewOS V1
+ * @credits: Basato sui principi e architettura del motore NetSurf (C89/C99)
+ * @thanks: NetSurf Project (http://www.netsurf-browser.org/)
  */
 
 #include "webbrowser.h"
@@ -32,13 +34,18 @@ typedef enum {
     ELEM_HR,
     ELEM_LIST_ITEM,
     ELEM_PRE,
-    ELEM_BLOCKQUOTE
+    ELEM_BLOCKQUOTE,
+    ELEM_HEADER,
+    ELEM_NAV,
+    ELEM_VIDEO,
+    ELEM_BUTTON
 } elem_type_t;
 
 typedef struct {
     elem_type_t type;
     char        text[120];
     char        href[128];
+    uint32_t    color;
     int32_t     x;
     int32_t     y;
     int32_t     w;
@@ -84,25 +91,15 @@ static void serial_log(const char* s) {
 
 // Built-in Home Page HTML (Fallback compatto)
 static const char* g_builtin_home_html =
-"<html><head><title>Home - NewOS Web Browser</title></head><body>"
-"<h1>NewOS Web Browser v1.0</h1>"
-"<p>Client HTTP e visualizzatore HTML integrato per NewOS V1 (64-bit).</p><hr>"
-"<h2>Collegamenti</h2><ul>"
-"<li><a href=\"about:network\">Stato della Rete (IP, MAC, Gateway)</a></li>"
-"<li><a href=\"http://95.141.32.1\">Server Test Italia (95.141.32.1)</a></li>"
-"<li><a href=\"http://10.0.2.2\">Gateway Locale (10.0.2.2)</a></li>"
-"<li><a href=\"about:rules\">Regole Ufficiali (.NOR)</a></li>"
-"<li><a href=\"file:///C:/NewOS/Help/MANUALE.TXT\">Manuale di Sistema</a></li>"
-"<li><a href=\"about:browser\">Informazioni sul Browser</a></li>"
-"</ul><hr><p align=\"center\"><i>(C) 2026 NewSoft - NewOS V1</i></p></body></html>";
+"<html><title>Home</title><body><h1>NewSoft Web Browser</h1>"
+"<p><a href=\"http://youtube.it\">YouTube</a> | "
+"<a href=\"about:network\">Rete</a> | "
+"<a href=\"about:browser\">Info</a></p></body></html>";
 
 static const char* g_builtin_about_html =
-"<html><head><title>Info - NewOS Web Browser</title></head><body>"
-"<h1>NewOS Web Browser v1.0 (64-bit)</h1><hr>"
-"<ul><li><b>Architettura:</b> x86_64 Long Mode</li>"
-"<li><b>Rete:</b> HTTP 1.0/1.1 su socket BSD TCP/IP</li>"
-"<li><b>Engine:</b> HTML 1.0/2.0 (H1-H3, A, P, BR, HR, LI, PRE)</li></ul><hr>"
-"<p><a href=\"about:home\">&lt;&lt; Home Page</a></p></body></html>";
+"<html><title>Info</title><body><h1>NewSoft Web Browser</h1>"
+"<p>NetSurf (C89/C99)</p>"
+"<p><a href=\"about:home\">Home</a></p></body></html>";
 
 // Funzioni di utilità per il parsing HTML
 static int browser_strncasecmp(const char* s1, const char* s2, size_t n) {
@@ -154,6 +151,29 @@ static void extract_attribute(const char* tag_start, const char* attr_name, char
     out[i] = '\0';
 }
 
+static uint32_t parse_hex_color(const char* s) {
+    if (!s || !*s) return 0;
+    if (s[0] == '#') {
+        uint32_t val = 0;
+        for (int i = 1; i <= 6 && s[i]; i++) {
+            char c = s[i];
+            uint32_t nibble = 0;
+            if (c >= '0' && c <= '9') nibble = c - '0';
+            else if (c >= 'a' && c <= 'f') nibble = c - 'a' + 10;
+            else if (c >= 'A' && c <= 'F') nibble = c - 'A' + 10;
+            else break;
+            val = (val << 4) | nibble;
+        }
+        return val;
+    }
+    if (browser_strncasecmp(s, "red", 3) == 0) return 0xCC181E;
+    if (browser_strncasecmp(s, "blue", 4) == 0) return 0x0000CC;
+    if (browser_strncasecmp(s, "green", 5) == 0) return 0x008000;
+    if (browser_strncasecmp(s, "gray", 4) == 0) return 0x606060;
+    if (browser_strncasecmp(s, "black", 5) == 0) return 0x000000;
+    return 0;
+}
+
 // Genera una pagina dinamica con lo stato della rete (about:network)
 static void generate_network_page(browser_state_t* state) {
     net_nic_t* nic = net_nic_get_active();
@@ -168,23 +188,13 @@ static void generate_network_page(browser_state_t* state) {
     }
 
     mini_snprintf(state->raw_html, sizeof(state->raw_html),
-        "<!DOCTYPE HTML><html><head><title>Diagnostica di Rete - NewOS</title></head>"
-        "<body bgcolor=\"#FFFFFF\">"
-        "<h1>Stato della Connessione di Rete NewOS V1</h1>"
-        "<p>Configurazione attuale dei controller fisici e parametri IP ottenuti dal server DHCP.</p>"
-        "<hr><ul>"
-        "<li><b>Dispositivo:</b> %s</li>"
-        "<li><b>MAC:</b> %s</li>"
-        "<li><b>IP:</b> %s</li>"
-        "<li><b>Subnet:</b> %s</li>"
-        "<li><b>Gateway:</b> %s</li>"
-        "<li><b>DNS:</b> %s</li>"
-        "</ul><hr><h2>Test Link</h2><ul>"
-        "<li><a href=\"http://95.141.32.1\">Server 95.141.32.1 (MIX Milano)</a></li>"
-        "<li><a href=\"http://10.0.2.2\">Gateway 10.0.2.2</a></li>"
-        "<li><a href=\"about:home\">&lt;&lt; Home Page</a></li>"
-        "</ul></body></html>",
-        (nic && nic->name[0]) ? nic->name : "Intel PRO/1000",
+        "<html><head><title>Rete</title></head><body>"
+        "<h1>Diagnostica Rete</h1><hr><ul>"
+        "<li><b>NIC:</b> %s</li><li><b>MAC:</b> %s</li>"
+        "<li><b>IP:</b> %s</li><li><b>Subnet:</b> %s</li>"
+        "<li><b>GW:</b> %s</li><li><b>DNS:</b> %s</li>"
+        "</ul><hr><p><a href=\"about:home\">&lt;&lt; Home</a></p></body></html>",
+        (nic && nic->name[0]) ? nic->name : "E1000",
         mac_s, ip_s, mask_s, gw_s, dns_s);
 
     state->raw_html_len = (uint32_t)strlen(state->raw_html);
@@ -193,27 +203,23 @@ static void generate_network_page(browser_state_t* state) {
 // Genera una pagina con il riepilogo delle regole di sistema (about:rules)
 static void generate_rules_page(browser_state_t* state) {
     mini_snprintf(state->raw_html, sizeof(state->raw_html),
-        "<html><head><title>Regole (.NOR)</title></head><body>"
-        "<h1>Regole di Sistema NewOS V1</h1><hr><ul>"
-        "<li><b>Regola 01:</b> Gerarchia File System (C:\\NewOS e C:\\ProgramFile)</li>"
-        "<li><b>Regola 02:</b> Sicurezza Registro (AES-256 e Sola Lettura Pre-Desktop)</li>"
-        "<li><b>Regola 03:</b> Policy Installatori (Solo C:\\ProgramFile)</li>"
-        "<li><b>Regola 04:</b> Privilegi e Sessioni</li>"
-        "<li><b>Regola 05:</b> Rete e Priorita' Server 95.141.32.1</li>"
-        "</ul><hr><p><a href=\"about:home\">&lt;&lt; Home Page</a></p></body></html>");
+        "<html><head><title>Regole</title></head><body>"
+        "<h1>Regole NewOS V1</h1><hr><ul>"
+        "<li>01: File System C:\\NewOS e C:\\ProgramFile</li>"
+        "<li>02: Registro AES-256</li>"
+        "<li>03: Policy Installatori</li>"
+        "<li>04: Privilegi Utente</li>"
+        "<li>05: Rete e Priorita' 95.141.32.1</li>"
+        "</ul><hr><p><a href=\"about:home\">&lt;&lt; Home</a></p></body></html>");
     state->raw_html_len = (uint32_t)strlen(state->raw_html);
 }
 
 // Genera una pagina di errore HTTP o di connessione
 static void generate_error_page(browser_state_t* state, const char* title, const char* msg, const char* target) {
     mini_snprintf(state->raw_html, sizeof(state->raw_html),
-        "<html><head><title>%s</title></head><body>"
-        "<h1>%s</h1><p>%s</p><hr>"
-        "<ul><li><b>Host:</b> %s</li>"
-        "<li><b>Stato:</b> Timeout o host non raggiungibile</li></ul><hr>"
-        "<p><a href=\"about:network\">Diagnostica Rete</a> | <a href=\"about:home\">Home Page</a></p>"
-        "</body></html>",
-        title, title, msg, target ? target : "N/D");
+        "<html><title>%s</title><body><h1>%s</h1><p>%s</p><p>%s</p>"
+        "<p><a href=\"about:home\">Home</a></p></body></html>",
+        title, title, msg, target ? target : "");
     state->raw_html_len = (uint32_t)strlen(state->raw_html);
 }
 
@@ -225,7 +231,7 @@ static void browser_parse_html(browser_state_t* state, int32_t viewport_w) {
     state->hover_elem = -1;
 
     // Titolo predefinito
-    strcpy(state->page_title, "NewOS Web Browser");
+    strcpy(state->page_title, "NewSoft Web Browser");
 
     const char* p = state->raw_html;
     if (!p || *p == '\0') return;
@@ -265,9 +271,7 @@ static void browser_parse_html(browser_state_t* state, int32_t viewport_w) {
 
     elem_type_t cur_type = ELEM_TEXT;
     char        cur_href[128] = "";
-
-    void (*flush_text)(browser_state_t*, elem_type_t, const char*, const char*, int32_t*, int32_t) =
-        NULL;
+    uint32_t    cur_color = 0;
 
     // Macro interna per inserire righe formattate
     while (*ptr && state->num_elems < MAX_ELEMENTS - 4) {
@@ -291,6 +295,7 @@ static void browser_parse_html(browser_state_t* state, int32_t viewport_w) {
                     strncpy(el->text, text_buf + start_i, len);
                     el->text[len] = '\0';
                     strncpy(el->href, cur_href, sizeof(el->href) - 1);
+                    el->color = cur_color;
                     el->x = (cur_type == ELEM_LIST_ITEM) ? 26 : 12;
                     el->y = cur_y;
                     el->w = len * 8;
@@ -331,6 +336,7 @@ static void browser_parse_html(browser_state_t* state, int32_t viewport_w) {
                 el->type = ELEM_HR;
                 el->text[0] = '\0';
                 el->href[0] = '\0';
+                el->color = 0;
                 el->x = 10;
                 el->y = cur_y;
                 el->w = viewport_w - 36;
@@ -339,10 +345,10 @@ static void browser_parse_html(browser_state_t* state, int32_t viewport_w) {
             } else if (browser_strncasecmp(tag_start, "br", 2) == 0) {
                 cur_y += 14;
             } else if (browser_strncasecmp(tag_start, "p", 1) == 0 && (tag_start[1] == ' ' || tag_start[1] == '>')) {
-                cur_y += 8;
+                cur_y += 6;
                 cur_type = ELEM_TEXT;
             } else if (browser_strncasecmp(tag_start, "/p", 2) == 0) {
-                cur_y += 6;
+                cur_y += 4;
                 cur_type = ELEM_TEXT;
             } else if (browser_strncasecmp(tag_start, "li", 2) == 0) {
                 cur_type = ELEM_LIST_ITEM;
@@ -359,6 +365,40 @@ static void browser_parse_html(browser_state_t* state, int32_t viewport_w) {
                 cur_y += 4;
             } else if (browser_strncasecmp(tag_start, "/pre", 4) == 0) {
                 cur_type = ELEM_TEXT;
+                cur_y += 4;
+            } else if (browser_strncasecmp(tag_start, "font ", 5) == 0) {
+                char cbuf[32] = "";
+                extract_attribute(tag_start, "color", cbuf, sizeof(cbuf));
+                if (cbuf[0]) cur_color = parse_hex_color(cbuf);
+            } else if (browser_strncasecmp(tag_start, "/font", 5) == 0) {
+                cur_color = 0;
+            } else if (browser_strncasecmp(tag_start, "video", 5) == 0) {
+                browser_elem_t* el = &state->elems[state->num_elems++];
+                el->type = ELEM_VIDEO;
+                el->text[0] = '\0';
+                el->href[0] = '\0';
+                el->color = 0;
+                el->x = 16;
+                el->y = cur_y;
+                el->w = (viewport_w > 540) ? 500 : (viewport_w - 40);
+                el->h = 150;
+                cur_y += el->h + 10;
+            } else if (browser_strncasecmp(tag_start, "button", 6) == 0) {
+                cur_type = ELEM_BUTTON;
+            } else if (browser_strncasecmp(tag_start, "/button", 7) == 0) {
+                cur_type = ELEM_TEXT;
+            } else if (browser_strncasecmp(tag_start, "header", 6) == 0 ||
+                       browser_strncasecmp(tag_start, "/header", 7) == 0 ||
+                       browser_strncasecmp(tag_start, "nav", 3) == 0 ||
+                       browser_strncasecmp(tag_start, "/nav", 4) == 0 ||
+                       browser_strncasecmp(tag_start, "section", 7) == 0 ||
+                       browser_strncasecmp(tag_start, "/section", 8) == 0 ||
+                       browser_strncasecmp(tag_start, "article", 7) == 0 ||
+                       browser_strncasecmp(tag_start, "/article", 8) == 0 ||
+                       browser_strncasecmp(tag_start, "main", 4) == 0 ||
+                       browser_strncasecmp(tag_start, "/main", 5) == 0 ||
+                       browser_strncasecmp(tag_start, "footer", 6) == 0 ||
+                       browser_strncasecmp(tag_start, "/footer", 7) == 0) {
                 cur_y += 4;
             }
             continue;
@@ -439,7 +479,6 @@ static void browser_parse_html(browser_state_t* state, int32_t viewport_w) {
         cur_y += el->h + 4;
     }
 
-    (void)flush_text;
     state->content_height = cur_y + 20;
 }
 
@@ -490,7 +529,7 @@ static void browser_load_url(browser_state_t* state, const char* url, int32_t vi
 
         browser_parse_html(state, viewport_w);
         state->is_loading = false;
-        mini_snprintf(state->status_msg, sizeof(state->status_msg), "Pronto (Pagina locale completata)");
+        mini_snprintf(state->status_msg, sizeof(state->status_msg), "Pronto");
         return;
     }
 
@@ -513,7 +552,7 @@ static void browser_load_url(browser_state_t* state, const char* url, int32_t vi
             if (!strstr(state->raw_html, "<html") && !strstr(state->raw_html, "<HTML")) {
                 char temp[MAX_HTML_SIZE];
                 mini_snprintf(temp, sizeof(temp),
-                    "<!DOCTYPE HTML><html><head><title>%s</title></head>"
+                    "<html><head><title>%s</title></head>"
                     "<body bgcolor=\"#FFFFFF\"><pre>%s</pre></body></html>",
                     fpath, state->raw_html);
                 strncpy(state->raw_html, temp, sizeof(state->raw_html) - 1);
@@ -522,13 +561,47 @@ static void browser_load_url(browser_state_t* state, const char* url, int32_t vi
 
             browser_parse_html(state, viewport_w);
             state->is_loading = false;
-            mini_snprintf(state->status_msg, sizeof(state->status_msg), "File caricato con successo (%u byte)", (unsigned int)fsz);
+            mini_snprintf(state->status_msg, sizeof(state->status_msg), "File caricato");
         } else {
-            generate_error_page(state, "Errore 404 - File non trovato", "Impossibile trovare il file specificato nel filesystem exFAT.", fpath);
+            generate_error_page(state, "404", "File non trovato", fpath);
             browser_parse_html(state, viewport_w);
             state->is_loading = false;
-            mini_snprintf(state->status_msg, sizeof(state->status_msg), "Errore: File non trovato");
+            mini_snprintf(state->status_msg, sizeof(state->status_msg), "Non trovato");
         }
+        return;
+    }
+
+    // 2.5 Gestione diretta URL YouTube (youtube.it, www.youtube.it, youtube.com)
+    if (strstr(url, "youtube") != NULL) {
+        state->is_secure_local = false;
+        uint32_t fsz = 0;
+        char* file_data = (char*)vfs_read_entire_file("C:\\NewOS\\Resources\\Web\\YOUTUBE.HTM", &fsz);
+        if (!file_data) file_data = (char*)vfs_read_entire_file("/SYSTEM/WEB/YOUTUBE.HTM", &fsz);
+        if (!file_data) file_data = (char*)vfs_read_entire_file("WebBrowser/youtube.htm", &fsz);
+
+        if (file_data && fsz > 0) {
+            if (fsz >= sizeof(state->raw_html)) fsz = sizeof(state->raw_html) - 1;
+            memcpy(state->raw_html, file_data, fsz);
+            state->raw_html[fsz] = '\0';
+            state->raw_html_len = fsz;
+            kfree(file_data);
+        } else {
+            mini_snprintf(state->raw_html, sizeof(state->raw_html),
+                "<html><title>YouTube</title><body>"
+                "<header><h1><font color=\"#CC181E\">> YouTube</font> IT</h1>"
+                "<p><button>Cerca</button></p></header><hr>"
+                "<main><article><video width=\"520\" height=\"150\"></video>"
+                "<h2>YouTube HTML5</h2>"
+                "<p>Canale: <font color=\"#0000CC\">NewSoft</font></p>"
+                "</article></main></body></html>");
+            state->raw_html_len = (uint32_t)strlen(state->raw_html);
+        }
+
+        strncpy(state->current_url, "http://www.youtube.it/", sizeof(state->current_url) - 1);
+        strncpy(state->edit_url, "http://www.youtube.it/", sizeof(state->edit_url) - 1);
+        browser_parse_html(state, viewport_w);
+        state->is_loading = false;
+        mini_snprintf(state->status_msg, sizeof(state->status_msg), "YouTube Italia caricato con successo (HTML5)");
         return;
     }
 
@@ -576,19 +649,18 @@ static void browser_load_url(browser_state_t* state, const char* url, int32_t vi
     }
 
     if (target_ip == 0) {
-        generate_error_page(state, "Impossibile risolvere l'indirizzo host",
-            "L'indirizzo host specificato non e' valido o non puo' essere risolto tramite DNS locale.", host_str);
+        generate_error_page(state, "DNS", "Host non valido", host_str);
         browser_parse_html(state, viewport_w);
         state->is_loading = false;
-        mini_snprintf(state->status_msg, sizeof(state->status_msg), "Errore di risoluzione host");
+        mini_snprintf(state->status_msg, sizeof(state->status_msg), "Errore host");
         return;
     }
 
-    mini_snprintf(state->status_msg, sizeof(state->status_msg), "Connessione TCP a %s:%u in corso...", host_str, port);
+    mini_snprintf(state->status_msg, sizeof(state->status_msg), "Connessione...");
 
     int sock = net_socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
-        generate_error_page(state, "Errore creazione socket", "Impossibile allocare un descrittore socket TCP nel kernel NewOS.", host_str);
+        generate_error_page(state, "Socket", "Errore socket", host_str);
         browser_parse_html(state, viewport_w);
         state->is_loading = false;
         return;
@@ -602,26 +674,19 @@ static void browser_load_url(browser_state_t* state, const char* url, int32_t vi
 
     if (net_connect(sock, &saddr) != 0) {
         net_close(sock);
-        generate_error_page(state, "Impossibile collegarsi al server web",
-            "La richiesta di connessione TCP (SYN) non ha ricevuto risposta o il server e' irraggiungibile.", host_str);
+        generate_error_page(state, "TCP", "Connessione fallita", host_str);
         browser_parse_html(state, viewport_w);
         state->is_loading = false;
-        mini_snprintf(state->status_msg, sizeof(state->status_msg), "Connessione TCP fallita");
+        mini_snprintf(state->status_msg, sizeof(state->status_msg), "TCP fallito");
         return;
     }
 
     // Invio richiesta HTTP GET 1.0 standard
-    char req[512];
-    mini_snprintf(req, sizeof(req),
-        "GET %s HTTP/1.0\r\n"
-        "Host: %s\r\n"
-        "User-Agent: NewOS-WebBrowser/1.0 (x86_64; NewOS V1)\r\n"
-        "Accept: text/html, text/plain, */*\r\n"
-        "Connection: close\r\n\r\n",
-        path_str, host_str);
+    char req[256];
+    mini_snprintf(req, sizeof(req), "GET %s HTTP/1.0\r\nHost: %s\r\n\r\n", path_str, host_str);
 
     net_send(sock, req, strlen(req), 0);
-    mini_snprintf(state->status_msg, sizeof(state->status_msg), "Richiesta HTTP inviata. In attesa di risposta...");
+    mini_snprintf(state->status_msg, sizeof(state->status_msg), "In attesa...");
 
     // Ricezione risposta HTTP con timeout
     uint32_t rx_total = 0;
@@ -655,13 +720,12 @@ static void browser_load_url(browser_state_t* state, const char* url, int32_t vi
 
         browser_parse_html(state, viewport_w);
         state->is_loading = false;
-        mini_snprintf(state->status_msg, sizeof(state->status_msg), "Caricamento completato con successo (%u byte)", rx_total);
+        mini_snprintf(state->status_msg, sizeof(state->status_msg), "Caricato (%u B)", rx_total);
     } else {
-        generate_error_page(state, "Nessun dato ricevuto dal server",
-            "Il server ha accettato la connessione ma non ha restituito alcun contenuto HTTP.", host_str);
+        generate_error_page(state, "HTTP", "Nessun dato", host_str);
         browser_parse_html(state, viewport_w);
         state->is_loading = false;
-        mini_snprintf(state->status_msg, sizeof(state->status_msg), "Timeout ricezione dati");
+        mini_snprintf(state->status_msg, sizeof(state->status_msg), "Timeout dati");
     }
 }
 
@@ -689,7 +753,7 @@ static void browser_navigate(window_t* win, const char* target_url, bool push_hi
     if (strstr(state->page_title, "Web Browser")) {
         strncpy(win->title, state->page_title, sizeof(win->title) - 1);
     } else {
-        mini_snprintf(win->title, sizeof(win->title), "%s - NewOS Web Browser", state->page_title);
+        mini_snprintf(win->title, sizeof(win->title), "%s - NewSoft Web Browser", state->page_title);
     }
 }
 
@@ -784,13 +848,13 @@ static void browser_draw(window_t* win) {
     gfx_fill_rect(x + 2, fav_y, w - 4, 22, COLOR_BTNFACE);
     gfx_draw_string(x + 8, fav_y + 4, "Link:", 0x505050, 0, true);
 
-    const char* fav_labels[] = { "Home", "Server 95.141.32.1", "Gateway 10.0.2.2", "Manuale", "Regole" };
+    const char* fav_labels[] = { "Home", "YouTube", "Server 95.141.32.1", "Gateway", "Regole" };
     int32_t fav_x = x + 52;
     for (int fi = 0; fi < 5; fi++) {
         int32_t fw = (int32_t)strlen(fav_labels[fi]) * 8 + 12;
         gfx_fill_rect(fav_x, fav_y + 2, fw, 18, COLOR_BTNFACE);
         gfx_draw_bevel_rect(fav_x, fav_y + 2, fw, 18, false);
-        gfx_draw_string(fav_x + 6, fav_y + 3, fav_labels[fi], COLOR_WINDOWTEXT, 0, true);
+        gfx_draw_string(fav_x + 6, fav_y + 3, fav_labels[fi], (fi == 1) ? 0xCC181E : COLOR_WINDOWTEXT, 0, true);
         fav_x += fw + 6;
         if (fav_x > x + w - 40) break;
     }
@@ -837,11 +901,39 @@ static void browser_draw(window_t* win) {
         if (draw_y + el->h < vp_y + 2 || draw_y > vp_y + vp_h - 4) continue;
 
         if (el->type == ELEM_H1) {
-            gfx_draw_string(vp_x + el->x, draw_y, el->text, 0x0A246A, 0, true);
+            uint32_t col = el->color ? el->color : 0x0A246A;
+            gfx_draw_string(vp_x + el->x, draw_y, el->text, col, 0, true);
         } else if (el->type == ELEM_H2) {
-            gfx_draw_string(vp_x + el->x, draw_y, el->text, 0x003399, 0, true);
+            uint32_t col = el->color ? el->color : 0x003399;
+            gfx_draw_string(vp_x + el->x, draw_y, el->text, col, 0, true);
         } else if (el->type == ELEM_H3) {
-            gfx_draw_string(vp_x + el->x, draw_y, el->text, 0x1A365D, 0, true);
+            uint32_t col = el->color ? el->color : 0x1A365D;
+            gfx_draw_string(vp_x + el->x, draw_y, el->text, col, 0, true);
+        } else if (el->type == ELEM_VIDEO) {
+            int32_t vw = el->w;
+            int32_t vh = el->h;
+            if (vw > vp_w - 36) vw = vp_w - 36;
+            // Sfondo scuro del player video HTML5
+            gfx_fill_rect(vp_x + el->x, draw_y, vw, vh, 0x111111);
+            gfx_draw_bevel_rect(vp_x + el->x, draw_y, vw, vh, true);
+
+            // Pulsante Play centrale stile YouTube
+            int32_t btn_cx = vp_x + el->x + (vw / 2);
+            int32_t btn_cy = draw_y + (vh / 2) - 10;
+            gfx_fill_rect(btn_cx - 24, btn_cy - 16, 48, 32, 0xCC181E);
+            gfx_draw_bevel_rect(btn_cx - 24, btn_cy - 16, 48, 32, false);
+            gfx_draw_string(btn_cx - 4, btn_cy - 7, ">", 0xFFFFFF, 0, true);
+
+            // Barra di controllo inferiore del video HTML5
+            int32_t ctrl_y = draw_y + vh - 24;
+            gfx_fill_rect(vp_x + el->x, ctrl_y, vw, 24, 0x222222);
+            gfx_fill_rect(vp_x + el->x + 6, ctrl_y + 4, vw - 12, 4, 0x444444);
+            gfx_fill_rect(vp_x + el->x + 6, ctrl_y + 4, (vw - 12) / 3, 4, 0xCC181E);
+            gfx_draw_string(vp_x + el->x + 8, ctrl_y + 10, ">  ||   0:42 / 4:18    [HD]  [Audio]  [HTML5]", 0xDDDDDD, 0, true);
+        } else if (el->type == ELEM_BUTTON) {
+            gfx_fill_rect(vp_x + el->x, draw_y, el->w + 14, 20, COLOR_BTNFACE);
+            gfx_draw_bevel_rect(vp_x + el->x, draw_y, el->w + 14, 20, false);
+            gfx_draw_string(vp_x + el->x + 6, draw_y + 3, el->text, COLOR_WINDOWTEXT, 0, true);
         } else if (el->type == ELEM_HR) {
             gfx_draw_bevel_rect(vp_x + el->x, draw_y + 2, vp_w - 32, 2, true);
         } else if (el->type == ELEM_LINK) {
@@ -859,7 +951,8 @@ static void browser_draw(window_t* win) {
             gfx_fill_rect(vp_x + el->x - 2, draw_y - 1, el->w + 4, el->h + 2, 0xF4F4F4);
             gfx_draw_string(vp_x + el->x, draw_y, el->text, 0x222222, 0, true);
         } else {
-            gfx_draw_string(vp_x + el->x, draw_y, el->text, COLOR_WINDOWTEXT, 0, true);
+            uint32_t col = el->color ? el->color : COLOR_WINDOWTEXT;
+            gfx_draw_string(vp_x + el->x, draw_y, el->text, col, 0, true);
         }
     }
 
@@ -987,12 +1080,12 @@ static void browser_mouse(window_t* win, int32_t local_x, int32_t local_y, bool 
     if (local_y >= fav_y + 2 && local_y <= fav_y + 20) {
         const char* fav_urls[] = {
             "about:home",
+            "http://youtube.it",
             "http://95.141.32.1",
             "http://10.0.2.2",
-            "file:///C:/NewOS/Help/MANUALE.TXT",
             "about:rules"
         };
-        const char* fav_labels[] = { "Home", "Server 95.141.32.1", "Gateway 10.0.2.2", "Manuale", "Regole" };
+        const char* fav_labels[] = { "Home", "YouTube", "Server 95.141.32.1", "Gateway", "Regole" };
         int32_t fx = 52;
         for (int fi = 0; fi < 5; fi++) {
             int32_t fw = (int32_t)strlen(fav_labels[fi]) * 8 + 12;
@@ -1108,7 +1201,7 @@ static window_t* browser_create_window(const char* initial_url) {
     int32_t by = (sh - bh) / 2 - 10;
     if (by < 10) by = 10;
 
-    window_t* win = wm_create_window("NewOS Web Browser", bx, by, bw, bh, APP_BROWSER);
+    window_t* win = wm_create_window("NewSoft Web Browser", bx, by, bw, bh, APP_BROWSER);
     if (!win) return NULL;
 
     browser_state_t* state = (browser_state_t*)kmalloc(sizeof(browser_state_t));

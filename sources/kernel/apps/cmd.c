@@ -545,7 +545,7 @@ static void cmd_execute(cmd_state_t* state, const char* cmd) {
         if (strncmp(cmd, "browser", 7) == 0) target += 7;
         else if (strncmp(cmd, "web", 3) == 0) target += 3;
         while (*target == ' ') target++;
-        cmd_print(state, "Avvio NewOS Web Browser...");
+        cmd_print(state, "Avvio NewSoft Web Browser...");
         if (*target) app_browser_open_url(target);
         else app_browser_launch();
     } else if (strncmp(cmd, "type ", 5) == 0) {

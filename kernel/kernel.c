@@ -189,7 +189,7 @@ void kernel_main(BootInfo* binfo) {
         if (usb_msc_is_present()) {
             app_autoplay_launch('U');
         }
-        app_browser_launch();
+        app_browser_open_url("http://youtube.it");
     }
     outb(0x3F8, '7');
 
