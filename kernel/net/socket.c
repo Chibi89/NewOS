@@ -7,6 +7,7 @@
 #include <net/udp.h>
 #include <net/tcp.h>
 #include <net/dhcp.h>
+#include <net/dns.h>
 #include <net/tls.h>
 #include <mm/heap.h>
 #include <string.h>
@@ -32,7 +33,7 @@ static void serial_log(const char* s) {
 }
 
 void net_init(void) {
-    serial_log("[NET] Inizializzazione Network Stack NewOS V1 (ETH, IP, ICMP, UDP, TCP, DHCP, TLS)...\n");
+    serial_log("[NET] Inizializzazione Network Stack NewOS V1 (ETH, IP, ICMP, UDP, TCP, DHCP, DNS, TLS)...\n");
 
     memset(g_sockets, 0, sizeof(g_sockets));
     for (int i = 0; i < MAX_SOCKETS; i++) {
@@ -46,6 +47,7 @@ void net_init(void) {
     udp_init();
     tcp_init();
     dhcp_init();
+    dns_init();
     tls_init();
 
     // Avvia discovery DHCP reale su cavo/interfaccia virtuale

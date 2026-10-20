@@ -212,6 +212,7 @@ const cFiles = [
     'kernel/net/udp.c',
     'kernel/net/tcp.c',
     'kernel/net/dhcp.c',
+    'kernel/net/dns.c',
     'kernel/net/tls.c',
     'kernel/net/socket.c',
     'kernel/fs/registry.c',

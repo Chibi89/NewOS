@@ -12,6 +12,7 @@
 #include <gui/icons.h>
 #include <fs/vfs.h>
 #include <net/socket.h>
+#include <net/dns.h>
 #include <drivers/net/net_nic.h>
 #include <drivers/timer.h>
 #include <mm/heap.h>
@@ -635,28 +636,19 @@ static void browser_load_url(browser_state_t* state, const char* url, int32_t vi
         if (port == 0) port = 80;
     }
 
-    // Risoluzione indirizzo IP target
-    uint32_t target_ip = 0;
-    if (strcmp(host_str, "localhost") == 0) {
-        target_ip = net_parse_ip("127.0.0.1");
-    } else if (strcmp(host_str, "gateway") == 0 || strcmp(host_str, "router") == 0) {
-        net_nic_t* nic = net_nic_get_active();
-        target_ip = (nic && nic->gateway) ? nic->gateway : net_parse_ip("10.0.2.2");
-    } else if (strcmp(host_str, "test.it") == 0) {
-        target_ip = net_parse_ip("95.141.32.1");
-    } else {
-        target_ip = net_parse_ip(host_str);
-    }
+    // Risoluzione indirizzo IP target tramite servizio DNS interno (RFC 1035)
+    mini_snprintf(state->status_msg, sizeof(state->status_msg), "DNS: %s", host_str);
+    uint32_t target_ip = dns_resolve(host_str);
 
     if (target_ip == 0) {
-        generate_error_page(state, "DNS", "Host non valido", host_str);
+        generate_error_page(state, "DNS", "Host non risolto", host_str);
         browser_parse_html(state, viewport_w);
         state->is_loading = false;
-        mini_snprintf(state->status_msg, sizeof(state->status_msg), "Errore host");
+        mini_snprintf(state->status_msg, sizeof(state->status_msg), "Errore DNS");
         return;
     }
 
-    mini_snprintf(state->status_msg, sizeof(state->status_msg), "Connessione...");
+    mini_snprintf(state->status_msg, sizeof(state->status_msg), "Connessione: %s", host_str);
 
     int sock = net_socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
@@ -734,6 +726,23 @@ static void browser_navigate(window_t* win, const char* target_url, bool push_hi
     browser_state_t* state = (browser_state_t*)win->app_data;
     if (!state || !target_url) return;
 
+    // Normalizzazione URL: pulizia spazi e auto-prefisso http:// se mancante
+    char norm_url[MAX_URL_LEN];
+    const char* u = target_url;
+    while (*u == ' ') u++;
+    if (*u == '\0') u = BROWSER_DEFAULT_HOME;
+
+    if (strncmp(u, "http://", 7) == 0 ||
+        strncmp(u, "https://", 8) == 0 ||
+        strncmp(u, "about:", 6) == 0 ||
+        strncmp(u, "file:///", 8) == 0 ||
+        (u[1] == ':' && (u[2] == '\\' || u[2] == '/'))) {
+        strncpy(norm_url, u, sizeof(norm_url) - 1);
+    } else {
+        mini_snprintf(norm_url, sizeof(norm_url), "http://%s", u);
+    }
+    norm_url[sizeof(norm_url) - 1] = '\0';
+
     if (push_history && state->current_url[0] != '\0') {
         if (state->history_back_count < MAX_HISTORY) {
             strncpy(state->history_back[state->history_back_count++], state->current_url, MAX_URL_LEN - 1);
@@ -747,7 +756,7 @@ static void browser_navigate(window_t* win, const char* target_url, bool push_hi
     }
 
     int32_t vp_w = win->width - 12;
-    browser_load_url(state, target_url, vp_w);
+    browser_load_url(state, norm_url, vp_w);
 
     // Aggiorna titolo della finestra del Window Manager
     if (strstr(state->page_title, "Web Browser")) {
