@@ -218,6 +218,7 @@ const cFiles = [
     'kernel/apps/regedit.c',
     'kernel/apps/oobe.c',
     'kernel/apps/rules_viewer.c',
+    'WebBrowser/webbrowser.c',
     'kernel/gui/screen_mgr.c',
     'kernel/kernel.c'
 ];
@@ -233,6 +234,7 @@ const cFlags = [
     `-I"${path.join(ROOT, 'kernel')}"`,
     `-I"${path.join(ROOT, 'kernel', 'include')}"`,
     `-I"${path.join(ROOT, 'BootSetup')}"`,
+    `-I"${path.join(ROOT, 'WebBrowser')}"`,
     '-O2',
     '-Wall',
     '-Wno-unused-function'

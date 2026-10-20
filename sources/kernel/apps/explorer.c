@@ -536,8 +536,16 @@ static void explorer_load_items(explorer_state_t* state) {
                     } else {
                         const char* dot = strstr(it->name, ".");
                         if (dot && (strcasecmp(dot, ".exe") == 0)) {
-                            strcpy(it->desc, "Applicazione");
-                            it->icon_id = ICON_RUN;
+                            if (strcasecmp(it->name, "WEBBROWSER.EXE") == 0 || strcasecmp(it->name, "BROWSER.EXE") == 0) {
+                                strcpy(it->desc, "Browser Web");
+                                it->icon_id = ICON_NET;
+                            } else {
+                                strcpy(it->desc, "Applicazione");
+                                it->icon_id = ICON_RUN;
+                            }
+                        } else if (dot && (strcasecmp(dot, ".htm") == 0 || strcasecmp(dot, ".html") == 0)) {
+                            strcpy(it->desc, "Documento HTML");
+                            it->icon_id = ICON_NET;
                         } else if (dot && (strcasecmp(dot, ".jpg") == 0 || strcasecmp(dot, ".bmp") == 0 || strcasecmp(dot, ".png") == 0)) {
                             strcpy(it->desc, "Immagine grafica");
                             it->icon_id = ICON_IMAGE;
@@ -1586,8 +1594,11 @@ static void explorer_execute_selected(explorer_state_t* state) {
                 else if (strcasecmp(it->name, "EXPLORER.EXE") == 0) app_explorer_open_this_pc();
                 else if (strcasecmp(it->name, "REGEDIT.EXE") == 0) app_regedit_launch();
                 else if (strcasecmp(it->name, "RULES.EXE") == 0) app_rules_viewer_launch();
+                else if (strcasecmp(it->name, "WEBBROWSER.EXE") == 0 || strcasecmp(it->name, "BROWSER.EXE") == 0) app_browser_launch();
                 else if (strcasecmp(it->name, "SETUP.EXE") == 0 || strcasecmp(it->name, "OOBE.EXE") == 0) app_oobe_launch();
                 else app_notepad_open_file(it->name, "Esecuzione applicazione PE64...");
+            } else if (dot && (strcasecmp(dot, ".htm") == 0 || strcasecmp(dot, ".html") == 0)) {
+                app_browser_open_url(full_path);
             } else if (dot && (strcasecmp(dot, ".dat") == 0) && strcasecmp(it->name, "REGISTRY.DAT") == 0) {
                 app_regedit_launch();
             } else {

@@ -1,0 +1,37 @@
+================================================================================
+NEWOS V1 (64-BIT) - COMPONENTE WEBBROWSER (C:\WebBrowser\)
+(C) Copyright Newspoint Software - NewSoft - NewOS V1
+================================================================================
+
+DESCRIZIONE:
+Questo modulo implementa il browser web grafico nativo e client HTTP per
+l'ambiente desktop di NewOS V1 (WEBBROWSER.EXE).
+
+FILE DEL COMPONENTE:
+- webbrowser.c      : Sorgente C con GUI Window Manager, parser HTML ed engine HTTP
+- webbrowser.h      : Header pubblico con prototipi di avvio ed esportazioni
+- webbrowser.ini    : Configurazione preferenze, homepage e segnalibri
+- home.htm          : Pagina iniziale predefinita (about:home)
+- about.htm         : Pagina informativa sul browser e specifiche tecniche
+- LEGGIMI.TXT       : Questo file di documentazione
+
+FUNZIONALITA' PRINCIPALI:
+1. Interfaccia Classic Windows 2000 con barre 3D sunken/bevel:
+   - Barra dei menu (File, Modifica, Visualizza, Preferiti, ?)
+   - Barra strumenti di navigazione: Indietro, Avanti, Stop, Aggiorna, Home
+   - Barra indirizzi con input interattivo da tastiera e pulsante [ Vai ]
+   - Barra dei segnalibri / Preferiti con collegamenti rapidi
+   - Barra di stato inferiore con zona di sicurezza e icona di rete
+2. Connessione HTTP remota su stack TCP/IP nativo (.SYS.NET):
+   - Connessione a server HTTP remoti (porta 80)
+   - Test prioritario con IP italiano 95.141.32.1 o gateway 10.0.2.2
+3. Visualizzazione documenti locali tramite schema file:///C:/
+4. Motore di parsing e rendering HTML 1.0/2.0:
+   - Titoli h1, h2, h3 con enfasi cromatica
+   - Collegamenti ipertestuali <a> cliccabili con sottolineatura ed effetto hover
+   - Elenchi puntati e numerati <ul>, <ol>, <li>
+   - Linee orizzontali <hr> incassate 3D
+   - Testo preformattato <pre> e <code>
+   - Paragrafi <p> e ritorni a capo <br>
+5. Cronologia di navigazione (Back/Forward history stack)
+================================================================================

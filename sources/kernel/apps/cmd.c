@@ -105,6 +105,7 @@ static void cmd_execute(cmd_state_t* state, const char* cmd) {
         cmd_print(state, "  CLEAR     Pulisce la schermata del terminale");
         cmd_print(state, "  OOBE      Avvia Configurazione Guidata Iniziale");
         cmd_print(state, "  RULES     Visualizzatore Ufficiale Regole (.NOR)");
+        cmd_print(state, "  BROWSER   Avvia il Web Browser (es. BROWSER [url])");
         cmd_print(state, "  TYPE      Visualizza file (solo testo chiaro)");
         cmd_print(state, "  ECHO      Stampa un messaggio a video");
         cmd_print(state, "  AUTOPLAY  Finestra dinamica USB/CD/DVD/BD (Casi 1-4)");
@@ -539,6 +540,14 @@ static void cmd_execute(cmd_state_t* state, const char* cmd) {
     } else if (strcmp(cmd, "rules") == 0 || strcmp(cmd, "rulesview") == 0 || strcmp(cmd, "rules.exe") == 0) {
         cmd_print(state, "Apertura Visualizzatore Regole NewOS (.NOR)...");
         app_rules_viewer_launch();
+    } else if (strncmp(cmd, "browser", 7) == 0 || strncmp(cmd, "web", 3) == 0) {
+        const char* target = cmd;
+        if (strncmp(cmd, "browser", 7) == 0) target += 7;
+        else if (strncmp(cmd, "web", 3) == 0) target += 3;
+        while (*target == ' ') target++;
+        cmd_print(state, "Avvio NewOS Web Browser...");
+        if (*target) app_browser_open_url(target);
+        else app_browser_launch();
     } else if (strncmp(cmd, "type ", 5) == 0) {
         const char* path = cmd + 5;
         while (*path == ' ') path++;

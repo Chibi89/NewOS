@@ -152,15 +152,16 @@ void wm_init(void) {
     num_desktop_icons = 0;
     const char* base_labels[] = {
         "Risorse PC",
+        "Web Browser",
         "Cestino",
         "Prompt Comandi",
         "Blocco Note",
         "Calcolatrice",
         "Info Sistema"
     };
-    int base_types[] = { 0, 7, 1, 2, 3, 4 };
+    int base_types[] = { 0, 9, 7, 1, 2, 3, 4 };
 
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < 7; i++) {
         desktop_icons[i].x = 20;
         desktop_icons[i].y = 20 + i * 75;
         strncpy(desktop_icons[i].label, base_labels[i], sizeof(desktop_icons[i].label) - 1);
@@ -382,6 +383,7 @@ static void draw_window_frame(window_t* win) {
     else if (win->app_type == APP_DISPLAY) w_icon = ICON_DESKTOP;
     else if (win->app_type == APP_SOUND) w_icon = ICON_SOUND;
     else if (win->app_type == APP_RULES) w_icon = ICON_DOCUMENT;
+    else if (win->app_type == APP_BROWSER) w_icon = ICON_NET;
     else if (win->app_type == APP_EXPLORER) {
         w_icon = ICON_THIS_PC;
         if (strstr(win->title, "Disco locale") || strstr(win->title, "C:\\")) w_icon = ICON_HD;
@@ -420,7 +422,7 @@ static void draw_window_frame(window_t* win) {
 
 static void draw_start_menu(int32_t sw, int32_t sh) {
     int32_t mw = 200;
-    int32_t mh = 272;
+    int32_t mh = 304;
     int32_t mx = 2;
     int32_t my = sh - 28 - mh;
 
@@ -435,6 +437,7 @@ static void draw_start_menu(int32_t sw, int32_t sh) {
 
     // Voci di menu con icone
     const char* items[] = {
+        "Web Browser",
         "Prompt Comandi",
         "Blocco Note",
         "Calcolatrice",
@@ -445,6 +448,7 @@ static void draw_start_menu(int32_t sw, int32_t sh) {
         "Arresta il sistema..."
     };
     icon_id_t item_icons[] = {
+        ICON_NET,
         ICON_RUN,
         ICON_DOCUMENT,
         ICON_MAINTENANCE,
@@ -455,9 +459,9 @@ static void draw_start_menu(int32_t sw, int32_t sh) {
         ICON_ENERGY
     };
 
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < 9; i++) {
         int32_t iy = my + 8 + i * 32;
-        if (i == 7) {
+        if (i == 8) {
             // Linea divisoria prima di Arresta il sistema
             gfx_draw_bevel_rect(mx + 28, iy - 4, mw - 34, 2, true);
         }
@@ -581,6 +585,7 @@ void wm_render(void) {
         }
         else if (desktop_icons[i].type == 7) gfx_draw_icon_32(ix, iy, ICON_CESTINO);
         else if (desktop_icons[i].type == 8) gfx_draw_icon_32(ix, iy, ICON_MAINTENANCE);
+        else if (desktop_icons[i].type == 9) gfx_draw_icon_32(ix, iy, ICON_NET);
 
         // Calcola larghezza e posizione centrata dell'etichetta
         int32_t lw = (int32_t)strlen(desktop_icons[i].label) * 8;
@@ -805,6 +810,9 @@ void wm_update(mouse_state_t* mouse, char key) {
                 else if (desktop_icons[idx].type == 8) {
                     app_installer_launch();
                 }
+                else if (desktop_icons[idx].type == 9) {
+                    app_browser_launch();
+                }
             }
             dragging_icon_idx = -1;
             icon_was_dragged = false;
@@ -930,17 +938,18 @@ void wm_update(mouse_state_t* mouse, char key) {
 
         // Clic dentro il menu Start se aperto
         if (start_menu_open) {
-            int32_t mw = 200, mh = 272, mx = 2, my = sh - 28 - mh;
+            int32_t mw = 200, mh = 304, mx = 2, my = sh - 28 - mh;
             if (mouse->x >= mx && mouse->x <= mx + mw && mouse->y >= my && mouse->y <= my + mh) {
                 int item = (mouse->y - my - 8) / 32;
-                if (item == 0) app_cmd_launch();
-                else if (item == 1) app_notepad_launch();
-                else if (item == 2) app_calc_launch();
-                else if (item == 3) app_rules_viewer_launch();
-                else if (item == 4) app_control_panel_open();
-                else if (item == 5) app_regedit_launch();
-                else if (item == 6) app_about_launch();
-                else if (item == 7) {
+                if (item == 0) app_browser_launch();
+                else if (item == 1) app_cmd_launch();
+                else if (item == 2) app_notepad_launch();
+                else if (item == 3) app_calc_launch();
+                else if (item == 4) app_rules_viewer_launch();
+                else if (item == 5) app_control_panel_open();
+                else if (item == 6) app_regedit_launch();
+                else if (item == 7) app_about_launch();
+                else if (item == 8) {
                     app_shutdown_dialog_launch();
                 }
                 start_menu_open = false;

@@ -139,6 +139,7 @@ function organizeBuildBin(rootDir, binDir) {
         'NewOS/Resources/Sounds',
         'NewOS/Resources/Screens',
         'NewOS/Resources/Icons',
+        'NewOS/Resources/Web',
         'NewOS/Resource/cursor',
         'NewOS/Resource/wallpapers',
         'NewOS/Font',
@@ -254,6 +255,21 @@ function organizeBuildBin(rootDir, binDir) {
         fs.copyFileSync(iconSrc, path.join(binDir, 'NewOS', 'Resources', 'Icons', 'ICONS.BIN'));
     }
 
+    // Risorse Web per il Web Browser (C:\NewOS\Resources\Web\)
+    const webDst = path.join(binDir, 'NewOS', 'Resources', 'Web');
+    if (!fs.existsSync(webDst)) fs.mkdirSync(webDst, { recursive: true });
+    const webFiles = [
+        { src: 'WebBrowser/home.htm', dst: 'HOME.HTM' },
+        { src: 'WebBrowser/about.htm', dst: 'ABOUT.HTM' },
+        { src: 'WebBrowser/webbrowser.ini', dst: 'BROWSER.INI' }
+    ];
+    for (const wf of webFiles) {
+        const sp = path.join(rootDir, wf.src);
+        if (fs.existsSync(sp)) {
+            fs.copyFileSync(sp, path.join(webDst, wf.dst));
+        }
+    }
+
     // 3. Popola Font (C:\NewOS\Font\)
     const fontDir = path.join(binDir, 'NewOS', 'Font');
     fs.writeFileSync(path.join(fontDir, 'SYSTEM.FNT'), "NewOS V1 System Bitmap Font 8x16 ISO-8859-1 Western Latin\n");
@@ -349,7 +365,7 @@ WindowText=0xE2E8F0
 
     // 8. Popola SystemProgram (C:\NewOS\SystemProgram\)
     const sysProgDir = path.join(binDir, 'NewOS', 'SystemProgram');
-    for (const prog of ['REGEDIT.EXE', 'TASKMGR.EXE', 'EXPLORER.EXE', 'CMD.EXE', 'CALC.EXE', 'NOTEPAD.EXE', 'RULES.EXE', 'DISKMGMT.EXE', 'CHKDSK.EXE', 'EVENTVWR.EXE',
+    for (const prog of ['REGEDIT.EXE', 'TASKMGR.EXE', 'EXPLORER.EXE', 'CMD.EXE', 'CALC.EXE', 'NOTEPAD.EXE', 'RULES.EXE', 'WEBBROWSER.EXE', 'DISKMGMT.EXE', 'CHKDSK.EXE', 'EVENTVWR.EXE',
                        'DISPLAY.CPL', 'POWER.CPL', 'NETWORK.CPL', 'DEVMGMT.CPL', 'SOUND.CPL', 'DATEANDTIME.CPL', 'PROGRAMS.CPL', 'ACCESSIBILITY.CPL', 'REGEDIT.CPL']) {
         fs.writeFileSync(path.join(sysProgDir, prog), peStub);
     }
@@ -461,6 +477,7 @@ TccPath=REG_SZ:C:\\NewOS\\Dev\\TCC\\TCC.EXE
 CmdPath=REG_SZ:C:\\NewOS\\SystemProgram\\CMD.EXE
 NotepadPath=REG_SZ:C:\\NewOS\\SystemProgram\\NOTEPAD.EXE
 CalcPath=REG_SZ:C:\\NewOS\\SystemProgram\\CALC.EXE
+BrowserPath=REG_SZ:C:\\NewOS\\SystemProgram\\WEBBROWSER.EXE
 
 [HKEY_CURRENT_USER\\DESKTOP]
 (Predefinito)=REG_SZ:(valore non impostato)
@@ -474,6 +491,7 @@ TaskbarAutoHide=REG_DWORD:0
 Language=REG_SZ:IT_IT
 Sounds=REG_DWORD:1
 Resolution=REG_SZ:1024x768
+HomePage=REG_SZ:about:home
 
 [HKEY_CLASSES_ROOT]
 (Predefinito)=REG_SZ:(valore non impostato)
@@ -486,6 +504,9 @@ Resolution=REG_SZ:1024x768
 .INI=REG_SZ:inifile (Configurazione)
 .SYS=REG_SZ:sysfile (Driver di Sistema)
 .DAT=REG_SZ:datfile (Database Registro)
+.HTM=REG_SZ:htmlfile (WEBBROWSER.EXE)
+.HTML=REG_SZ:htmlfile (WEBBROWSER.EXE)
+.URL=REG_SZ:inetsave (WEBBROWSER.EXE)
 `;
 
     const encryptedRegistryDat = encryptRegistryEnvelope(registryDatContent);

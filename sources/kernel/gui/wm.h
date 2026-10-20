@@ -21,7 +21,8 @@ typedef enum {
     APP_REGEDIT,
     APP_OOBE,
     APP_RULES,
-    APP_AUTOPLAY
+    APP_AUTOPLAY,
+    APP_BROWSER
 } app_type_t;
 
 typedef struct window window_t;
@@ -85,6 +86,8 @@ void app_installer_launch(void);
 void app_regedit_launch(void);
 void app_rules_viewer_launch(void);
 void app_rules_viewer_open_file(const char* filepath);
+void app_browser_launch(void);
+void app_browser_open_url(const char* url);
 
 void wm_on_resolution_changed(uint32_t old_w, uint32_t old_h, uint32_t new_w, uint32_t new_h);
 

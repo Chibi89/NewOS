@@ -48,6 +48,9 @@ function syncSources() {
     // 2. Kernel C & ASM
     copyFolderRecursiveSync(path.join(ROOT, 'kernel'), path.join(SOURCES_DIR, 'kernel'));
 
+    // 2b. Modulo WebBrowser
+    copyFolderRecursiveSync(path.join(ROOT, 'WebBrowser'), path.join(SOURCES_DIR, 'WebBrowser'));
+
     // 3. Risorse grafiche e audio
     copyFolderRecursiveSync(path.join(ROOT, 'resources'), path.join(SOURCES_DIR, 'resources'));
 
