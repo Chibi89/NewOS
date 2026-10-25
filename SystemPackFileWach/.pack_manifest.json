@@ -1,0 +1,1209 @@
+﻿{
+  "package_info": {
+    "magic": "NOSPAK10",
+    "total_files": 171,
+    "total_uncompressed_bytes": 28699561,
+    "encrypted_payload_crc32": "0xB8648DAE",
+    "timestamp": "2026-10-20T17:28:12.0431815Z",
+    "extracted_from": "C:\\Users\\morga\\Desktop\\MyOS\\build\\bin\\BootSetup\\SYSTEM.PAK"
+  },
+  "files": [
+    {
+      "path": "BOOTSCR.INI",
+      "size": 293,
+      "crc32": "0x3B1D4FDD",
+      "sha256": "fe9077e03d969f02a2a66ddf349aeff164bfa3cb21a0c28d43ec8b97ab52c1d3",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "BOOTSCR.MOD",
+      "size": 2792,
+      "crc32": "0x2C6440DC",
+      "sha256": "7abd05b3e791ec206f5aad3e4548ff3d4a54ba62aba767a579f608b473c9d4f3",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "LOGIN.INI",
+      "size": 326,
+      "crc32": "0x46AD5123",
+      "sha256": "0de4dde8c9a404e326f1ac32bb7d936cdcd0a1c8c67f0a4470ef36ee18ce431f",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "LOGIN.MOD",
+      "size": 4560,
+      "crc32": "0x829434A4",
+      "sha256": "267de6d91fb8b40a9f0139a69d075f9f3331da79c8f5c20eb7d8657f0b374b0c",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "LOGOUT.INI",
+      "size": 314,
+      "crc32": "0xA9F89D6B",
+      "sha256": "25d7af2b270c16489d9a847b821995d8f4d7d99a43276773de85a725e1b39fd6",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "LOGOUT.MOD",
+      "size": 4672,
+      "crc32": "0xDB9710A7",
+      "sha256": "ddc261b74b57afde5f1305f7b29f0616be5bf54c76029eddd383a5db3b568986",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Dev/CONFIG/TCC.CFG",
+      "size": 193,
+      "crc32": "0xC9288314",
+      "sha256": "5dd388e51cd77a8860fa6eb549a65ef70990b554884a4bb20404f291538555fe",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Dev/INCLUDE/NEWOS.H",
+      "size": 408,
+      "crc32": "0xBBA0329E",
+      "sha256": "f434909451cea3b88aeed17cdd3c61e003b4df7de4bead20c4af98120e605b64",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Dev/LEGGIMI.TXT",
+      "size": 86,
+      "crc32": "0xF7FCCD3B",
+      "sha256": "785b22a20e9a4bf71b9fd882e932f99c19aef387044dbec67e0bbe2da0447405",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Dev/TCC/CONFIG/TCC.CFG",
+      "size": 209,
+      "crc32": "0x7BE9F600",
+      "sha256": "64a0408b7ed9a870ece81ff7d2614fd54c79899230016b94445869244d1fcdac",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Dev/TCC/INCLUDE/NEWOS.H",
+      "size": 408,
+      "crc32": "0xBBA0329E",
+      "sha256": "f434909451cea3b88aeed17cdd3c61e003b4df7de4bead20c4af98120e605b64",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Dev/TCC/LEGGIMI.TXT",
+      "size": 56,
+      "crc32": "0x254C145F",
+      "sha256": "8bbdac43c74e2bb1dc0dd91e1514dded1058cda475567ce50bf155c2a005b9df",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Dev/TCC/TEMP/TEMP.TXT",
+      "size": 70,
+      "crc32": "0x3B107DF4",
+      "sha256": "a08926f985450e52fd1c48468a78d4f35a5f894c52c2808d3212f062378e2486",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Dev/TCC/TMP/TMP.TXT",
+      "size": 49,
+      "crc32": "0x1508A808",
+      "sha256": "068b7af779bf65c14a14ba1f446c856c141d2bafc4a65df017b7ad46401502d4",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Dev/TEMP/TEMP.TXT",
+      "size": 70,
+      "crc32": "0x3B107DF4",
+      "sha256": "a08926f985450e52fd1c48468a78d4f35a5f894c52c2808d3212f062378e2486",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Dev/TMP/TMP.TXT",
+      "size": 49,
+      "crc32": "0x1508A808",
+      "sha256": "068b7af779bf65c14a14ba1f446c856c141d2bafc4a65df017b7ad46401502d4",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Diagnostic/DIAG.LOG",
+      "size": 76,
+      "crc32": "0x600BC468",
+      "sha256": "377eafe7637a438c6e92d0694e44c9e657594f8a2b91fa6dea38fb55dc6ca279",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Diagnostic/SYSINFO.TXT",
+      "size": 82,
+      "crc32": "0x04773D47",
+      "sha256": "74234560f27d427dce5875f7669170c9ae57371c6030dbc2c1a3723be1b32924",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/AC97.INI",
+      "size": 276,
+      "crc32": "0xC0C8C374",
+      "sha256": "c61a30589df5df729c4fb7193870bbb6f4252a97e6b16817c3dbef9a96e70b32",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/AC97.SYS",
+      "size": 1024,
+      "crc32": "0xD6F66B54",
+      "sha256": "782b4cbc01ac067882d8f5833c4503736393622479288cda3e7ba4d90f71120e",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/ATA.INI",
+      "size": 284,
+      "crc32": "0x2CEB957F",
+      "sha256": "040c5a790bc01b615be11ab2b32a256225b99e35a24a4eb68d117ed566de9c76",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/ATA.SYS",
+      "size": 1024,
+      "crc32": "0xF48E5566",
+      "sha256": "c618dc9c79fd9cbf8e5724dad5787fdaef4f122ac0e4c1a03f2644266059c66c",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/DHCP.INI",
+      "size": 280,
+      "crc32": "0x630CDEAE",
+      "sha256": "987b49d53ba83c077ee1e9c7ee5b5a1a3b2ec94356313ae4102b868e8516f1bb",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/DHCP.SYS.NET",
+      "size": 1024,
+      "crc32": "0xF74495A4",
+      "sha256": "10813ef82adaf899a9a398fe4f111aad3b8da251cf5ce16c9718aa0c0bebd797",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/E1000.INI",
+      "size": 293,
+      "crc32": "0x1FEB30AF",
+      "sha256": "548f93c1792b23c6f171584afe80fc622414467ee0601f2f8e30751d7a0f2299",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/E1000.SYS",
+      "size": 1024,
+      "crc32": "0xCE02C2D1",
+      "sha256": "24886cf94d1d56c4f56c2c51feda87bd6ed401d4576a06ef03dd5059ea1d0b50",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/ETH.INI",
+      "size": 280,
+      "crc32": "0x5BF76BB5",
+      "sha256": "4b751c962ba0133c1cf7a38d81d1a29b6cca1e53858501549bfa381f8e6ad9b8",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/ETH.SYS.NET",
+      "size": 1024,
+      "crc32": "0x5357D66F",
+      "sha256": "33ac4ce6359b765379a5c6a97fe50cc3d34dd29d513938eb7d8b008a9cafc0ad",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/IP.INI",
+      "size": 299,
+      "crc32": "0x4410E715",
+      "sha256": "d44173bd9a786b791101d7027f1f6aab743cb90c5f346369445d8eb524c336ef",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/IP.SYS.NET",
+      "size": 1024,
+      "crc32": "0x09742A05",
+      "sha256": "44bcfbec0845c26faa8112c14ed3e2399f8eb64ab723bd412e9b4a6680c76b11",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/LEGGIMI.TXT",
+      "size": 50,
+      "crc32": "0xE4C8C4C9",
+      "sha256": "1231c65f8bb5ebf3997cd77f06011c675ea7c01164a21f5184a3133d239aabd7",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/NET/DHCP.INI",
+      "size": 280,
+      "crc32": "0x630CDEAE",
+      "sha256": "987b49d53ba83c077ee1e9c7ee5b5a1a3b2ec94356313ae4102b868e8516f1bb",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/NET/DHCP.SYS.NET",
+      "size": 1024,
+      "crc32": "0xF74495A4",
+      "sha256": "10813ef82adaf899a9a398fe4f111aad3b8da251cf5ce16c9718aa0c0bebd797",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/NET/E1000.INI",
+      "size": 293,
+      "crc32": "0x1FEB30AF",
+      "sha256": "548f93c1792b23c6f171584afe80fc622414467ee0601f2f8e30751d7a0f2299",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/NET/E1000.SYS",
+      "size": 1024,
+      "crc32": "0xCE02C2D1",
+      "sha256": "24886cf94d1d56c4f56c2c51feda87bd6ed401d4576a06ef03dd5059ea1d0b50",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/NET/ETH.INI",
+      "size": 280,
+      "crc32": "0x5BF76BB5",
+      "sha256": "4b751c962ba0133c1cf7a38d81d1a29b6cca1e53858501549bfa381f8e6ad9b8",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/NET/ETH.SYS.NET",
+      "size": 1024,
+      "crc32": "0x5357D66F",
+      "sha256": "33ac4ce6359b765379a5c6a97fe50cc3d34dd29d513938eb7d8b008a9cafc0ad",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/NET/IP.INI",
+      "size": 299,
+      "crc32": "0x4410E715",
+      "sha256": "d44173bd9a786b791101d7027f1f6aab743cb90c5f346369445d8eb524c336ef",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/NET/IP.SYS.NET",
+      "size": 1024,
+      "crc32": "0x09742A05",
+      "sha256": "44bcfbec0845c26faa8112c14ed3e2399f8eb64ab723bd412e9b4a6680c76b11",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/NET/RTL8139.INI",
+      "size": 296,
+      "crc32": "0x4948DCD3",
+      "sha256": "f672f9806947ec484a81eb6cb509fca79608823c3e3dcd19fa103a6317324b07",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/NET/RTL8139.SYS",
+      "size": 1024,
+      "crc32": "0x85873F88",
+      "sha256": "fa80fe81804b35ad03037ed47c92307e244aa4c7826dc01597968a80e5acb0f8",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/NET/TCP.INI",
+      "size": 297,
+      "crc32": "0x859EFC0F",
+      "sha256": "39c6354e60ef84d93ec3ca6584f64f8c206182854f5eeebda81212bc4f52ee4e",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/NET/TCP.SYS.NET",
+      "size": 1024,
+      "crc32": "0x6F999C89",
+      "sha256": "cf598e6670113520c22977195dc1cb44ffd10da1da7c611cbbd0adc29a1b9792",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/NET/TLS.INI",
+      "size": 281,
+      "crc32": "0x980123D7",
+      "sha256": "cfadb3b3c949f6c3762919356138ff96efc56f7ceb6d485266af0ca6d056546d",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/NET/TLS.SYS.NET",
+      "size": 1024,
+      "crc32": "0xD252FA73",
+      "sha256": "f480d97406e1a0b903710fa86f92aa1763a1f67fa0500b5754d6194db0bf65da",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/NET/UDP.INI",
+      "size": 270,
+      "crc32": "0x3C214FBC",
+      "sha256": "73e1a0cd82d606bfc027b6e117de17d45d604093a2af4ec0cc37e7a36424c6cc",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/NET/UDP.SYS.NET",
+      "size": 1024,
+      "crc32": "0xF0E0B408",
+      "sha256": "dd4e67278d398b2fbac247e1f3d02dba11c0a6568e84ad7d4475a480336d98b9",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/NET/USBNET.INI",
+      "size": 318,
+      "crc32": "0xA0F375A0",
+      "sha256": "5d80060019461731e98945f3a0d7b69294a3c717869a4abf28bd92b7d3a44661",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/NET/USBNET.SYS",
+      "size": 1024,
+      "crc32": "0xCC03458E",
+      "sha256": "e716a34bd5225eb2b5462c8afeac94111d8471dafa0567e18682cac728cd81b3",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/NET/WIFI7.INI",
+      "size": 365,
+      "crc32": "0x1706553A",
+      "sha256": "ba5d3f86037c61160c39f57c7fdc7a9e31f5023754cda3417549e1d6d9a611ca",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/NET/WIFI7.SYS",
+      "size": 1024,
+      "crc32": "0x787D0DEB",
+      "sha256": "03bcef086c74cd873332ec0468643fac6fd68b5df30e019926b416a17cf91324",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/PCI.INI",
+      "size": 252,
+      "crc32": "0x6A58FAF6",
+      "sha256": "07c70b197d4216c4165857eac325e1554a8d7bb66ea20473c823866ef017954f",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/PCI.SYS",
+      "size": 1024,
+      "crc32": "0x320812AA",
+      "sha256": "e385e8cd21a47bac659b5edb0c6682678dd5486639e651a1305c6546265ec365",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/POWER.INI",
+      "size": 297,
+      "crc32": "0x2BB032F1",
+      "sha256": "e9443b8966181709106de6d35f24349eff0568c966982d20bb7ac08c845d5248",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/POWER.SYS",
+      "size": 1024,
+      "crc32": "0x07AE7A27",
+      "sha256": "5ec36b0d91eb0e985fe94648e1aeb95ae0c7bbab41ddbff99c84040100cd5cd0",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/PS2KBD.INI",
+      "size": 276,
+      "crc32": "0x70B63B61",
+      "sha256": "ccd00c4d63e8a891950d976e5e3c50fde9fe68b36cfb077dd1337159cb69d243",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/PS2KBD.SYS",
+      "size": 1024,
+      "crc32": "0x4AE10C6F",
+      "sha256": "3e6fcfd341516a430429687c9ce8c72fdadc4c697b9cfdaf08628138db0e9151",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/PS2MOUSE.INI",
+      "size": 281,
+      "crc32": "0xF72360F4",
+      "sha256": "54c865cbec00ebd6489bfec847e244f7da955e5d3e13e520c65e6a274dacf088",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/PS2MOUSE.SYS",
+      "size": 1024,
+      "crc32": "0xC84AC53A",
+      "sha256": "d47c39860246265c1ee97502fef5e1caa4f9a8a5e554470c44b578f9b520ea04",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/RTC.INI",
+      "size": 280,
+      "crc32": "0xB5D80270",
+      "sha256": "31f1af895fb9159098cae5277041083104a64892d2673e35fb4a14c8d5d3c573",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/RTC.SYS",
+      "size": 1024,
+      "crc32": "0xEBD52C27",
+      "sha256": "c442942fdf0bfb18722ceea7ae0d0076e69bb8033a7e896ccf8d5b3b71198b7b",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/RTL8139.INI",
+      "size": 296,
+      "crc32": "0x4948DCD3",
+      "sha256": "f672f9806947ec484a81eb6cb509fca79608823c3e3dcd19fa103a6317324b07",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/RTL8139.SYS",
+      "size": 1024,
+      "crc32": "0x85873F88",
+      "sha256": "fa80fe81804b35ad03037ed47c92307e244aa4c7826dc01597968a80e5acb0f8",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/TCP.INI",
+      "size": 297,
+      "crc32": "0x859EFC0F",
+      "sha256": "39c6354e60ef84d93ec3ca6584f64f8c206182854f5eeebda81212bc4f52ee4e",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/TCP.SYS.NET",
+      "size": 1024,
+      "crc32": "0x6F999C89",
+      "sha256": "cf598e6670113520c22977195dc1cb44ffd10da1da7c611cbbd0adc29a1b9792",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/TLS.INI",
+      "size": 281,
+      "crc32": "0x980123D7",
+      "sha256": "cfadb3b3c949f6c3762919356138ff96efc56f7ceb6d485266af0ca6d056546d",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/TLS.SYS.NET",
+      "size": 1024,
+      "crc32": "0xD252FA73",
+      "sha256": "f480d97406e1a0b903710fa86f92aa1763a1f67fa0500b5754d6194db0bf65da",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/UDP.INI",
+      "size": 270,
+      "crc32": "0x3C214FBC",
+      "sha256": "73e1a0cd82d606bfc027b6e117de17d45d604093a2af4ec0cc37e7a36424c6cc",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/UDP.SYS.NET",
+      "size": 1024,
+      "crc32": "0xF0E0B408",
+      "sha256": "dd4e67278d398b2fbac247e1f3d02dba11c0a6568e84ad7d4475a480336d98b9",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/USBHID.INI",
+      "size": 308,
+      "crc32": "0xAE823C8E",
+      "sha256": "494969d66271124f23d453228a31a9ef7889c600504fcbf685ac1fb5cdd58ce7",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/USBHID.SYS",
+      "size": 1024,
+      "crc32": "0x2EB17CF0",
+      "sha256": "81636469faf76ae0f058356a571891a82a4c59ebb3aef73160838a29949264b9",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/USBHUB.INI",
+      "size": 277,
+      "crc32": "0x1EBBE34E",
+      "sha256": "7a63837ee4da67a18106b7b8f7794dd9106c263ecdc323126fd3ec891419e85c",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/USBHUB.SYS",
+      "size": 1024,
+      "crc32": "0x5CC30E33",
+      "sha256": "c0f5acb77911147c945143821c65a35b75f4af93ce79095a47a3459dd29dbe88",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/USBMSC.INI",
+      "size": 312,
+      "crc32": "0x5EE4ADFE",
+      "sha256": "2ab7828151f2deae3d705e0569e133402b1727b7a345ec4779efd2e4d5fbff00",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/USBMSC.SYS",
+      "size": 1024,
+      "crc32": "0x08CEBF9A",
+      "sha256": "ff3f6b4a6483fc24adbb13e23aa52de160ee731a154b3780cb4024489185aa3c",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/USBNET.INI",
+      "size": 318,
+      "crc32": "0xA0F375A0",
+      "sha256": "5d80060019461731e98945f3a0d7b69294a3c717869a4abf28bd92b7d3a44661",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/USBNET.SYS",
+      "size": 1024,
+      "crc32": "0xCC03458E",
+      "sha256": "e716a34bd5225eb2b5462c8afeac94111d8471dafa0567e18682cac728cd81b3",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/USBOHCI.INI",
+      "size": 292,
+      "crc32": "0x75314430",
+      "sha256": "bba74aeb648d694200dd467df0529e36673ecdaa998d32565f7a0a4f46145f2c",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/USBOHCI.SYS",
+      "size": 1024,
+      "crc32": "0x08A440C2",
+      "sha256": "26cf23b8d495fcc2fe2b041fcb8bfcb2301f16f235cec02d70b8721b1bc7ec4c",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/USBUHCI.INI",
+      "size": 290,
+      "crc32": "0x5531F39F",
+      "sha256": "96de127772571cc699c9216f0f3f9022794758d330234d5f78d6bc454e7ee346",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/USBUHCI.SYS",
+      "size": 1024,
+      "crc32": "0x8E4DD208",
+      "sha256": "fcb4303f8b4219e5baba7bfae602994c544e471f7b8a3aa32aba32e8d7b44ae4",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/USBXHCI.INI",
+      "size": 307,
+      "crc32": "0x1F698D58",
+      "sha256": "e038be4cf81694f9acf783cc44040a28e13f1c5528d6cfcfd70bc3f8b8618473",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/USBXHCI.SYS",
+      "size": 1024,
+      "crc32": "0xC8ECC994",
+      "sha256": "43b212414e81c239c0e29894e9fcb497285de93e4601081f9750bb66da356306",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/VGA.INI",
+      "size": 300,
+      "crc32": "0xAAC263A1",
+      "sha256": "d19f286f956795dcfaa63c59f59a793bc2225d6496af05a7b86254bfc0deb828",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/VGA.SYS",
+      "size": 1024,
+      "crc32": "0x4057D2EE",
+      "sha256": "3193b18d25053dead624883bba2d7e169ec88636fa8ed3dbc04575118850267f",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/WIFI7.INI",
+      "size": 365,
+      "crc32": "0x1706553A",
+      "sha256": "ba5d3f86037c61160c39f57c7fdc7a9e31f5023754cda3417549e1d6d9a611ca",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Driver/WIFI7.SYS",
+      "size": 1024,
+      "crc32": "0x787D0DEB",
+      "sha256": "03bcef086c74cd873332ec0468643fac6fd68b5df30e019926b416a17cf91324",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Font/CONSOLE.FNT",
+      "size": 55,
+      "crc32": "0x3E5421B2",
+      "sha256": "95ed187d2257365def2135c1b5f2a858d9682bb52fddc2fe39c9386f931774f4",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Font/LEGGIMI.TXT",
+      "size": 79,
+      "crc32": "0xEE2B1FE0",
+      "sha256": "191829d1e5de5acb564a36b84ffbfafed0c0337e02a580413435a6b5a27336de",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Font/SYSTEM.FNT",
+      "size": 58,
+      "crc32": "0xB245DCEE",
+      "sha256": "639f3825ea1e6d8e53f760bae4ea27c80c47afa45bae8bc402873add689c87ee",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Font/VGA.FNT",
+      "size": 44,
+      "crc32": "0x7AE9AE10",
+      "sha256": "856d760dcdfba6f4f45c7e7da1a39e9b46492f6c248cf66b7fac3f931b3d190c",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Help/COMANDI.TXT",
+      "size": 83,
+      "crc32": "0x50BF3CF8",
+      "sha256": "9f791271a8c759b3cb8f8fc277e75f7bd826c2b4e5e122e66d6b15afd0c9c35a",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Help/FAQ.TXT",
+      "size": 71,
+      "crc32": "0x4D4D9734",
+      "sha256": "ffd1ed019b0284335a120b60cc22af56ea291f079d45eee9c4c1c9a888a3ba93",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Help/GUIDA.HLP",
+      "size": 29,
+      "crc32": "0xABFAB70F",
+      "sha256": "7738040f166d9f9db148d32b6dcb314e696c4e85216a2e433c11173c6a989796",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Help/MANUALE.TXT",
+      "size": 1491,
+      "crc32": "0x321322AE",
+      "sha256": "8db41605cbf615b8ca28b89f1b4c03980602c28208a42713991b0cbf465327ed",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Language/EN_US.LNG",
+      "size": 167,
+      "crc32": "0x6637FC8E",
+      "sha256": "2f0ed8b83aff593a965c40386c5d4105f929f5354fdfe0e58f5d3dc68c3c762c",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Language/IT_IT.LNG",
+      "size": 178,
+      "crc32": "0x077A7A92",
+      "sha256": "fe9b1243f211e5730cad7740e4b0766442fe5e2782af3f3269dee77ce58375f8",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Language/LANGUAGE.INI",
+      "size": 125,
+      "crc32": "0xD0895FD7",
+      "sha256": "58969880180b4c4fc53e84923a0826ed893833cbc40e83530b0f1f021dda2660",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/OOBE/OOBE.INI",
+      "size": 257,
+      "crc32": "0x23C65D23",
+      "sha256": "9aa08d4830d0ed8762d2f9443c9068cf54cca34e50c2b65dd2227d259932fe8a",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/OOBE/WELCOME.TXT",
+      "size": 49,
+      "crc32": "0x7C4645E5",
+      "sha256": "55679c135086da7131671bdddf5cfcf2dbf04275bf21fd9ca193bda730a75e91",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Registry/REGISTRY.DAT",
+      "size": 6575,
+      "crc32": "0x2A339F1E",
+      "sha256": "dad37436c190c3399bf8f07eebbf749f10959a4a98e29cf86bd05dcc59b01384",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Registry/REGISTRY.LOG",
+      "size": 349,
+      "crc32": "0x5DFDCA3C",
+      "sha256": "4ebdf4b5e52b8cf15fa15a83107c9eeab3e6cf9a2cfd53a3b8874061d0df8e16",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resource/cursor/ARROW.CUR",
+      "size": 82,
+      "crc32": "0x70E04641",
+      "sha256": "72bef0b5d8bd5cf3f0f982b1f260d1151d3eaf350818cfd510d4e6863f583a8b",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resource/cursor/BEAM.CUR",
+      "size": 82,
+      "crc32": "0x70E04641",
+      "sha256": "72bef0b5d8bd5cf3f0f982b1f260d1151d3eaf350818cfd510d4e6863f583a8b",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resource/cursor/HAND.CUR",
+      "size": 82,
+      "crc32": "0x70E04641",
+      "sha256": "72bef0b5d8bd5cf3f0f982b1f260d1151d3eaf350818cfd510d4e6863f583a8b",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resource/cursor/WAIT.CUR",
+      "size": 82,
+      "crc32": "0x70E04641",
+      "sha256": "72bef0b5d8bd5cf3f0f982b1f260d1151d3eaf350818cfd510d4e6863f583a8b",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resource/wallpapers/BLISS.BMP",
+      "size": 2359350,
+      "crc32": "0x78AD5574",
+      "sha256": "122f9adaf61ad85aec10f40c0471a9f78ecb46eedde35b964badf358cfa5b1a8",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resource/wallpapers/BLISS.JPG",
+      "size": 40756,
+      "crc32": "0x0C48A838",
+      "sha256": "aa088032ca4592e2d3aa08df40ba710a1173cba0ea60c5e4742fecefa52c4ed0",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resource/wallpapers/FLOW.BMP",
+      "size": 2359350,
+      "crc32": "0x5D95FFC1",
+      "sha256": "54e08a116deac731d3a2b9912cebc97bcc7d10746eca4d2ad843cc0e9d1893f8",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resource/wallpapers/FLOW.JPG",
+      "size": 89375,
+      "crc32": "0x207872E1",
+      "sha256": "42e61574935242aabb013ef019bf32afdbc6bc648f6fafd93434d48b6ca609f5",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resource/wallpapers/HERO.BMP",
+      "size": 2359350,
+      "crc32": "0x57D114BE",
+      "sha256": "953416d97afd80dc07390ebf92050228e5355de185d0e90ad6496d31fa43b519",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resource/wallpapers/HERO.JPG",
+      "size": 98317,
+      "crc32": "0x5857D2F6",
+      "sha256": "e0c90bc5c1289e9c8a6b1281bb0d7e2d542a531c42c3e4eebf1a89af1381fed9",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resource/wallpapers/THEME_A.BMP",
+      "size": 2359350,
+      "crc32": "0x650725A7",
+      "sha256": "b837de1919d919f54295fd4eed1c3ecb6e1dcce608d41cba2a54b6597ad64dd2",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resource/wallpapers/THEME_A.JPG",
+      "size": 37885,
+      "crc32": "0x59354A91",
+      "sha256": "4db124cb9befbe88adeee3c263533a7c59091204bc84b47ac8af97c3b2c5f023",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resources/cursor/ARROW.CUR",
+      "size": 82,
+      "crc32": "0x70E04641",
+      "sha256": "72bef0b5d8bd5cf3f0f982b1f260d1151d3eaf350818cfd510d4e6863f583a8b",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resources/cursor/BEAM.CUR",
+      "size": 82,
+      "crc32": "0x70E04641",
+      "sha256": "72bef0b5d8bd5cf3f0f982b1f260d1151d3eaf350818cfd510d4e6863f583a8b",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resources/cursor/HAND.CUR",
+      "size": 82,
+      "crc32": "0x70E04641",
+      "sha256": "72bef0b5d8bd5cf3f0f982b1f260d1151d3eaf350818cfd510d4e6863f583a8b",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resources/cursor/WAIT.CUR",
+      "size": 82,
+      "crc32": "0x70E04641",
+      "sha256": "72bef0b5d8bd5cf3f0f982b1f260d1151d3eaf350818cfd510d4e6863f583a8b",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resources/Icons/ICONS.BIN",
+      "size": 150528,
+      "crc32": "0x452836BE",
+      "sha256": "efd08cb574fee0f9091a2fb164ffc63de2d5635f30584cc9f59a5dd73db8c6d2",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resources/Screens/BOOTSCR.BMP",
+      "size": 3145782,
+      "crc32": "0x1C799821",
+      "sha256": "286618ebce802bee094030770fdf90e5577bf20c9bc18b2a83ae210dbc561def",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resources/Screens/BOOTSCR.JPG",
+      "size": 42351,
+      "crc32": "0x04940D44",
+      "sha256": "5ccdedcf39c264f8ce13c542de65d0e9f0fb146993c70dd2fb50756c5262fe5c",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resources/Screens/BOOTSCR.ORIG.JPG",
+      "size": 332218,
+      "crc32": "0xBB3CFEF4",
+      "sha256": "6e66e5969dd52599fd5d8c97b0407b239d5ac99910112f2dae9022bf89c03f0a",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resources/Screens/LOGIN.BMP",
+      "size": 2359350,
+      "crc32": "0x3A139575",
+      "sha256": "3763adfe96cc472841b580f9dbfcdb979117aea00ee60851ff9df47b945ea3d6",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resources/Screens/LOGIN.JPG",
+      "size": 92088,
+      "crc32": "0x0CB13CBC",
+      "sha256": "5660351f877eb73e8cdda43fa1853ed548f0b7f12d63a05d44f020d631314745",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resources/Screens/LOGOUT.BMP",
+      "size": 2359350,
+      "crc32": "0x3A139575",
+      "sha256": "3763adfe96cc472841b580f9dbfcdb979117aea00ee60851ff9df47b945ea3d6",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resources/Screens/LOGOUT.JPG",
+      "size": 92088,
+      "crc32": "0x0CB13CBC",
+      "sha256": "5660351f877eb73e8cdda43fa1853ed548f0b7f12d63a05d44f020d631314745",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resources/Sounds/CHORD.WAV",
+      "size": 113964,
+      "crc32": "0x0CBFD2A2",
+      "sha256": "327d389de55ae49a3e891ec450f2a6dd1f8039ebc74cbc3909667741bd3a0782",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resources/Sounds/DING.WAV",
+      "size": 70060,
+      "crc32": "0x34A26C6D",
+      "sha256": "500d8520a894aa45000279d02334057e92d1141704fae5406628960fd824c151",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resources/Sounds/RECYCLE.WAV",
+      "size": 95404,
+      "crc32": "0xD5BD722F",
+      "sha256": "f1eb9d205799a5b803b1df4de4e8feb54acd1a9ac9f3732b1a17a0cff02d71a7",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resources/Sounds/STARTUP.WAV",
+      "size": 38380,
+      "crc32": "0xBFB6F316",
+      "sha256": "deecc7613e7f26550a866b386875366f190fb00ac9484029bb1d0bd1274b344e",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resources/Sounds/TADA.WAV",
+      "size": 285228,
+      "crc32": "0x6E581752",
+      "sha256": "1527dd1cc9a800369c43c918e15db3ffd7b4347eb9f60f8969cf926d87fe9513",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resources/Wallpapers/BLISS.BMP",
+      "size": 2359350,
+      "crc32": "0x78AD5574",
+      "sha256": "122f9adaf61ad85aec10f40c0471a9f78ecb46eedde35b964badf358cfa5b1a8",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resources/Wallpapers/BLISS.JPG",
+      "size": 40756,
+      "crc32": "0x0C48A838",
+      "sha256": "aa088032ca4592e2d3aa08df40ba710a1173cba0ea60c5e4742fecefa52c4ed0",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resources/Wallpapers/FLOW.BMP",
+      "size": 2359350,
+      "crc32": "0x5D95FFC1",
+      "sha256": "54e08a116deac731d3a2b9912cebc97bcc7d10746eca4d2ad843cc0e9d1893f8",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resources/Wallpapers/FLOW.JPG",
+      "size": 89375,
+      "crc32": "0x207872E1",
+      "sha256": "42e61574935242aabb013ef019bf32afdbc6bc648f6fafd93434d48b6ca609f5",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resources/Wallpapers/HERO.BMP",
+      "size": 2359350,
+      "crc32": "0x57D114BE",
+      "sha256": "953416d97afd80dc07390ebf92050228e5355de185d0e90ad6496d31fa43b519",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resources/Wallpapers/HERO.JPG",
+      "size": 98317,
+      "crc32": "0x5857D2F6",
+      "sha256": "e0c90bc5c1289e9c8a6b1281bb0d7e2d542a531c42c3e4eebf1a89af1381fed9",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resources/Wallpapers/THEME_A.BMP",
+      "size": 2359350,
+      "crc32": "0x650725A7",
+      "sha256": "b837de1919d919f54295fd4eed1c3ecb6e1dcce608d41cba2a54b6597ad64dd2",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resources/Wallpapers/THEME_A.JPG",
+      "size": 37885,
+      "crc32": "0x59354A91",
+      "sha256": "4db124cb9befbe88adeee3c263533a7c59091204bc84b47ac8af97c3b2c5f023",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resources/Web/ABOUT.HTM",
+      "size": 1844,
+      "crc32": "0x48F59D9A",
+      "sha256": "32072cdfa56160fc2106997afabe449c313d8c49e2fd62cca4580a3bea281c3f",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resources/Web/BROWSER.INI",
+      "size": 765,
+      "crc32": "0xAFC1E7C4",
+      "sha256": "54669110c8d38de97f4e349767e28d91f814d25d34570f38424c018104473789",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resources/Web/HOME.HTM",
+      "size": 1736,
+      "crc32": "0x80E0A1AA",
+      "sha256": "3139098e45a90b3eea55d34eaf2369934f86f8aa076d5d345e3c634dc81dd05f",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Resources/Web/YOUTUBE.HTM",
+      "size": 2130,
+      "crc32": "0x9F3A3376",
+      "sha256": "83bfcfe1419aa77954ca6180aa4b0cc548a496aee1d29656df46eecd3bdfc6e8",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Rules/01_SYSTEM_HIERARCHY.NOR",
+      "size": 1723,
+      "crc32": "0x5FD54469",
+      "sha256": "e0c7b243f7484f5ea8ab06829538ed0ff2fa90f2ee04f1b4dbc408249736355f",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Rules/02_REGISTRY_SECURITY.NOR",
+      "size": 2110,
+      "crc32": "0x178BF621",
+      "sha256": "ec47e87b1a6fa2a403d3f0814d354ca84752b7b3316cfa8a48551553388e6c10",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Rules/03_INSTALL_POLICY.NOR",
+      "size": 1043,
+      "crc32": "0x3D4C40B5",
+      "sha256": "f441fd798851d3014cf002e9646b4106a3a23bbe843ede3d8d4ae12a05e2b18d",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Rules/04_USER_PRIVILEGES.NOR",
+      "size": 853,
+      "crc32": "0xE351141B",
+      "sha256": "89e93028b94eaf964485a130dded84ce4fdcc10c5d37ca9a82f2164cebdcd829",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Rules/05_NETWORK_AND_DEVICES.NOR",
+      "size": 797,
+      "crc32": "0x47642AFE",
+      "sha256": "7b7d120167cc0c265b81f8ed6572449b88d8c7e77cbea68dc73510e8d817415b",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Rules/LEGGIMI.TXT",
+      "size": 996,
+      "crc32": "0x9F36CE15",
+      "sha256": "c4264cedfc7f539edecaded0eaed9448504178d54da759e09250cf15b959579d",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/SystemProgram/ACCESSIBILITY.CPL",
+      "size": 1024,
+      "crc32": "0xB1A68A2C",
+      "sha256": "fc1370e9a6221b40da289bcfd804ad143d4043362f2cafbcb608a5ca5ce05456",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/SystemProgram/BOOTSCR.INI",
+      "size": 293,
+      "crc32": "0x3B1D4FDD",
+      "sha256": "fe9077e03d969f02a2a66ddf349aeff164bfa3cb21a0c28d43ec8b97ab52c1d3",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/SystemProgram/BOOTSCR.MOD",
+      "size": 2792,
+      "crc32": "0x2C6440DC",
+      "sha256": "7abd05b3e791ec206f5aad3e4548ff3d4a54ba62aba767a579f608b473c9d4f3",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/SystemProgram/DATEANDTIME.CPL",
+      "size": 1024,
+      "crc32": "0xB1A68A2C",
+      "sha256": "fc1370e9a6221b40da289bcfd804ad143d4043362f2cafbcb608a5ca5ce05456",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/SystemProgram/DEVMGMT.CPL",
+      "size": 1024,
+      "crc32": "0xB1A68A2C",
+      "sha256": "fc1370e9a6221b40da289bcfd804ad143d4043362f2cafbcb608a5ca5ce05456",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/SystemProgram/DISPLAY.CPL",
+      "size": 1024,
+      "crc32": "0xB1A68A2C",
+      "sha256": "fc1370e9a6221b40da289bcfd804ad143d4043362f2cafbcb608a5ca5ce05456",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/SystemProgram/LOGIN.INI",
+      "size": 326,
+      "crc32": "0x46AD5123",
+      "sha256": "0de4dde8c9a404e326f1ac32bb7d936cdcd0a1c8c67f0a4470ef36ee18ce431f",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/SystemProgram/LOGIN.MOD",
+      "size": 4560,
+      "crc32": "0x829434A4",
+      "sha256": "267de6d91fb8b40a9f0139a69d075f9f3331da79c8f5c20eb7d8657f0b374b0c",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/SystemProgram/LOGOUT.INI",
+      "size": 314,
+      "crc32": "0xA9F89D6B",
+      "sha256": "25d7af2b270c16489d9a847b821995d8f4d7d99a43276773de85a725e1b39fd6",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/SystemProgram/LOGOUT.MOD",
+      "size": 4672,
+      "crc32": "0xDB9710A7",
+      "sha256": "ddc261b74b57afde5f1305f7b29f0616be5bf54c76029eddd383a5db3b568986",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/SystemProgram/NETWORK.CPL",
+      "size": 1024,
+      "crc32": "0xB1A68A2C",
+      "sha256": "fc1370e9a6221b40da289bcfd804ad143d4043362f2cafbcb608a5ca5ce05456",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/SystemProgram/POWER.CPL",
+      "size": 1024,
+      "crc32": "0xB1A68A2C",
+      "sha256": "fc1370e9a6221b40da289bcfd804ad143d4043362f2cafbcb608a5ca5ce05456",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/SystemProgram/PROGRAMS.CPL",
+      "size": 1024,
+      "crc32": "0xB1A68A2C",
+      "sha256": "fc1370e9a6221b40da289bcfd804ad143d4043362f2cafbcb608a5ca5ce05456",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/SystemProgram/REGEDIT.CPL",
+      "size": 1024,
+      "crc32": "0xB1A68A2C",
+      "sha256": "fc1370e9a6221b40da289bcfd804ad143d4043362f2cafbcb608a5ca5ce05456",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/SystemProgram/SOUND.CPL",
+      "size": 1024,
+      "crc32": "0xB1A68A2C",
+      "sha256": "fc1370e9a6221b40da289bcfd804ad143d4043362f2cafbcb608a5ca5ce05456",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Themes/CLASSIC.THM",
+      "size": 28,
+      "crc32": "0x62B0FA3D",
+      "sha256": "a28a003674bd3ed723d58434401d2465cbad5f997fb4fa028d3e24ecd550dcfb",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Themes/DARK_NAVY.THM",
+      "size": 30,
+      "crc32": "0xAAB8809E",
+      "sha256": "ff3579fa5e95e24f701fadfd10e426f2369e7b42f25580d62c288c8be66e5389",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Themes/LIQUID_GLASS.THM",
+      "size": 36,
+      "crc32": "0xA9CABF15",
+      "sha256": "905074cf1615e5c2733dc4c63911216ceb4cfc0f839ee5f786eb9516ab4dabaf",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "NewOS/Themes/THEMES.INI",
+      "size": 461,
+      "crc32": "0x13E299DA",
+      "sha256": "2dd80ee1a92313430bb8cb0b69b8e13e15ee51c284c03a1d0731e8a8d536d159",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "ProgramFile/INSTALL_POLICY.TXT",
+      "size": 1223,
+      "crc32": "0xD3E94C1E",
+      "sha256": "9f3de32f451d59f1368e6aa1717c593ab3a91cd0e3f4e64ae3e0ef81b966f209",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "ProgramFile/LEGGIMI.TXT",
+      "size": 1223,
+      "crc32": "0xD3E94C1E",
+      "sha256": "9f3de32f451d59f1368e6aa1717c593ab3a91cd0e3f4e64ae3e0ef81b966f209",
+      "status": "AUTHENTIC"
+    },
+    {
+      "path": "User/Default/USER.CFG",
+      "size": 61,
+      "crc32": "0xE35F6414",
+      "sha256": "87d715f895a88f7d5418563bfa4d339a842159cd627a47199a82b5e71a78d09c",
+      "status": "AUTHENTIC"
+    }
+  ]
+}

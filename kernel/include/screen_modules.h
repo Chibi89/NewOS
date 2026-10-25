@@ -13,6 +13,8 @@
 #define MODULE_TYPE_LOGINSCREEN  2
 #define MODULE_TYPE_LOGOUTSCREEN 3
 #define MODULE_TYPE_BOOTSETUP    4
+#define MODULE_TYPE_CODEC        5
+#define MODULE_TYPE_UPDATE       6
 
 #define SEC_FLAG_PROTECTED       0x01
 #define SEC_FLAG_SYSTEM_SIGNED   0x02
@@ -152,10 +154,24 @@ typedef enum {
     BOOTSETUP_ERROR = -1
 } bootsetup_result_t;
 
+// Parametri e risultati Update Module (UPDATE.MOD)
+typedef struct {
+    const char* package_path;
+    const char* reg_update_path;
+    bool force_unattended;
+} update_params_t;
+
+typedef enum {
+    UPDATE_SUCCESS = 0,
+    UPDATE_ROLLBACK = 1,
+    UPDATE_ERROR = -1
+} update_result_t;
+
 // Tipi di funzione per Entry Point dei moduli protetti
 typedef int (*bootscreen_entry_fn)(const kernel_api_t* api, const bootscreen_params_t* params);
 typedef int (*loginscreen_entry_fn)(const kernel_api_t* api, const loginscreen_params_t* params);
 typedef int (*logoutscreen_entry_fn)(const kernel_api_t* api, const logoutscreen_params_t* params);
 typedef int (*bootsetup_entry_fn)(const kernel_api_t* api, const bootsetup_params_t* params);
+typedef int (*update_entry_fn)(const kernel_api_t* api, const update_params_t* params);
 
 #endif // SCREEN_MODULES_H

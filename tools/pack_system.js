@@ -20,16 +20,26 @@ function getAllFiles(dir, baseDir = '') {
     let results = [];
     const list = fs.readdirSync(dir);
     for (const file of list) {
-        if (file === 'SYSTEM.PAK' || file === 'BOOTSETUP.MOD' || file === 'BOOTSETUP.INI' ||
-            file === 'kernel.bin' || file === 'kernel.elf' || file === 'stage2.bin' || file === 'bootsect.bin' ||
-            file === 'myos.img' || file === 'NewOS_V1.img' || file === 'myos.iso' || file === 'NewOS_V1.iso') continue;
-        const fullPath = path.join(dir, file);
+        const fnameUpper = file.toUpperCase();
+        if (fnameUpper === 'SYSTEM.PAK' || fnameUpper === 'BOOTSETUP.MOD' || fnameUpper === 'BOOTSETUP.INI' ||
+            fnameUpper === 'KERNEL.BIN' || fnameUpper === 'KERNEL.ELF' || fnameUpper === 'STAGE2.BIN' || fnameUpper === 'BOOTSECT.BIN' ||
+            fnameUpper === 'BOOTX64.EFI' || fnameUpper === 'BOOTX64.BIN' ||
+            fnameUpper.endsWith('.IMG') || fnameUpper.endsWith('.ISO') || fnameUpper.endsWith('.VDI')) continue;
         const relPath = baseDir ? `${baseDir}/${file}` : file;
+        const relNormalized = relPath.replace(/\\/g, '/');
+
+        // Il profilo Morgan deve essere mantenuto solo per la versione Live (escluso da SYSTEM.PAK)
+        if (relNormalized === 'User/Morgan' || relNormalized.startsWith('User/Morgan/') ||
+            relNormalized === 'User/MORGAN' || relNormalized.startsWith('User/MORGAN/')) {
+            continue;
+        }
+
+        const fullPath = path.join(dir, file);
         const stat = fs.statSync(fullPath);
         if (stat.isDirectory()) {
-            results = results.concat(getAllFiles(fullPath, relPath));
+            results = results.concat(getAllFiles(fullPath, relNormalized));
         } else {
-            results.push({ fullPath, relPath: relPath.replace(/\\/g, '/'), size: stat.size });
+            results.push({ fullPath, relPath: relNormalized, size: stat.size });
         }
     }
     return results;

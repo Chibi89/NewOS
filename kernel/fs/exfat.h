@@ -73,4 +73,11 @@ int32_t exfat_read_file(const exfat_item_info_t* file_info, uint32_t offset, voi
 // Scrive dati in-place su un file esistente preservando i cluster
 int32_t exfat_write_file_inplace(const exfat_item_info_t* file_info, uint32_t offset, const void* buf, uint32_t count);
 
+// Interrogazione spazio e cluster allocati reali
+uint32_t exfat_get_allocated_clusters(void);
+uint32_t exfat_get_used_mb(void);
+uint32_t exfat_get_free_clusters(void);
+void     exfat_notify_cluster_allocated(void);
+void     exfat_notify_cluster_freed(void);
+
 #endif // FS_EXFAT_H

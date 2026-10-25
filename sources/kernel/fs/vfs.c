@@ -11,6 +11,7 @@
 #include <drivers/ata.h>
 #include <mm/heap.h>
 #include <string.h>
+#include <arch/x86_64/io.h>
 
 #define MAX_OPEN_FILES 16
 static vfs_file_t g_file_pool[MAX_OPEN_FILES];
@@ -108,25 +109,66 @@ bool vfs_init(void) {
     ramfs_init();
 
     // 2. Annoda dinamicamente i punti di montaggio ufficiali:
-    // C: -> Partizione primaria exFAT a LBA 2048
-    bool c_ok = vfs_mount_drive('C', "exFAT", "Disco locale (C:)", 0, EXFAT_PARTITION_LBA, false, NULL);
+    // C: -> Partizione primaria exFAT a LBA 2048 (SISTEMA IN ESECUZIONE - SEMPRE PRIORITARIO)
+    const ata_device_t* pm = ata_get_primary_master();
+    bool c_ok = vfs_mount_drive('C', "exFAT", "Disco locale (C:)", 0, EXFAT_PARTITION_LBA, false, (void*)pm);
 
     // D: -> Lettore Ottico CD-ROM / DVD / Blu-Ray (con rilevamento automatico UDF / ISO 9660 / Joliet / Bridge)
     char opt_fs[16] = "ISO9660";
     char opt_lbl[32] = "Unita ottica (D:)";
     const ata_device_t* atapi_dev = NULL;
+    uint32_t atapi_dev_id = 1;
     int dev_cnt = ata_get_device_count();
     for (int i = 0; i < dev_cnt; i++) {
         const ata_device_t* d = ata_get_device(i);
-        if (d && d->is_atapi) { atapi_dev = d; break; }
+        if (d && d->is_atapi) {
+            atapi_dev = d;
+            atapi_dev_id = (uint32_t)i;
+            break;
+        }
     }
     if (atapi_dev) {
         fs_probe_optical_device(atapi_dev, opt_fs, sizeof(opt_fs), opt_lbl, sizeof(opt_lbl));
     }
-    vfs_mount_drive('D', opt_fs, opt_lbl, 1, 0, true, NULL);
+    vfs_mount_drive('D', opt_fs, opt_lbl, atapi_dev_id, 0, true, (void*)atapi_dev);
 
     // R: -> Disco RAM in memoria ad altissima velocità
     vfs_mount_drive('R', "RamFS", "Disco RAM (R:)", 0, 0, false, NULL);
+
+    // 3. Montaggio di tutti gli altri Hard Disk / SSD secondari rilevati sulla scheda madre:
+    // Il disco C: e' SEMPRE e RIGOROSAMENTE il sistema operativo in esecuzione.
+    // Se altri dischi hanno partizioni con lettera C:, vengono riassegnati alla prima lettera non allocata.
+    for (int i = 0; i < dev_cnt; i++) {
+        const ata_device_t* dev = ata_get_device(i);
+        if (!dev || !dev->present || dev->is_atapi) continue;
+        if (dev == pm) continue; // Salta il disco di sistema C:
+
+        // Trova la prima lettera di unità libera non allocata (E..Z, escluse R e U)
+        char free_letter = 0;
+        for (char cand = 'E'; cand <= 'Z'; cand++) {
+            if (cand == 'R' || cand == 'U') continue;
+            vfs_drive_info_t dummy;
+            if (!vfs_get_drive_info(cand, &dummy)) {
+                free_letter = cand;
+                break;
+            }
+        }
+        if (!free_letter) break; // Terminate lettere di unità disponibili
+
+        const char* fs_name = "RAW";
+        if (strcmp(dev->part_fs, "NTFS") == 0) {
+            fs_name = "NTFS";
+        } else if (strcmp(dev->part_fs, "exFAT") == 0) {
+            fs_name = "exFAT";
+        } else if (strcmp(dev->part_fs, "FAT32") == 0 || strcmp(dev->part_fs, "FAT16") == 0) {
+            fs_name = "exFAT"; // Fallback compatibile FAT
+        }
+
+        char label[32];
+        mini_snprintf(label, sizeof(label), "Disco locale (%c:)", free_letter);
+
+        vfs_mount_drive(free_letter, fs_name, label, (uint32_t)i, dev->part_lba, false, (void*)dev);
+    }
 
     return c_ok;
 }
@@ -293,7 +335,8 @@ int32_t vfs_readdir(const char* dir_path, vfs_dirent_t* entries, int32_t max_ent
         dir_cluster = dir_info.first_cluster;
     }
 
-    exfat_item_info_t raw_items[64];
+    exfat_item_info_t* raw_items = (exfat_item_info_t*)kmalloc(sizeof(exfat_item_info_t) * 64);
+    if (!raw_items) return 0;
     int32_t raw_count = exfat_list_dir(dir_cluster, raw_items, (max_entries < 64) ? max_entries : 64);
 
     for (int32_t i = 0; i < raw_count; i++) {
@@ -304,6 +347,7 @@ int32_t vfs_readdir(const char* dir_path, vfs_dirent_t* entries, int32_t max_ent
         entries[i].is_directory = raw_items[i].is_directory;
     }
 
+    kfree(raw_items);
     return raw_count;
 }
 

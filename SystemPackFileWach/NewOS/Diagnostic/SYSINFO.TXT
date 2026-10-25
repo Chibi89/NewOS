@@ -1,0 +1,1 @@
+NewOS V1 System Telemetry: CPU x86_64, VBE 1024x768x32bpp, RAM 256MB+, exFAT C:\.

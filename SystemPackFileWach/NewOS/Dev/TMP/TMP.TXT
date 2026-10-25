@@ -1,0 +1,1 @@
+Directory temporanea TMP per il compilatore TCC.

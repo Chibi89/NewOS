@@ -1,6 +1,11 @@
 #include <drivers/ata.h>
+#include <drivers/ahci.h>
 #include <arch/x86_64/io.h>
 #include <string.h>
+
+bool storage_is_ahci_active(void) {
+    return ahci_is_active();
+}
 
 #define ATA_PRIMARY_IO      0x1F0
 #define ATA_SECONDARY_IO    0x170
@@ -60,6 +65,9 @@ static void ata_clean_string(char* dst, const uint16_t* src, int word_count) {
 
 bool atapi_read_cd_sector(const ata_device_t* dev, uint32_t cd_lba, void* buf2048) {
     if (!dev || !buf2048) return false;
+    if (dev->is_ahci) {
+        return ahci_read_cd_sector(dev->ahci_port, cd_lba, buf2048);
+    }
     uint16_t io = dev->io_base;
     uint8_t sel = (dev->drive == 0) ? 0xA0 : 0xB0;
 
@@ -306,14 +314,24 @@ static bool ata_identify_drive(uint8_t channel, uint8_t drive, ata_device_t* dev
 
         strcpy(dev->part_fs, "ISO 9660");
 
-        // Verifica se presente disco ibrido el-torito con MBR/exFAT a CD LBA 32
+        // 1. Rileva il BOOT_LBA dal catalogo El Torito al settore 20
+        uint32_t boot_lba = 32;
+        uint8_t cat_sec[2048];
+        if (atapi_read_cd_sector(dev, 20, cat_sec)) {
+            uint32_t cand = *(uint32_t*)&cat_sec[40];
+            if (cand > 0 && cand < 200000) {
+                boot_lba = cand;
+            }
+        }
+        dev->boot_lba = boot_lba;
+
+        // 2. Verifica se presente disco ibrido el-torito con MBR/exFAT a boot_lba
         uint8_t cd_sector[2048];
-        if (atapi_read_cd_sector(dev, 32, cd_sector)) {
+        if (atapi_read_cd_sector(dev, boot_lba, cd_sector)) {
             if (cd_sector[510] == 0x55 && cd_sector[511] == 0xAA) {
                 dev->has_mbr = true;
                 dev->part_type = cd_sector[446 + 4];
                 dev->part_lba = *(uint32_t*)&cd_sector[446 + 8];
-                dev->part_sectors = *(uint32_t*)&cd_sector[446 + 12];
                 if (dev->part_type == 0x07) {
                     strcpy(dev->part_fs, "exFAT");
                 }
@@ -329,14 +347,46 @@ void ata_init(void) {
     memset(g_devices, 0, sizeof(g_devices));
     g_device_count = 0;
 
-    // Scansiona i 4 canali/unità ATA standard
-    // 0: Primary Master, 1: Primary Slave, 2: Secondary Master, 3: Secondary Slave
-    for (uint8_t ch = 0; ch < 2; ch++) {
-        for (uint8_t drv = 0; drv < 2; drv++) {
-            ata_device_t tmp;
-            if (ata_identify_drive(ch, drv, &tmp)) {
-                if (g_device_count < MAX_ATA_DEVICES) {
-                    memcpy(&g_devices[g_device_count++], &tmp, sizeof(ata_device_t));
+    // 1. TENTATIVO PRIORITARIO CONTROLLER SERIAL ATA AHCI 1.0 (DMA AD ALTE PRESTAZIONI)
+    if (ahci_init()) {
+        int ahci_cnt = ahci_get_device_count();
+        for (int i = 0; i < ahci_cnt && g_device_count < MAX_ATA_DEVICES; i++) {
+            const ahci_device_t* ad = ahci_get_device(i);
+            if (!ad || !ad->present) continue;
+            ata_device_t* dev = &g_devices[g_device_count++];
+            memset(dev, 0, sizeof(ata_device_t));
+            dev->present = true;
+            dev->is_atapi = ad->is_atapi;
+            dev->is_ahci = true;
+            dev->ahci_port = ad->port_num;
+            dev->channel = 0;
+            dev->drive = (uint8_t)i;
+            dev->io_base = 0;
+            strncpy(dev->model, ad->model, sizeof(dev->model) - 1);
+            strncpy(dev->serial, ad->serial, sizeof(dev->serial) - 1);
+            strncpy(dev->firmware, ad->firmware, sizeof(dev->firmware) - 1);
+            dev->total_sectors = ad->total_sectors;
+            dev->size_bytes = ad->size_bytes;
+            dev->size_mb = ad->size_mb;
+            dev->size_gb = ad->size_gb;
+            dev->has_mbr = ad->has_mbr;
+            dev->part_type = ad->part_type;
+            dev->part_lba = ad->part_lba;
+            dev->part_sectors = ad->part_sectors;
+            dev->boot_lba = ad->boot_lba;
+            strncpy(dev->part_fs, ad->part_fs, sizeof(dev->part_fs) - 1);
+        }
+    }
+
+    // 2. SCANSIONE FALLBACK CANALI LEGACY ATA PIO (se rimangono slot liberi)
+    if (g_device_count < MAX_ATA_DEVICES) {
+        for (uint8_t ch = 0; ch < 2; ch++) {
+            for (uint8_t drv = 0; drv < 2; drv++) {
+                ata_device_t tmp;
+                if (ata_identify_drive(ch, drv, &tmp)) {
+                    if (g_device_count < MAX_ATA_DEVICES) {
+                        memcpy(&g_devices[g_device_count++], &tmp, sizeof(ata_device_t));
+                    }
                 }
             }
         }
@@ -383,13 +433,33 @@ const ata_device_t* ata_get_primary_master(void) {
 bool ata_read_device_sectors(const ata_device_t* dev, uint32_t lba, uint32_t count, void* buffer) {
     if (!dev || !buffer || count == 0) return false;
 
+    if (dev->is_ahci) {
+        if (dev->is_atapi) {
+            uint32_t base_sec = dev->boot_lba ? dev->boot_lba : 32;
+            uint8_t cd_buf[2048];
+            uint8_t* dst = (uint8_t*)buffer;
+            for (uint32_t i = 0; i < count; i++) {
+                uint32_t cur_lba = lba + i;
+                uint32_t cd_sec = base_sec + (cur_lba / 4);
+                uint32_t sub_offset = (cur_lba % 4) * 512;
+                if (!ahci_read_cd_sector(dev->ahci_port, cd_sec, cd_buf)) {
+                    return false;
+                }
+                memcpy(dst + i * 512, cd_buf + sub_offset, 512);
+            }
+            return true;
+        }
+        return ahci_read_sectors(dev->ahci_port, lba, count, buffer);
+    }
+
     if (dev->is_atapi) {
-        // Unità ATAPI CD-ROM (settori da 2048 byte, immagine disco a CD LBA 32)
+        // Unità ATAPI CD-ROM (settori da 2048 byte, immagine disco a boot_lba)
+        uint32_t base_sec = dev->boot_lba ? dev->boot_lba : 32;
         uint8_t cd_buf[2048];
         uint8_t* dst = (uint8_t*)buffer;
         for (uint32_t i = 0; i < count; i++) {
             uint32_t cur_lba = lba + i;
-            uint32_t cd_sec = 32 + (cur_lba / 4);
+            uint32_t cd_sec = base_sec + (cur_lba / 4);
             uint32_t sub_offset = (cur_lba % 4) * 512;
             if (!atapi_read_cd_sector(dev, cd_sec, cd_buf)) {
                 return false;
@@ -408,15 +478,19 @@ bool ata_read_device_sectors(const ata_device_t* dev, uint32_t lba, uint32_t cou
 
         ata_wait_bsy_port(io);
         outb(io + ATA_REG_DRIVE_SEL, drive_sel | ((lba >> 24) & 0x0F));
+        for (int i = 0; i < 4; i++) inb(io + ATA_REG_STATUS);
         outb(io + ATA_REG_SEC_COUNT, (uint8_t)batch);
         outb(io + ATA_REG_LBA_LO, (uint8_t)lba);
         outb(io + ATA_REG_LBA_MID, (uint8_t)(lba >> 8));
         outb(io + ATA_REG_LBA_HI, (uint8_t)(lba >> 16));
         outb(io + ATA_REG_COMMAND, ATA_CMD_READ_PIO);
+        for (int i = 0; i < 4; i++) inb(io + ATA_REG_STATUS);
 
         for (uint32_t s = 0; s < batch; s++) {
             ata_wait_bsy_port(io);
-            if (!ata_wait_drq_port(io)) return false;
+            if (!ata_wait_drq_port(io)) {
+                return false;
+            }
             for (int i = 0; i < 256; i++) {
                 *ptr++ = inw(io + ATA_REG_DATA);
             }
@@ -433,8 +507,12 @@ bool ata_read_sectors(uint32_t lba, uint32_t count, void* buffer) {
     if (dev) {
         return ata_read_device_sectors(dev, lba, count, buffer);
     }
+    if (ahci_is_active()) {
+        return ahci_read_primary_sectors(lba, count, buffer);
+    }
     // Fallback standard su porta 0x1F0 Primary Master
     ata_device_t def;
+    memset(&def, 0, sizeof(def));
     def.io_base = ATA_PRIMARY_IO;
     def.drive = 0;
     return ata_read_device_sectors(&def, lba, count, buffer);
@@ -443,6 +521,12 @@ bool ata_read_sectors(uint32_t lba, uint32_t count, void* buffer) {
 bool ata_write_sectors(uint32_t lba, uint32_t count, const void* buffer) {
     const ata_device_t* dev = ata_get_primary_master();
     if (dev && dev->is_atapi) return false;
+    if (dev && dev->is_ahci) {
+        return ahci_write_sectors(dev->ahci_port, lba, count, buffer);
+    }
+    if (ahci_is_active()) {
+        return ahci_write_primary_sectors(lba, count, buffer);
+    }
 
     uint16_t io = dev ? dev->io_base : ATA_PRIMARY_IO;
     uint8_t drive_sel = (dev && dev->drive == 1) ? 0xF0 : 0xE0;

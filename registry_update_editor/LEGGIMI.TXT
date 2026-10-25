@@ -1,0 +1,65 @@
+================================================================================
+NEWOS V1 - SUITE WINDOWS: REGISTRY UPDATE EDITOR & CERTIFICATE SIGNER
+Cartella di Root: registry_update_editor\
+================================================================================
+
+Questa cartella posizionata nella root del repository contiene l'applicativo
+ufficiale per Microsoft Windows dedicato alla manutenzione controllata, alla
+creazione di nuove chiavi e alla generazione certificata del file differenziale
+"registry_update.update" per il sistema operativo NewOS V1 (64-bit).
+
+--------------------------------------------------------------------------------
+1. COMPONENTI DELLA CARTELLA
+--------------------------------------------------------------------------------
+- RegistryUpdateEditor.exe
+  Applicazione grafica nativa Windows (GUI Windows Forms x64/AnyCpu compilata 
+  con .NET Framework 4.0/4.8). Permette di:
+  1. Caricare e decifrare in modo trasparente l'archivio protetto REGISTRY.DAT 
+     (crittografia AES-256-CBC con chiave master NewOS V1).
+  2. Esplorare l'albero gerarchico dei rami di sistema:
+     * HKEY_LOCAL_MACHINE (SYSTEM, DRIVERS, SOFTWARE, NEWOS\...)
+     * HKEY_CLASSES_ROOT (associazioni tipi MIME, estensioni e player)
+     * HKEY_CURRENT_USER (solo policy generali, con blocco su profili utente)
+  3. Creare nuove sottochiavi ("Nuova Chiave") in modalita' Update.
+  4. Modificare valori esistenti o inserire nuovi valori (REG_SZ, REG_DWORD, REG_BINARY).
+  5. Eseguire in tempo reale il Safety Check (Anti-Instabilita'): rileva e segnala 
+     immediatamente le chiavi instabili (es. CpuVendor, MemTotalMB, IRQ, IOBase, 
+     IPAddress o percorsi User\), bloccandone l'inserimento accidentale.
+  6. Esportare e firmare crittograficamente il file differenziale autorizzato:
+     "registry_update.update" con certificato crittografico NewSoft integrato
+     e firma HMAC-SHA256.
+
+- Avvia_RegistryUpdateEditor.bat
+  Script di avvio rapido con doppio clic.
+
+- build.bat
+  Script batch per ricompilare RegistryUpdateEditor.exe a partire dal sorgente C#
+  tramite il compilatore csc.exe di Windows.
+
+- src\Program.cs
+  Codice sorgente C# completo dell'applicativo Windows Forms.
+
+- cli_update_builder.js / cli_build_update.bat
+  Utility CLI da riga di comando (Node.js) per generare o convalidare pacchetti
+  differenziali "registry_update.update" in modalita' headless o durante build automatizzate.
+
+--------------------------------------------------------------------------------
+2. PROTOCOLLO DI AGGIORNAMENTO DI NEWOS V1
+--------------------------------------------------------------------------------
+In conformita' con il piano architetturale (PIANO_UPDATE_SYSTEM.md):
+- REGOLA PRIMARIA 1: Inviolabilita' assoluta di C:\User\ (nessun profilo o documento
+  personale puo' essere alterato).
+- REGOLA PRIMARIA 2: Divieto assoluto di sostituzione in blocco di REGISTRY.DAT
+  (una sostituzione totale cancellerebbe la configurazione hardware del PC bersaglio).
+- REGOLA PRIMARIA 3: Certificato di autorizzazione crittografico obbligatorio.
+  Il file "registry_update.update" contiene il certificato REG-AUTH firmato con
+  chiave HMAC-SHA256. Senza certificato autentico, UPDATE.MOD rifiuta qualsiasi modifica.
+- REGOLA PRIMARIA 4: Modifica granulare per singolo valore, Safety Check e Fallback:
+  * UPDATE.MOD applica esclusivamente le chiavi stabili autorizzate.
+  * Se una chiave corrisponde a risorse dinamiche hardware (IRQ, IOBase, memoria fisica),
+    viene scartata per proteggere l'hardware reale bare-metal.
+  * Per ogni chiave applicata, viene creato un file di rollback atomico (.reg.bak).
+
+--------------------------------------------------------------------------------
+(C) 2026 Newspoint Software - NewSoft Root Authority
+================================================================================

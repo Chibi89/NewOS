@@ -1,0 +1,26 @@
+================================================================
+Manuale Utente Ufficiale - NewOS V1 (64-bit Edition)
+(C) Newspoint Software - NewSoft - NewOS V1
+================================================================
+
+1. Architettura di Sistema:
+   - Kernel monolitico 64-bit x86_64 in Long Mode
+   - File System Microsoft exFAT nativo su partizione C:\
+   - Moduli protetti esterni firmati con CRC32 (.MOD)
+
+2. Struttura Cartelle:
+   - C:\NewOS\Driver         : Driver di sistema (.SYS e .INI)
+   - C:\NewOS\Resources      : Sfondi, suoni, icone, grafiche
+   - C:\NewOS\Resource\cursor : Puntatori del mouse
+   - C:\NewOS\Font           : Font e caratteri
+   - C:\NewOS\Help           : Guide e documentazione
+   - C:\NewOS\Diagnostic     : Utility di test hardware
+   - C:\NewOS\Themes         : Temi grafici (Classic, Liquid Glass)
+   - C:\NewOS\Language       : Pacchetti di localizzazione (IT, EN)
+   - C:\NewOS\SystemProgram  : Applicativi e moduli nativi (CMD, CALC, NOTEPAD, EXPLORER, REGEDIT)
+   - C:\NewOS\Registry       : Database cifrato del registro di sistema (REGISTRY.DAT)
+   - C:\NewOS\Rules          : Regole e policy ufficiali di architettura e sistema
+   - C:\NewOS\OOBE           : Setup e benvenuto primo avvio
+   - C:\NewOS\Dev            : Compilatore C nativo (TCC 64-bit), include SDK e temp
+   - C:\User                 : Profili utente e desktop personali
+   - C:\ProgramFile          : Applicazioni e software installati manualmente dall'utente finale

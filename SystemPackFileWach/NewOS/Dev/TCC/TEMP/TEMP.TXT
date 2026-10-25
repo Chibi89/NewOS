@@ -1,0 +1,1 @@
+Cartella per file temporanei e oggetti intermedi di compilazione TCC.

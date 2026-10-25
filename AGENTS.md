@@ -12,3 +12,4 @@ Le regole di comportamento, vincoli tecnici e direttive operative per lo svilupp
 5. **Comunicazione**: Risposte sempre in lingua italiana, sintetiche e con link cliccabili (`file:///`).
 6. **Gerarchia File System**: File di sistema in `C:\NewOS\`, software utente/terze parti solo in `C:\ProgramFile`.
 7. **Registro**: Sola lettura pre-desktop, scrittura consentita solo a sessione autenticata.
+8. **Hardware Reale Bare-Metal**: Componenti vecchi e nuovi devono essere sviluppati e collaudati per l'uso su silicio fisico x86_64 e non solo su VM/emulatori (handshake BIOS/OS, temporizzazioni PHY, allineamenti DMA).

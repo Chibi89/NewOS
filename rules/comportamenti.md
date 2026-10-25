@@ -64,3 +64,14 @@ Questo documento definisce le regole comportamentali, i vincoli architetturali e
   - *Fase Pre-Desktop (Login/OOBE)*: Registro accessibile esclusivamente in modalità **Sola Lettura** (`registry_set_read_only(true)`). Qualsiasi tentativo di scrittura deve essere bloccato.
   - *Fase Desktop*: Scrittura abilitata solo dopo l'avvenuta autenticazione dell'utente e l'inizializzazione del Window Manager.
 - **Regole Ufficiali (.NOR)**: File protetti cifrati proprietari in `C:\NewOS\Rules\`, visualizzabili solo da `RULES.EXE` su Desktop o dall'utility Windows `NewOS_Rules_Viewer.exe`.
+
+---
+
+## 8. Sviluppo e Compatibilità Bare-Metal su Hardware Reale (Non solo VM)
+- **Destinazione d'Uso del Sistema**: Tutti i componenti, driver e sottosistemi (storage, timer, memoria, bus PCI, rete, audio, video) sia nuovi che preesistenti devono essere progettati, implementati e collaudati considerando i requisiti fisici del silicio x86_64 reale e non unicamente ambienti virtuali o emulatori (QEMU, VirtualBox, VMware).
+- **Handshake Firmware e Proprietà Hardware (BIOS/OS Handoff)**: Per controller di sistema come AHCI, USB (xHCI/EHCI), ACPI o PCI, implementare sempre il protocollo di passaggio di consegne dal BIOS/SMM al sistema operativo (es. `BOHC` per AHCI, `OS_OWNED` per USB) prima di accedere ai registri operativi.
+- **Tempi di Risposta Fisici e Negoziazione di Bus**: Tenere sempre conto delle latenze fisiche dei dispositivi reali (es. tempo di negoziazione PHY SATA 10..50 ms, Staggered Spin-Up dei dischi `PxCMD.SUD`, reset del bus PCI/USB, stabilizzazione PLL). Non assumere mai disponibilità immediata a latenza zero tipica delle VM.
+- **Conformità e Allineamento DMA Fisico**: Rispettare rigorosamente gli allineamenti hardware dei descrittori (es. 1024B per command list, 256B per FIS, 128B per command table) ed evitare l'attraversamento di confini fisici di 4 MB o 64 KB. Fornire sempre meccanismi di rimbalzo protetto (`Bounce Buffer`) allineati per garantire la sicurezza del bus contro disallineamenti di memoria.
+- **Temporizzazione Hardware Reale Calibrata**: I timeout di sicurezza non devono mai essere loop software a vuoto dipendenti dalla frequenza della CPU, bensì basati su contatori hardware fisici stabili (`rdtsc` Time Stamp Counter x86_64, PIT a 100 Hz o HPET).
+- **Prevenzione di Interrupt Storm su Linee Condivise**: Gestire l'instradamento delle linee IRQ PCI tenendo conto che su macchine reali più periferiche condividono la stessa linea fisica level-triggered (IRQ sharing). Applicare mascheramento one-shot o disabilitazione degli interrupt non gestiti per impedire affamamento della CPU.
+

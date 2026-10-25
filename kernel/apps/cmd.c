@@ -205,8 +205,15 @@ static void cmd_execute(cmd_state_t* state, const char* cmd) {
             vfs_drive_info_t dinfo;
             if (vfs_get_drive_info(drv_letters[i], &dinfo)) {
                 char dline[CMD_COLS];
-                mini_snprintf(dline, sizeof(dline), "  %c: [%-7s] %s (%u MB)",
-                              dinfo.drive_letter, dinfo.fs_name, dinfo.label, (unsigned int)dinfo.total_mb);
+                if (dinfo.total_mb >= 1024) {
+                    mini_snprintf(dline, sizeof(dline), "  %c: [%-7s] %s (%u GB, Libero: %u GB)",
+                                  dinfo.drive_letter, dinfo.fs_name, dinfo.label,
+                                  (unsigned int)(dinfo.total_mb / 1024), (unsigned int)(dinfo.free_mb / 1024));
+                } else {
+                    mini_snprintf(dline, sizeof(dline), "  %c: [%-7s] %s (%u MB, Libero: %u MB)",
+                                  dinfo.drive_letter, dinfo.fs_name, dinfo.label,
+                                  (unsigned int)dinfo.total_mb, (unsigned int)dinfo.free_mb);
+                }
                 cmd_print(state, dline);
             }
         }
@@ -235,6 +242,19 @@ static void cmd_execute(cmd_state_t* state, const char* cmd) {
                 cmd_print(state, entry_line);
             }
         }
+        char sum_line[CMD_COLS];
+        vfs_drive_info_t dinfo;
+        char drive_let = (target[0] >= 'A' && target[0] <= 'Z') ? target[0] : ((target[0] >= 'a' && target[0] <= 'z') ? (target[0] - 32) : 'C');
+        if (vfs_get_drive_info(drive_let, &dinfo)) {
+            if (dinfo.free_mb >= 1024) {
+                mini_snprintf(sum_line, sizeof(sum_line), "  %d elementi - Spazio disponibile: %u.%u GB", count, (unsigned int)(dinfo.free_mb / 1024), (unsigned int)((dinfo.free_mb % 1024) / 100));
+            } else {
+                mini_snprintf(sum_line, sizeof(sum_line), "  %d elementi - Spazio disponibile: %u MB", count, (unsigned int)dinfo.free_mb);
+            }
+        } else {
+            mini_snprintf(sum_line, sizeof(sum_line), "  %d elementi", count);
+        }
+        cmd_print(state, sum_line);
     } else if (strcmp(cmd, "driverquery") == 0 || strcmp(cmd, "drivers") == 0) {
         cmd_print(state, "Driver (.INI)  Modulo    Tipo     IRQ IO     Stato");
         cmd_print(state, "--------------------------------------------------");

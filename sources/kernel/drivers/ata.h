@@ -21,11 +21,17 @@ typedef struct {
     bool     has_mbr;       // Tabella MBR con firma 0xAA55 presente
     uint8_t  part_type;     // Tipo partizione primaria (es. 0x07 exFAT)
     uint32_t part_lba;      // LBA iniziale della partizione 1 (es. 2048)
-    uint32_t part_sectors;  // Settori della partizione 1
+    uint32_t part_sectors;  // Numero di settori della partizione 1
+    uint32_t boot_lba;      // Settore CD LBA di avvio El Torito (es. 31138 o 32)
     char     part_fs[16];   // "exFAT", "FAT32", "NTFS", "RAW"
+    bool     is_ahci;       // true = Dispositivo controllato tramite Serial ATA AHCI (prioritario)
+    uint8_t  ahci_port;     // Numero porta AHCI (0..31)
 } ata_device_t;
 
-// Inizializza il sottosistema ATA ed esegue la scansione reale delle periferiche collegate
+// Verifica se il controller AHCI Serial ATA è attivo come driver primario prioritario
+bool storage_is_ahci_active(void);
+
+// Inizializza il sottosistema ATA ed esegue la scansione reale delle periferiche collegate (priorità AHCI)
 void ata_init(void);
 
 // Restituisce il numero di unità disco/CD rilevate (0..4)

@@ -199,17 +199,19 @@ bootscreen_result_t screen_mgr_run_bootscreen(void) {
     screen_mgr_init();
 
     const char* paths[] = {
+        "C:\\NewOS\\Boot\\BOOTSCR.MOD",
+        "D:\\NewOS\\Boot\\BOOTSCR.MOD",
         "C:\\NewOS\\SystemProgram\\BOOTSCR.MOD",
+        "/NewOS/Boot/BOOTSCR.MOD",
         "/NewOS/SystemProgram/BOOTSCR.MOD",
-        "C:\\SYSTEM\\SCREENS\\BOOTSCR.MOD",
-        "/SYSTEM/SCREENS/BOOTSCR.MOD",
+        "D:\\BOOTSCR.MOD",
         "BOOTSCR.MOD"
     };
 
     uint8_t* mod_buf = NULL;
     uint32_t mod_size = 0;
 
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < (int)(sizeof(paths) / sizeof(paths[0])); i++) {
         mod_buf = (uint8_t*)vfs_read_entire_file(paths[i], &mod_size);
         if (mod_buf && mod_size > 0) break;
     }
@@ -235,17 +237,17 @@ loginscreen_result_t screen_mgr_run_loginscreen(void) {
     screen_mgr_init();
 
     const char* paths[] = {
+        "C:\\NewOS\\Boot\\LOGIN.MOD",
         "C:\\NewOS\\SystemProgram\\LOGIN.MOD",
+        "/NewOS/Boot/LOGIN.MOD",
         "/NewOS/SystemProgram/LOGIN.MOD",
-        "C:\\SYSTEM\\SCREENS\\LOGIN.MOD",
-        "/SYSTEM/SCREENS/LOGIN.MOD",
         "LOGIN.MOD"
     };
 
     uint8_t* mod_buf = NULL;
     uint32_t mod_size = 0;
 
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < (int)(sizeof(paths) / sizeof(paths[0])); i++) {
         mod_buf = (uint8_t*)vfs_read_entire_file(paths[i], &mod_size);
         if (mod_buf && mod_size > 0) break;
     }
@@ -271,17 +273,17 @@ logoutscreen_result_t screen_mgr_run_logoutscreen(void) {
     screen_mgr_init();
 
     const char* paths[] = {
+        "C:\\NewOS\\Boot\\LOGOUT.MOD",
         "C:\\NewOS\\SystemProgram\\LOGOUT.MOD",
+        "/NewOS/Boot/LOGOUT.MOD",
         "/NewOS/SystemProgram/LOGOUT.MOD",
-        "C:\\SYSTEM\\SCREENS\\LOGOUT.MOD",
-        "/SYSTEM/SCREENS/LOGOUT.MOD",
         "LOGOUT.MOD"
     };
 
     uint8_t* mod_buf = NULL;
     uint32_t mod_size = 0;
 
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < (int)(sizeof(paths) / sizeof(paths[0])); i++) {
         mod_buf = (uint8_t*)vfs_read_entire_file(paths[i], &mod_size);
         if (mod_buf && mod_size > 0) break;
     }
@@ -304,27 +306,60 @@ logoutscreen_result_t screen_mgr_run_logoutscreen(void) {
 }
 
 static bootsetup_result_t bootsetup_fallback(void) {
-    serial_log("[BOOTSETUP] Fallback di sicurezza attivo...\n");
-    return BOOTSETUP_SUCCESS;
+    serial_log("[BOOTSETUP ERRORE] Impossibile avviare il modulo di installazione (BOOTSETUP.MOD non trovato o non valido).\n");
+    uint32_t sw = gfx_get_width();
+    uint32_t sh = gfx_get_height();
+    int32_t w = 540, h = 170;
+    int32_t x = (sw - w) / 2, y = (sh - h) / 2;
+    gfx_fill_rect(x, y, w, h, COLOR_BTNFACE);
+    gfx_draw_bevel_rect(x, y, w, h, false);
+    gfx_draw_gradient_h(x + 3, y + 3, w - 6, 20, COLOR_ACTIVECAPTION_LEFT, COLOR_ACTIVECAPTION_RIGHT);
+    gfx_draw_string(x + 10, y + 5, "Installazione NewOS V1 - Supporto non trovato", COLOR_CAPTIONTEXT, 0, true);
+    gfx_draw_string(x + 20, y + 42, "Impossibile trovare il file di installazione BOOTSETUP.MOD", COLOR_WINDOWTEXT, 0, true);
+    gfx_draw_string(x + 20, y + 68, "Verificare che il supporto di installazione (CD/DVD/USB) sia inserito.", 0x555555, 0, true);
+    gfx_draw_string(x + 20, y + 108, "Premere Invio per riavviare il sistema...", 0x880000, 0, true);
+    gfx_flip();
+    while (1) {
+        if (keyboard_has_char()) {
+            (void)keyboard_get_char();
+            break;
+        }
+        timer_sleep(50);
+    }
+    return BOOTSETUP_ERROR;
 }
 
 bootsetup_result_t screen_mgr_run_bootsetup(void) {
     screen_mgr_init();
 
     const char* paths[] = {
+        "D:\\NewOS\\Boot\\BOOTSETUP.MOD",
+        "D:\\BootSetup\\BOOTSETUP.MOD",
+        "D:\\BOOTSETUP.MOD",
+        "C:\\NewOS\\Boot\\BOOTSETUP.MOD",
         "C:\\BootSetup\\BOOTSETUP.MOD",
-        "/BootSetup/BOOTSETUP.MOD",
+        "C:\\BOOTSETUP.MOD",
+        "E:\\NewOS\\Boot\\BOOTSETUP.MOD",
+        "E:\\BootSetup\\BOOTSETUP.MOD",
+        "U:\\NewOS\\Boot\\BOOTSETUP.MOD",
+        "U:\\BootSetup\\BOOTSETUP.MOD",
         "C:\\NewOS\\SystemProgram\\BOOTSETUP.MOD",
+        "/NewOS/Boot/BOOTSETUP.MOD",
+        "/BootSetup/BOOTSETUP.MOD",
         "/NewOS/SystemProgram/BOOTSETUP.MOD",
         "BOOTSETUP.MOD"
     };
 
     uint8_t* mod_buf = NULL;
     uint32_t mod_size = 0;
+    int found_idx = -1;
 
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < (int)(sizeof(paths) / sizeof(paths[0])); i++) {
         mod_buf = (uint8_t*)vfs_read_entire_file(paths[i], &mod_size);
-        if (mod_buf && mod_size > 0) break;
+        if (mod_buf && mod_size > 0) {
+            found_idx = i;
+            break;
+        }
     }
 
     if (mod_buf && mod_size >= sizeof(module_header_t)) {
@@ -332,8 +367,13 @@ bootsetup_result_t screen_mgr_run_bootsetup(void) {
             const module_header_t* h = (const module_header_t*)mod_buf;
             bootsetup_entry_fn entry = (bootsetup_entry_fn)(mod_buf + h->entry_offset);
 
+            char pak_path[64] = "C:\\BootSetup\\SYSTEM.PAK";
+            if (found_idx >= 0 && paths[found_idx][1] == ':') {
+                pak_path[0] = paths[found_idx][0];
+            }
+
             bootsetup_params_t p = {
-                .package_path = "C:\\BootSetup\\SYSTEM.PAK",
+                .package_path = pak_path,
                 .auto_proceed_oobe = true
             };
             bootsetup_result_t res = (bootsetup_result_t)entry(&g_kernel_api, &p);
@@ -346,4 +386,108 @@ bootsetup_result_t screen_mgr_run_bootsetup(void) {
 
     return bootsetup_fallback();
 }
+
+bool screen_mgr_has_pending_update(void) {
+    uint32_t size = 0;
+    uint8_t* buf = (uint8_t*)vfs_read_entire_file("C:\\NewOS\\Boot\\boot_action.ini", &size);
+    if (!buf || size == 0) return false;
+
+    bool has_update = false;
+    // Cerca Target=UPDATE.MOD o UPDATE.MOD
+    for (uint32_t i = 0; i + 10 < size; i++) {
+        if (buf[i] == 'U' && buf[i+1] == 'P' && buf[i+2] == 'D' && buf[i+3] == 'A' &&
+            buf[i+4] == 'T' && buf[i+5] == 'E' && buf[i+6] == '.' && buf[i+7] == 'M' &&
+            buf[i+8] == 'O' && buf[i+9] == 'D') {
+            has_update = true;
+            break;
+        }
+    }
+
+    kfree(buf);
+    return has_update;
+}
+
+update_result_t screen_mgr_run_update(void) {
+    screen_mgr_init();
+    serial_log("[SCREEN_MGR] Rilevata azione straordinaria di aggiornamento: avvio UPDATE.MOD...\n");
+
+    // Watchdog contatore tentativi (Crash Recovery Boot Watchdog)
+    uint32_t act_size = 0;
+    uint8_t* act_buf = (uint8_t*)vfs_read_entire_file("C:\\NewOS\\Boot\\boot_action.ini", &act_size);
+    int attempts = 1;
+
+    if (act_buf && act_size > 0) {
+        for (uint32_t i = 0; i + 15 < act_size; i++) {
+            if (act_buf[i] == 'A' && act_buf[i+1] == 't' && act_buf[i+2] == 't' && act_buf[i+3] == 'e' &&
+                act_buf[i+4] == 'm' && act_buf[i+5] == 'p' && act_buf[i+6] == 't' && act_buf[i+7] == 's' &&
+                act_buf[i+8] == '=') {
+                attempts = act_buf[i+9] - '0';
+                break;
+            }
+        }
+        kfree(act_buf);
+    }
+
+    // Se superato il limite di tentativi (MaxAttempts=2), Rollback Automatico di Emergenza
+    if (attempts > 2) {
+        serial_log("[WATCHDOG CRITICAL] Superato il numero massimo tentativi update (Attempts > 2)! Rollback di Emergenza.\n");
+        const char* fail_log = "[ROLLBACK_EMERGENCY]\r\nTimestamp=CrashRecovery\r\nMotivo=Tentativi_Massimi_Superati\r\nStato=LOGIN.MOD_Ripristinato\r\n";
+        vfs_write_entire_file_inplace("C:\\NewOS\\Update\\update_failure.log", fail_log, 110);
+        vfs_write_entire_file_inplace("C:\\NewOS\\Boot\\boot_action.ini", "", 0);
+        return UPDATE_ROLLBACK;
+    }
+
+    // Incrementa contatore tentativi per il watchdog
+    char new_action[96];
+    mini_snprintf(new_action, sizeof(new_action), "[BootAction]\r\nTarget=UPDATE.MOD\r\nAttempts=%d\r\nMaxAttempts=2\r\n", attempts + 1);
+    vfs_write_entire_file_inplace("C:\\NewOS\\Boot\\boot_action.ini", new_action, (uint32_t)strlen(new_action));
+
+    const char* paths[] = {
+        "C:\\NewOS\\Boot\\UPDATE.MOD",
+        "C:\\NewOS\\SystemProgram\\UPDATE.MOD",
+        "D:\\NewOS\\Boot\\UPDATE.MOD",
+        "C:\\UPDATE.MOD",
+        "/NewOS/Boot/UPDATE.MOD",
+        "UPDATE.MOD"
+    };
+
+    uint8_t* mod_buf = NULL;
+    uint32_t mod_size = 0;
+
+    for (int i = 0; i < (int)(sizeof(paths) / sizeof(paths[0])); i++) {
+        mod_buf = (uint8_t*)vfs_read_entire_file(paths[i], &mod_size);
+        if (mod_buf && mod_size > 0) break;
+    }
+
+    if (mod_buf && mod_size >= sizeof(module_header_t)) {
+        if (screen_mgr_verify_module(mod_buf, mod_size, MODULE_TYPE_UPDATE, "UPDATE.MOD")) {
+            // Buffer protetto con cuscinetto BSS azzerato (64 KB)
+            uint8_t* exec_buf = (uint8_t*)kmalloc(mod_size + 65536);
+            if (exec_buf) {
+                memcpy(exec_buf, mod_buf, mod_size);
+                memset(exec_buf + mod_size, 0, 65536);
+                kfree(mod_buf);
+                mod_buf = exec_buf;
+            }
+
+            const module_header_t* h = (const module_header_t*)mod_buf;
+            update_entry_fn entry = (update_entry_fn)(mod_buf + h->entry_offset);
+
+            update_params_t p = {
+                .package_path = "C:\\NewOS\\Update\\UPDATE.PAK",
+                .reg_update_path = "C:\\NewOS\\Update\\registry_update.update",
+                .force_unattended = true
+            };
+            update_result_t res = (update_result_t)entry(&g_kernel_api, &p);
+
+            kfree(mod_buf);
+            return res;
+        }
+        kfree(mod_buf);
+    }
+
+    serial_log("[SCREEN_MGR ERROR] Impossibile caricare UPDATE.MOD o modulo non autentico.\n");
+    return UPDATE_ERROR;
+}
+
 

@@ -328,11 +328,52 @@ TUTTO IL CONTENUTO DI BUILD\\BIN E' VISIBILE DIRETTAMENTE SU QUESTO SUPPORTO.
         }
     }
 
-    // ─── 4. ALLOCAZIONE BOOT_LBA PER DISK IMAGE EL TORITO ───
+    // ─── 4. ALLOCAZIONE BOOT_LBA PER DISK IMAGE EL TORITO (BIOS) ───
     const BOOT_LBA = curSector;
     const diskImgEntry = rootNode.files.find(f => f.name === 'NEWOS_V1.IMG');
     diskImgEntry.extentSector = BOOT_LBA;
     curSector += diskImgCdSectors;
+
+    // ─── 4b. ALLOCAZIONE EFI_BOOT_LBA PER EL TORITO (UEFI) ───
+    let efiFatBuf = null;
+    let EFI_BOOT_LBA = 0;
+    let efiCdSectors = 0;
+
+    const efiCandidates = [
+        path.join(binDir, 'EFI', 'BOOT', 'BOOTX64.EFI'),
+        path.join(binDir, 'NewOS', 'Boot', 'BOOTX64.EFI'),
+        path.join(binDir, 'NewOS', 'Boot', 'bootx64.bin'),
+        path.join(binDir, 'BOOTX64.EFI')
+    ];
+    let effectiveEfi = null;
+    for (const ec of efiCandidates) {
+        if (fs.existsSync(ec)) { effectiveEfi = ec; break; }
+    }
+
+    const kCandidates = [
+        path.join(binDir, 'NewOS', 'Boot', 'kernel.bin'),
+        path.join(binDir, 'NewOS', 'Boot', 'KERNEL.BIN'),
+        path.join(binDir, 'kernel.bin'),
+        path.join(binDir, 'KERNEL.BIN')
+    ];
+    let kPath = null;
+    for (const kc of kCandidates) {
+        if (fs.existsSync(kc)) { kPath = kc; break; }
+    }
+
+    if (effectiveEfi && kPath) {
+        try {
+            const { createEfiFatImage } = require('./mkefifat.js');
+            const b64Data = fs.readFileSync(effectiveEfi);
+            const kData = fs.readFileSync(kPath);
+            efiFatBuf = createEfiFatImage(b64Data, kData);
+            efiCdSectors = Math.ceil(efiFatBuf.length / SECTOR_SIZE);
+            EFI_BOOT_LBA = curSector;
+            curSector += efiCdSectors;
+        } catch (e) {
+            console.error('[AVVISO ISO] Impossibile generare immagine ESP EFI:', e.message);
+        }
+    }
 
     const totalCdSectors = curSector;
 
@@ -471,12 +512,29 @@ TUTTO IL CONTENUTO DI BUILD\\BIN E' VISIBILE DIRETTAMENTE SU QUESTO SUPPORTO.
     }
     catalog.writeUInt16LE((0x10000 - csum) & 0xFFFF, 28);
 
-    // Initial / Default Entry (offset 32)
+    // Initial / Default Entry (offset 32) - BIOS
     catalog[32] = 0x88; // Bootable
     catalog[33] = 0x04; // Hard Disk Emulation
     catalog.writeUInt16LE(0, 34);
     catalog.writeUInt16LE(1, 38); // 1 sector
     catalog.writeUInt32LE(BOOT_LBA, 40); // Sector where myos.img starts
+
+    // Sezione El Torito EFI (offset 64 e 96) - UEFI
+    if (efiFatBuf && EFI_BOOT_LBA > 0) {
+        // Section Header (offset 64): Final section, Platform ID 0xEF (EFI)
+        catalog[64] = 0x91; // 0x91 = Final Section Header
+        catalog[65] = 0xEF; // Platform ID = 0xEF (EFI)
+        catalog.writeUInt16LE(1, 66); // 1 section entry
+        catalog.write('EFI', 68, 3, 'ascii');
+
+        // Section Entry (offset 96): Entry di Boot EFI
+        catalog[96] = 0x88; // Bootable
+        catalog[97] = 0x00; // No Emulation
+        catalog.writeUInt16LE(0, 98);
+        catalog.writeUInt16LE(Math.ceil(efiFatBuf.length / 512), 102); // 512-byte sectors count
+        catalog.writeUInt32LE(EFI_BOOT_LBA, 104); // CD sector LBA dove risiede l'immagine FAT EFI
+    }
+
     catalog.copy(isoBuf, BOOT_CATALOG_SECTOR * SECTOR_SIZE);
 
     // Scrittura Path Tables
@@ -513,8 +571,13 @@ TUTTO IL CONTENUTO DI BUILD\\BIN E' VISIBILE DIRETTAMENTE SU QUESTO SUPPORTO.
         }
     }
 
-    // Scrittura Disk Image a BOOT_LBA
+    // Scrittura Disk Image a BOOT_LBA (BIOS)
     diskImgBuf.copy(isoBuf, BOOT_LBA * SECTOR_SIZE);
+
+    // Scrittura EFI FAT Image a EFI_BOOT_LBA (UEFI)
+    if (efiFatBuf && EFI_BOOT_LBA > 0) {
+        efiFatBuf.copy(isoBuf, EFI_BOOT_LBA * SECTOR_SIZE);
+    }
 
     const tempOut = outIsoPath + '.tmp';
     fs.writeFileSync(tempOut, isoBuf);

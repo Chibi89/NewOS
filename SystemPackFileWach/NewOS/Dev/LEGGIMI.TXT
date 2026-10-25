@@ -1,0 +1,1 @@
+Ambiente di sviluppo nativo Tiny C Compiler (TCC 64-bit) per NewOS V1 (C:\NewOS\Dev\)

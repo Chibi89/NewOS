@@ -1,5 +1,6 @@
 #include <fs/exfat.h>
 #include <drivers/ata.h>
+#include <arch/x86_64/io.h>
 #include <mm/heap.h>
 #include <string.h>
 
@@ -10,6 +11,7 @@ static uint32_t    g_sectors_per_cluster = 8;
 static uint32_t    g_cluster_size = 4096;
 static uint32_t    g_cluster_heap_lba = 0;
 static uint32_t    g_fat_lba = 0;
+static uint32_t    g_allocated_clusters = 0;
 
 static uint32_t cluster_to_lba(uint32_t cluster) {
     if (cluster < 2) return 0;
@@ -33,19 +35,18 @@ static uint32_t get_next_cluster(uint32_t cluster, bool no_fat_chain) {
 }
 
 bool exfat_mount(uint32_t partition_lba) {
-    g_partition_lba = partition_lba;
-
     uint8_t sec_buf[512];
     if (!ata_read_sectors(partition_lba, 1, sec_buf)) {
         return false;
     }
 
-    memcpy(&g_vbr, sec_buf, sizeof(exfat_vbr_t));
-
-    // Verifica firma "EXFAT   " e 0xAA55
-    if (memcmp(g_vbr.fs_name, "EXFAT   ", 8) != 0 || g_vbr.boot_signature != 0xAA55) {
+    // Verifica firma "EXFAT   " e 0xAA55 PRIMA di toccare g_vbr o le variabili globali
+    if (memcmp(sec_buf + 3, "EXFAT   ", 8) != 0 || *(uint16_t*)(sec_buf + 510) != 0xAA55) {
         return false;
     }
+
+    g_partition_lba = partition_lba;
+    memcpy(&g_vbr, sec_buf, sizeof(exfat_vbr_t));
 
     g_sectors_per_cluster = 1 << g_vbr.sectors_per_cluster_shift;
     g_cluster_size = g_sectors_per_cluster * 512;
@@ -53,7 +54,77 @@ bool exfat_mount(uint32_t partition_lba) {
     g_fat_lba = partition_lba + g_vbr.fat_offset;
 
     g_mounted = true;
+
+    // Scansione e calcolo reale dei cluster allocati dalla tabella Allocation Bitmap
+    g_allocated_clusters = 0;
+    uint32_t root_lba = cluster_to_lba(g_vbr.root_dir_cluster);
+    uint8_t root_sec[512];
+    uint32_t bm_cluster = 0;
+    uint64_t bm_length = 0;
+
+    if (ata_read_sectors(root_lba, 1, root_sec)) {
+        for (int i = 0; i < 16; i++) {
+            uint8_t* ent = root_sec + i * 32;
+            if (ent[0] == EXFAT_ENTRY_BITMAP) {
+                bm_cluster = *(uint32_t*)(ent + 20);
+                bm_length = *(uint64_t*)(ent + 24);
+                break;
+            }
+        }
+    }
+
+    if (bm_cluster >= 2 && bm_length > 0) {
+        uint32_t count = 0;
+        uint32_t rem_bytes = (uint32_t)bm_length;
+        uint32_t cur_bm_cl = bm_cluster;
+        uint8_t bm_sec[512];
+
+        while (rem_bytes > 0 && cur_bm_cl >= 2 && cur_bm_cl < 0xFFFFFFF8) {
+            uint32_t cl_lba = cluster_to_lba(cur_bm_cl);
+            for (uint32_t s = 0; s < g_sectors_per_cluster && rem_bytes > 0; s++) {
+                if (!ata_read_sectors(cl_lba + s, 1, bm_sec)) break;
+                uint32_t b_in_sec = (rem_bytes > 512) ? 512 : rem_bytes;
+                for (uint32_t b = 0; b < b_in_sec; b++) {
+                    count += __builtin_popcount(bm_sec[b]);
+                }
+                rem_bytes -= b_in_sec;
+            }
+            cur_bm_cl = get_next_cluster(cur_bm_cl, false);
+        }
+        g_allocated_clusters = count;
+    }
+
+    // Fallback percentuale d'uso se la scansione bitmap non e' disponibile
+    if (g_allocated_clusters == 0 && g_vbr.percent_in_use > 0) {
+        g_allocated_clusters = (g_vbr.cluster_count * g_vbr.percent_in_use) / 100;
+    }
+
     return true;
+}
+
+uint32_t exfat_get_allocated_clusters(void) {
+    return g_allocated_clusters;
+}
+
+uint32_t exfat_get_used_mb(void) {
+    if (!g_mounted) return 0;
+    uint64_t used_bytes = (uint64_t)g_allocated_clusters * (uint64_t)g_cluster_size;
+    uint32_t mb = (uint32_t)(used_bytes / (1024ULL * 1024ULL));
+    if (mb == 0 && g_allocated_clusters > 0) mb = 1;
+    return mb;
+}
+
+uint32_t exfat_get_free_clusters(void) {
+    if (!g_mounted || g_vbr.cluster_count <= g_allocated_clusters) return 0;
+    return g_vbr.cluster_count - g_allocated_clusters;
+}
+
+void exfat_notify_cluster_allocated(void) {
+    g_allocated_clusters++;
+}
+
+void exfat_notify_cluster_freed(void) {
+    if (g_allocated_clusters > 0) g_allocated_clusters--;
 }
 
 bool exfat_is_mounted(void) {
@@ -160,19 +231,25 @@ int32_t exfat_list_dir(uint32_t dir_cluster, exfat_item_info_t* out_items, int32
 bool exfat_find_in_dir(uint32_t dir_cluster, const char* name, exfat_item_info_t* out_info) {
     if (!name || !*name) return false;
 
-    // Buffer locale per scorrere gli elementi
-    exfat_item_info_t items[64];
+    // Allocazione heap dinamica per proteggere lo stack kernel Ring 0
+    exfat_item_info_t* items = (exfat_item_info_t*)kmalloc(sizeof(exfat_item_info_t) * 64);
+    if (!items) return false;
+
     int32_t found = exfat_list_dir(dir_cluster, items, 64);
+    bool res = false;
 
     for (int32_t i = 0; i < found; i++) {
         if (strcasecmp(items[i].name, name) == 0) {
             if (out_info) {
                 memcpy(out_info, &items[i], sizeof(exfat_item_info_t));
             }
-            return true;
+            res = true;
+            break;
         }
     }
-    return false;
+
+    kfree(items);
+    return res;
 }
 
 int32_t exfat_read_file(const exfat_item_info_t* file_info, uint32_t offset, void* buf, uint32_t count) {

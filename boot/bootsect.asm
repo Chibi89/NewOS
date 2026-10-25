@@ -102,10 +102,18 @@ db 0x00, 0x02, 0x00     ; Start CHS
 db 0x07                 ; Partition Type (0x07 = exFAT / NTFS)
 db 0xFE, 0xFF, 0xFF     ; End CHS
 dd 2048                 ; Start LBA (LBA 2048 = 1 MB)
-dd 63488                ; Total Sectors (31 MB)
+dd 250000               ; Total Sectors (122 MB)
 
-; Partizioni 2, 3, 4 (vuote, 3 * 16 = 48 bytes)
-times 48 db 0
+; Partizione 2: EFI System Partition ESP (Type 0xEF, Start LBA 256000, 1.44 MB FAT12)
+db 0x00                 ; Non attiva
+db 0xFE, 0xFF, 0xFF     ; Start CHS
+db 0xEF                 ; Partition Type 0xEF (EFI System Partition)
+db 0xFE, 0xFF, 0xFF     ; End CHS
+dd 256000               ; Start LBA (LBA 256000 = 125 MB)
+dd 2880                 ; Total Sectors (2880 settori = 1.44 MB)
+
+; Partizioni 3, 4 (vuote, 2 * 16 = 32 bytes)
+times 32 db 0
 
 ; Firma MBR (0xAA55)
 dw 0xAA55

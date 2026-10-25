@@ -5,6 +5,7 @@
 #include <apps/explorer.h>
 #include <apps/power_props.h>
 #include <apps/installer.h>
+#include <apps/player.h>
 #include <user.h>
 #include <fs/vfs.h>
 #include <drivers/power.h>
@@ -233,6 +234,9 @@ window_t* wm_create_window(const char* title, int32_t x, int32_t y, int32_t w, i
 void wm_destroy_window(int32_t id) {
     for (int i = 0; i < MAX_WINDOWS; i++) {
         if (windows[i] && windows[i]->id == id) {
+            if (windows[i]->app_type == APP_PLAYER) {
+                app_player_on_close();
+            }
             if (windows[i]->app_data) {
                 kfree(windows[i]->app_data);
             }
@@ -384,6 +388,7 @@ static void draw_window_frame(window_t* win) {
     else if (win->app_type == APP_SOUND) w_icon = ICON_SOUND;
     else if (win->app_type == APP_RULES) w_icon = ICON_DOCUMENT;
     else if (win->app_type == APP_BROWSER) w_icon = ICON_NET;
+    else if (win->app_type == APP_PLAYER) w_icon = ICON_PLAY;
     else if (win->app_type == APP_EXPLORER) {
         w_icon = ICON_THIS_PC;
         if (strstr(win->title, "Disco locale") || strstr(win->title, "C:\\")) w_icon = ICON_HD;
@@ -422,7 +427,7 @@ static void draw_window_frame(window_t* win) {
 
 static void draw_start_menu(int32_t sw, int32_t sh) {
     int32_t mw = 200;
-    int32_t mh = 304;
+    int32_t mh = 336;
     int32_t mx = 2;
     int32_t my = sh - 28 - mh;
 
@@ -441,6 +446,7 @@ static void draw_start_menu(int32_t sw, int32_t sh) {
         "Prompt Comandi",
         "Blocco Note",
         "Calcolatrice",
+        "Lettore Multimediale",
         "Regole di Sistema",
         "Pannello di controllo",
         "Editor del Registro",
@@ -452,6 +458,7 @@ static void draw_start_menu(int32_t sw, int32_t sh) {
         ICON_RUN,
         ICON_DOCUMENT,
         ICON_MAINTENANCE,
+        ICON_PLAY,
         ICON_DOCUMENT,
         ICON_CONTROL_PANEL,
         ICON_MAINTENANCE,
@@ -459,9 +466,9 @@ static void draw_start_menu(int32_t sw, int32_t sh) {
         ICON_ENERGY
     };
 
-    for (int i = 0; i < 9; i++) {
+    for (int i = 0; i < 10; i++) {
         int32_t iy = my + 8 + i * 32;
-        if (i == 8) {
+        if (i == 9) {
             // Linea divisoria prima di Arresta il sistema
             gfx_draw_bevel_rect(mx + 28, iy - 4, mw - 34, 2, true);
         }
@@ -719,6 +726,7 @@ void wm_render(void) {
 }
 
 void wm_update(mouse_state_t* mouse, char key) {
+    app_player_update_tick();
     last_mouse_x = mouse->x;
     last_mouse_y = mouse->y;
 
@@ -938,18 +946,19 @@ void wm_update(mouse_state_t* mouse, char key) {
 
         // Clic dentro il menu Start se aperto
         if (start_menu_open) {
-            int32_t mw = 200, mh = 304, mx = 2, my = sh - 28 - mh;
+            int32_t mw = 200, mh = 336, mx = 2, my = sh - 28 - mh;
             if (mouse->x >= mx && mouse->x <= mx + mw && mouse->y >= my && mouse->y <= my + mh) {
                 int item = (mouse->y - my - 8) / 32;
                 if (item == 0) app_browser_launch();
                 else if (item == 1) app_cmd_launch();
                 else if (item == 2) app_notepad_launch();
                 else if (item == 3) app_calc_launch();
-                else if (item == 4) app_rules_viewer_launch();
-                else if (item == 5) app_control_panel_open();
-                else if (item == 6) app_regedit_launch();
-                else if (item == 7) app_about_launch();
-                else if (item == 8) {
+                else if (item == 4) app_player_launch();
+                else if (item == 5) app_rules_viewer_launch();
+                else if (item == 6) app_control_panel_open();
+                else if (item == 7) app_regedit_launch();
+                else if (item == 8) app_about_launch();
+                else if (item == 9) {
                     app_shutdown_dialog_launch();
                 }
                 start_menu_open = false;

@@ -18,7 +18,7 @@ int boot_menu_show(void) {
 
     int selected = 1; // 1 = Live, 2 = Install
     uint64_t start_tick = timer_get_ticks();
-    int timeout_sec = 2;
+    int timeout_sec = 10;
 
     int32_t bw = 640;
     int32_t bh = 360;
@@ -55,6 +55,7 @@ int boot_menu_show(void) {
                 else if (sc == 0x05) key = '4';
                 else if (sc == 0x06) key = '5';
                 else if (sc == 0x07) key = '6';
+                else if (sc == 0x08) key = '7';
                 else if (sc == 0x1C) key = '\n';
                 else if (sc == 0x11) key = 'w';
                 else if (sc == 0x1F) key = 's';
@@ -72,6 +73,7 @@ int boot_menu_show(void) {
         if (key == '4') { serial_log("[BOOT_MENU] Scelto 4\n"); return 4; }
         if (key == '5') { serial_log("[BOOT_MENU] Scelto 5\n"); return 5; }
         if (key == '6') { serial_log("[BOOT_MENU] Scelto 6\n"); return 6; }
+        if (key == '7') { serial_log("[BOOT_MENU] Scelto 7 (Media Player)\n"); return 7; }
         if (key == '\n' || key == '\r') return selected;
         if (key == 'w' || key == 'W') selected = 1;
         if (key == 's' || key == 'S') selected = 2;

@@ -4,7 +4,7 @@
 #include <types.h>
 #include <fs/vfs.h>
 
-#define VFS_MAX_DRIVES       8
+#define VFS_MAX_DRIVES       16
 #define VFS_MAX_FS_DRIVERS   8
 #define VFS_FS_NAME_MAX      16
 
@@ -80,6 +80,12 @@ vfs_mount_t* vfs_resolve_path_mount(const char* path, const char** out_rel_path)
 
 // Restituisce informazioni su un'unità
 bool vfs_get_drive_info(char drive_letter, vfs_drive_info_t* out_info);
+
+// Controlla se una specifica lettera di unità è montata
+bool vfs_is_drive_mounted(char drive_letter);
+
+// Trova la prima lettera di unità libera non allocata
+char vfs_get_first_free_letter(void);
 
 // Elenco lettere unità attive (es. "CDR")
 int vfs_list_drives(char* out_letters, int max_drives);

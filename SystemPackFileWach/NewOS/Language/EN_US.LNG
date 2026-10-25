@@ -1,0 +1,8 @@
+[Strings]
+AppName=NewOS V1 64-bit Edition
+LoginTitle=Logon to NewOS V1
+Username=Username:
+Password=Password:
+LoginBtn=Log On
+GuestBtn=Guest Mode
+ShutdownBtn=Shut Down

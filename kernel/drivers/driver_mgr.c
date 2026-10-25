@@ -161,7 +161,8 @@ static void init_fallback_drivers(void) {
         const char* settings;
     } defs[] = {
         { "NewSoft PCI Bus Enumerator", "PCI.SYS", "PCI.INI", "Bus", DRIVER_TYPE_BUS, 0, 0x0CF8, 0, "ScanMode: Fast, MaxBuses: 256" },
-        { "NewSoft IDE/ATA Storage Controller", "ATA.SYS", "ATA.INI", "Storage", DRIVER_TYPE_STORAGE, 14, 0x01F0, 0, "TransferMode: PIO4, Sector: 512" },
+        { "NewSoft Serial ATA AHCI Controller", "AHCI.SYS", "AHCI.INI", "Storage", DRIVER_TYPE_STORAGE, 11, 0x0000, 1, "Mode: AHCI 1.0 DMA, Priority: Primary" },
+        { "NewSoft IDE/ATA Storage Controller", "ATA.SYS", "ATA.INI", "Storage", DRIVER_TYPE_STORAGE, 14, 0x01F0, 0, "TransferMode: PIO4, Mode: Legacy Fallback" },
         { "NewSoft VESA/VBE Graphics Subsystem", "VGA.SYS", "VGA.INI", "Display", DRIVER_TYPE_DISPLAY, 0, 0x01CE, 0, "Resolution: 1024x768x32 BGA" },
         { "NewSoft AC97 Audio Subsystem", "AC97.SYS", "AC97.INI", "Audio", DRIVER_TYPE_AUDIO, 11, 0x1000, 1, "SampleRate: 48000Hz Stereo" },
         { "NewSoft PS/2 Mouse Driver", "PS2MOUSE.SYS", "PS2MOUSE.INI", "Mouse", DRIVER_TYPE_INPUT_MOUSE, 12, 0x0060, 0, "Sensitivity: 3, Accel: Normal" },

@@ -2,6 +2,7 @@
 #include <fs/exfat.h>
 #include <fs/vfs_cache.h>
 #include <drivers/ata.h>
+#include <arch/x86_64/io.h>
 #include <mm/heap.h>
 #include <string.h>
 
@@ -64,6 +65,7 @@ uint32_t exfat_ops_allocate_cluster(void) {
                 vfs_cache_write_sector(0, cl_lba + s, zero_sec);
             }
 
+            exfat_notify_cluster_allocated();
             return cl;
         }
     }
@@ -211,6 +213,7 @@ bool exfat_ops_delete_entry(uint32_t dir_cluster, const char* name) {
                         vfs_cache_write_sector(0, lba + s, cl_buf + s * 512);
                     }
                     kfree(cl_buf);
+                    exfat_notify_cluster_freed();
                     return true;
                 }
             }
@@ -228,21 +231,40 @@ bool exfat_ops_delete_entry(uint32_t dir_cluster, const char* name) {
 
 static bool exfat_vfs_mount(vfs_mount_t* mnt) {
     if (!mnt) return false;
-    if (!exfat_mount(mnt->partition_lba)) {
+    if (mnt->drive_letter == 'C') {
         if (!exfat_is_mounted()) {
-            mnt->total_mb = 128;
-            mnt->free_mb = 64;
-            return true;
+            exfat_mount(mnt->partition_lba);
+        }
+    } else if (mnt->partition_lba > 0) {
+        exfat_mount(mnt->partition_lba);
+    }
+
+    // Risoluzione periferica fisica reale dal chip (ATA / AHCI)
+    const ata_device_t* dev = (const ata_device_t*)mnt->priv_data;
+    if (!dev) {
+        if (mnt->drive_letter == 'C') {
+            dev = ata_get_primary_master();
+            mnt->priv_data = (void*)dev;
+        } else if (mnt->device_id < (uint32_t)ata_get_device_count()) {
+            dev = ata_get_device((int)mnt->device_id);
+            mnt->priv_data = (void*)dev;
         }
     }
+
     const exfat_vbr_t* vbr = exfat_get_vbr();
-    if (vbr && vbr->volume_length > 0) {
-        mnt->total_mb = (uint32_t)((vbr->volume_length * 512) / (1024 * 1024));
-        mnt->free_mb = mnt->total_mb / 2; // Stima spazio libero
+    uint32_t used_mb = exfat_get_used_mb();
+
+    // 1. Lettura dal chip del disco HD / SSD del valore reale totale
+    if (dev && dev->present && dev->size_mb > 0) {
+        mnt->total_mb = dev->size_mb;
+    } else if (vbr && vbr->volume_length > 0) {
+        mnt->total_mb = (uint32_t)((vbr->volume_length * 512ULL) / (1024ULL * 1024ULL));
     } else {
         mnt->total_mb = 128;
-        mnt->free_mb = 64;
     }
+
+    // 2. Lettura e calcolo memoria disponibile reale dal chip
+    mnt->free_mb = mnt->total_mb > used_mb ? (mnt->total_mb - used_mb) : 0;
     return true;
 }
 
@@ -256,6 +278,9 @@ static bool exfat_vfs_open(vfs_mount_t* mnt, const char* rel_path, vfs_file_t* f
     char temp_path[VFS_MAX_PATH];
     strncpy(temp_path, rel_path, sizeof(temp_path) - 1);
     temp_path[sizeof(temp_path) - 1] = '\0';
+    for (int k = 0; temp_path[k] != '\0'; k++) {
+        if (temp_path[k] == '\\') temp_path[k] = '/';
+    }
 
     char* token = temp_path;
     char* next = NULL;

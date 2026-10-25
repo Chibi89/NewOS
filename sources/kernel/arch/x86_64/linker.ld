@@ -3,15 +3,15 @@ ENTRY(kernel_entry)
 SECTIONS {
     . = 0x100000;
 
-    .text : ALIGN(4K) {
+    .text : ALIGN(16) {
         *(.text*)
     }
 
-    .rodata : ALIGN(4K) {
+    .rodata : ALIGN(16) {
         *(.rodata*)
     }
 
-    .data : ALIGN(4K) {
+    .data : ALIGN(16) {
         *(.data*)
     }
 
@@ -19,6 +19,8 @@ SECTIONS {
         *(COMMON)
         *(.bss*)
     }
+    . = ALIGN(4K);
+    _kernel_end = .;
 
     /DISCARD/ : {
         *(.comment)

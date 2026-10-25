@@ -10,6 +10,7 @@ bin/
 *.obj
 *.elf
 *.bin
+*.pdb
 !resources/icons.bin
 
 # Immagini Disco e Archivi Pesanti (Superiori a 100 MB - Limite Rigido GitHub)

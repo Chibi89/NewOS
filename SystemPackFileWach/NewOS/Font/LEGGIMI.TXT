@@ -1,0 +1,1 @@
+Cartella dei tipi di carattere (Font) di sistema di NewOS V1 (C:\NewOS\Font\).

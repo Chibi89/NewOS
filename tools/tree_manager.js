@@ -23,6 +23,62 @@ function createPeStub(name, type = 'App') {
     return buf;
 }
 
+function createWavSample(durationSec = 2.0, freq = 440) {
+    const sampleRate = 44100;
+    const numChannels = 2;
+    const bitsPerSample = 16;
+    const numSamples = Math.floor(sampleRate * durationSec);
+    const dataSize = numSamples * numChannels * (bitsPerSample / 8);
+    const buf = Buffer.alloc(44 + dataSize);
+
+    buf.write('RIFF', 0, 4, 'ascii');
+    buf.writeUInt32LE(36 + dataSize, 4);
+    buf.write('WAVE', 8, 4, 'ascii');
+
+    buf.write('fmt ', 12, 4, 'ascii');
+    buf.writeUInt32LE(16, 16);
+    buf.writeUInt16LE(1, 20); // PCM
+    buf.writeUInt16LE(numChannels, 22);
+    buf.writeUInt32LE(sampleRate, 24);
+    buf.writeUInt32LE(sampleRate * numChannels * (bitsPerSample / 8), 28);
+    buf.writeUInt16LE(numChannels * (bitsPerSample / 8), 32);
+    buf.writeUInt16LE(bitsPerSample, 34);
+
+    buf.write('data', 36, 4, 'ascii');
+    buf.writeUInt32LE(dataSize, 40);
+
+    let offset = 44;
+    for (let i = 0; i < numSamples; i++) {
+        const t = i / sampleRate;
+        const envelope = Math.exp(-t * 1.2);
+        const sampleVal = Math.sin(2 * Math.PI * freq * t) * 0.6 +
+                          Math.sin(2 * Math.PI * (freq * 1.25) * t) * 0.25 +
+                          Math.sin(2 * Math.PI * (freq * 1.5) * t) * 0.15;
+        const val16 = Math.max(-32767, Math.min(32767, Math.floor(sampleVal * envelope * 22000)));
+        buf.writeInt16LE(val16, offset);
+        buf.writeInt16LE(val16, offset + 2);
+        offset += 4;
+    }
+    return buf;
+}
+
+function createAviStub(width = 640, height = 360, frames = 30) {
+    const buf = Buffer.alloc(512, 0);
+    buf.write('RIFF', 0, 4, 'ascii');
+    buf.writeUInt32LE(512 - 8, 4);
+    buf.write('AVI ', 8, 4, 'ascii');
+    buf.write('LIST', 12, 4, 'ascii');
+    buf.writeUInt32LE(192, 16);
+    buf.write('hdrl', 20, 4, 'ascii');
+    buf.write('avih', 24, 4, 'ascii');
+    buf.writeUInt32LE(56, 28);
+    buf.writeUInt32LE(33333, 32);
+    buf.writeUInt32LE(frames, 48);
+    buf.writeUInt32LE(width, 64);
+    buf.writeUInt32LE(height, 68);
+    return buf;
+}
+
 function createDriverSys(name, typeId, ioBase, irq) {
     const buf = Buffer.alloc(1024, 0);
     buf[0] = 0x4D; buf[1] = 0x5A;
@@ -151,8 +207,19 @@ function organizeBuildBin(rootDir, binDir) {
         'NewOS/OOBE',
         'NewOS/Registry',
         'NewOS/Rules',
+        'NewOS/Boot',
+        'NewOS/Update',
+        'NewOS/Update/Backup',
+        'NewOS/MultimediaCodec',
+        'NewOS/PlayerCatalogy',
+        'NewOS/Resources/Miusic',
+        'NewOS/Resources/Videos',
         'BootSetup',
         'User/Morgan/Desktop/PROGETTI',
+        'User/Morgan/Miusic',
+        'User/Morgan/Video',
+        'User/Default/Miusic',
+        'User/Default/Video',
         'User/Default',
         'NewOS/Dev/CONFIG',
         'NewOS/Dev/INCLUDE',
@@ -366,15 +433,23 @@ WindowText=0xE2E8F0
 
     // 8. Popola SystemProgram (C:\NewOS\SystemProgram\)
     const sysProgDir = path.join(binDir, 'NewOS', 'SystemProgram');
-    for (const prog of ['REGEDIT.EXE', 'TASKMGR.EXE', 'EXPLORER.EXE', 'CMD.EXE', 'CALC.EXE', 'NOTEPAD.EXE', 'RULES.EXE', 'WEBBROWSER.EXE', 'DISKMGMT.EXE', 'CHKDSK.EXE', 'EVENTVWR.EXE',
+    for (const prog of ['PLAYER.EXE', 'REGEDIT.EXE', 'TASKMGR.EXE', 'EXPLORER.EXE', 'CMD.EXE', 'CALC.EXE', 'NOTEPAD.EXE', 'RULES.EXE', 'WEBBROWSER.EXE', 'DISKMGMT.EXE', 'CHKDSK.EXE', 'EVENTVWR.EXE',
                        'DISPLAY.CPL', 'POWER.CPL', 'NETWORK.CPL', 'DEVMGMT.CPL', 'SOUND.CPL', 'DATEANDTIME.CPL', 'PROGRAMS.CPL', 'ACCESSIBILITY.CPL', 'REGEDIT.CPL']) {
         fs.writeFileSync(path.join(sysProgDir, prog), peStub);
     }
-    // Copia i moduli protetti compilati
-    for (const mod of ['BOOTSCR.MOD', 'BOOTSCR.INI', 'LOGIN.MOD', 'LOGIN.INI', 'LOGOUT.MOD', 'LOGOUT.INI', 'BOOTSETUP.MOD', 'BOOTSETUP.INI']) {
+    // Copia i moduli protetti compilati (.MOD e .INI)
+    const newosBootDir = path.join(binDir, 'NewOS', 'Boot');
+    if (!fs.existsSync(newosBootDir)) fs.mkdirSync(newosBootDir, { recursive: true });
+
+    const newosUpdateDir = path.join(binDir, 'NewOS', 'Update');
+    const newosBackupDir = path.join(newosUpdateDir, 'Backup');
+    if (!fs.existsSync(newosBackupDir)) fs.mkdirSync(newosBackupDir, { recursive: true });
+
+    for (const mod of ['BOOTSCR.MOD', 'BOOTSCR.INI', 'LOGIN.MOD', 'LOGIN.INI', 'LOGOUT.MOD', 'LOGOUT.INI', 'BOOTSETUP.MOD', 'BOOTSETUP.INI', 'UPDATE.MOD', 'UPDATE.INI']) {
         const srcMod = path.join(binDir, mod);
         if (fs.existsSync(srcMod)) {
             fs.copyFileSync(srcMod, path.join(sysProgDir, mod));
+            fs.copyFileSync(srcMod, path.join(newosBootDir, mod));
         }
     }
     const bootSetupDir = path.join(binDir, 'BootSetup');
@@ -798,7 +873,165 @@ STRUTTURA E REGOLE DI SISTEMA:
     fs.writeFileSync(path.join(progDir, 'LEGGIMI.TXT'), installPolicy);
     fs.writeFileSync(path.join(progDir, 'INSTALL_POLICY.TXT'), installPolicy);
 
-    console.log('[OK] Struttura delle cartelle NewOS V1 in build/bin/ popolata con successo.');
+    // 13. Popola e sincronizza C:\NewOS\Boot\ (Spostamento e centralizzazione file di avvio)
+    const bootDir = path.join(binDir, 'NewOS', 'Boot');
+    if (!fs.existsSync(bootDir)) fs.mkdirSync(bootDir, { recursive: true });
+
+    const bootFiles = [
+        'bootscr.ini', 'BOOTSCR.INI',
+        'bootscr.mod', 'BOOTSCR.MOD',
+        'bootscr.bin', 'BOOTSCR.BIN',
+        'bootsetup.ini', 'BOOTSETUP.INI',
+        'bootsetup.mod', 'BOOTSETUP.MOD',
+        'bootx64.bin', 'BOOTX64.BIN',
+        'bootx64.efi', 'BOOTX64.EFI',
+        'kernel.bin', 'KERNEL.BIN',
+        'kernel.elf', 'KERNEL.ELF',
+        'login.ini', 'LOGIN.INI',
+        'login.mod', 'LOGIN.MOD',
+        'logout.ini', 'LOGOUT.INI',
+        'logout.mod', 'LOGOUT.MOD',
+        'stage2.bin', 'STAGE2.BIN',
+        'bootsect.bin', 'BOOTSECT.BIN'
+    ];
+
+    // Se un file e' presente nella root di binDir, copialo in NewOS/Boot/ e rimuovilo dalla root
+    for (const bf of bootFiles) {
+        const rootCandidate = path.join(binDir, bf);
+        const bootDst = path.join(bootDir, bf);
+        if (fs.existsSync(rootCandidate)) {
+            try {
+                fs.copyFileSync(rootCandidate, bootDst);
+                fs.unlinkSync(rootCandidate);
+            } catch (e) {}
+        }
+    }
+
+    // 14. Popola Sottosistema Multimediale (NewOS/MultimediaCodec, PlayerCatalogy, Risorse Miusic & Videos)
+    const codecDir = path.join(binDir, 'NewOS', 'MultimediaCodec');
+    if (!fs.existsSync(codecDir)) fs.mkdirSync(codecDir, { recursive: true });
+
+    const codecsInfo = [
+        // Video (AV1 è il codec video principale e predefinito di sistema in quanto open-source e gratuito)
+        {
+            file: 'AV1DEC.INI',
+            content: `[Codec]\nName=NewSoft AOMedia AV1 Video Decoder (Primary System Video Codec)\nFilename=AV1DEC.CDC\nType=Video\nFormat=AV1\nExtensions=.MP4,.MKV,.WEBM,.AV1\nVersion=1.0.0\nPriority=1\nIsPrimary=1\nAuthor=Newspoint Software\nLicense=Open Source / Royalty-Free (AOMedia)\nHardwareAcceleration=AutoDetect\nMaxResolution=7680x4320\nDescription=Codec video PRINCIPALE e predefinito di NewOS V1. Gratuito, open-source e privo di royalties. Efficienza 30% superiore ad HEVC.\n`
+        },
+        {
+            file: 'H264DEC.INI',
+            content: `[Codec]\nName=NewSoft H.264 / AVC Video Decoder (Fallback)\nFilename=H264DEC.CDC\nType=Video\nFormat=H264\nExtensions=.MP4,.MKV,.AVI\nVersion=1.0.0\nPriority=2\nIsPrimary=0\nAuthor=Newspoint Software\nLicense=Proprietary (MPEG-LA AVC)\nHardwareAcceleration=AutoDetect\nMaxResolution=1920x1080\nDescription=Fallback universale a massima compatibilita legacy, operante su ogni architettura da oltre vent'anni.\n`
+        },
+        {
+            file: 'H265DEC.INI',
+            content: `[Codec]\nName=NewSoft H.265 / HEVC High Efficiency Video Decoder\nFilename=H265DEC.CDC\nType=Video\nFormat=HEVC\nExtensions=.MP4,.MKV,.TS\nVersion=1.0.0\nPriority=3\nIsPrimary=0\nAuthor=Newspoint Software\nLicense=Proprietary (Royalties / Patents)\nHardwareAcceleration=AutoDetect\nMaxResolution=3840x2160\nDescription=Standard per contenuti 4K Ultra HD, Blu-ray 4K e HDR. Compressione doppia rispetto ad H.264.\n`
+        },
+        {
+            file: 'VP9DEC.INI',
+            content: `[Codec]\nName=NewSoft Google VP9 Video Decoder\nFilename=VP9DEC.CDC\nType=Video\nFormat=VP9\nExtensions=.WEBM,.MKV\nVersion=1.0.0\nPriority=4\nIsPrimary=0\nAuthor=Newspoint Software\nLicense=Open Source / Royalty-Free (Google)\nHardwareAcceleration=AutoDetect\nMaxResolution=3840x2160\nDescription=Alternativa aperta a H.265 per lo streaming video 4K su YouTube prima dell'avvento di AV1.\n`
+        },
+        {
+            file: 'AVIDEC.INI',
+            content: `[Codec]\nName=NewSoft RIFF AVI Demuxer & Motion Video Decoder\nFilename=AVIDEC.CDC\nType=Demuxer\nFormat=AVI\nExtensions=.AVI\nVersion=1.0.0\nAuthor=Newspoint Software\nLicense=Open\nHardwareAcceleration=None\nMaxResolution=1280x720\nDescription=Demuxer container AVI con supporto a Motion JPEG e stream RGB/YUV raw.\n`
+        },
+        {
+            file: 'MP4DEC.INI',
+            content: `[Codec]\nName=NewSoft ISOBMFF MP4 Demuxer Engine\nFilename=MP4DEC.CDC\nType=Demuxer\nFormat=MP4\nExtensions=.MP4,.M4V,.M4A\nVersion=1.0.0\nAuthor=Newspoint Software\nLicense=Open\nHardwareAcceleration=None\nMaxResolution=3840x2160\nDescription=Parser container ISO Base Media File Format con aggancio preferenziale per AV1 e Opus.\n`
+        },
+        // Audio
+        {
+            file: 'OPUSDEC.INI',
+            content: `[Codec]\nName=NewSoft Opus Interactive Audio Decoder (Primary Real-Time)\nFilename=OPUSDEC.CDC\nType=Audio\nFormat=OPUS\nExtensions=.OPUS,.OGG,.WEBM\nVersion=1.0.0\nPriority=1\nIsPrimary=1\nAuthor=Newspoint Software\nLicense=Open Source / Royalty-Free (Xiph.Org / IETF)\nSampleRates=8000,12000,16000,24000,48000\nChannels=2\nBitrateMode=DynamicAdaptive\nDescription=Re della bassa latenza e streaming real-time per note vocali (WhatsApp, Discord) e WebRTC.\n`
+        },
+        {
+            file: 'FLACDEC.INI',
+            content: `[Codec]\nName=NewSoft FLAC & ALAC Lossless Studio Audio Decoder (Primary Lossless)\nFilename=FLACDEC.CDC\nType=Audio\nFormat=FLAC/ALAC\nExtensions=.FLAC,.ALAC\nVersion=1.0.0\nPriority=1\nIsPrimary=1\nAuthor=Newspoint Software\nLicense=Open Source (FLAC) / Free (ALAC)\nSampleRates=44100,48000,96000,192000\nBitDepth=16,24\nChannels=2\nDescription=Compressione lossless senza perdita (come uno ZIP) bit-perfect per streaming Hi-Fi studio master.\n`
+        },
+        {
+            file: 'AACDEC.INI',
+            content: `[Codec]\nName=NewSoft Advanced Audio Coding Decoder\nFilename=AACDEC.CDC\nType=Audio\nFormat=AAC\nExtensions=.AAC,.M4A,.MP4\nVersion=1.0.0\nPriority=2\nIsPrimary=0\nAuthor=Newspoint Software\nLicense=Proprietary (Via Licensing)\nSampleRates=44100,48000\nChannels=2\nBitrateMode=VBR/CBR\nDescription=Successore spirituale dell'MP3, standard per lo streaming (YouTube, Twitch, Apple Music) e tracce MP4.\n`
+        },
+        {
+            file: 'MP3DEC.INI',
+            content: `[Codec]\nName=NewSoft MPEG-1/2 Audio Layer III Decoder (Fallback Legacy)\nFilename=MP3DEC.CDC\nType=Audio\nFormat=MP3\nExtensions=.MP3\nVersion=1.0.0\nPriority=3\nIsPrimary=0\nAuthor=Newspoint Software\nLicense=Public Domain (Brevetti scaduti)\nSampleRates=32000,44100,48000\nChannels=2\nBitrateMode=CBR/VBR\nDescription=Formato universale legacy con compatibilita totale per musica su qualsiasi dispositivo.\n`
+        },
+        {
+            file: 'WAVDEC.INI',
+            content: `[Codec]\nName=NewSoft RIFF Wave PCM Audio Engine\nFilename=WAVDEC.CDC\nType=Audio\nFormat=PCM\nExtensions=.WAV\nVersion=1.0.0\nAuthor=Newspoint Software\nLicense=Public\nSampleRates=11025,22050,44100,48000\nBitDepth=8,16\nChannels=2\nDescription=Codec audio nativo non compresso a latenza zero per il controller DMA AC97 di sistema.\n`
+        }
+    ];
+
+    for (const c of codecsInfo) {
+        fs.writeFileSync(path.join(codecDir, c.file), c.content);
+    }
+
+    // Catalogo e impostazioni Player (NewOS/PlayerCatalogy/)
+    const catalogDir = path.join(binDir, 'NewOS', 'PlayerCatalogy');
+    if (!fs.existsSync(catalogDir)) fs.mkdirSync(catalogDir, { recursive: true });
+
+    const playerIni = `[General]\nVersion=1.0.0\nVolume=85\nMute=0\nRepeatMode=0\nShuffle=0\nVisualizerMode=1\nShowPlaylistPanel=1\nLastPlayedFile=C:\\NewOS\\Resources\\Miusic\\WELCOME.WAV\nLastPositionMs=0\n\n[Video]\nPrimaryCodec=AV1\nFallbackCodec=H264\nHardwareAcceleration=AutoDetect\nAspectRatio=Auto\nHardwareScaling=1\nLetterboxColor=0x000000\nSubtitleEnabled=1\n\n[LibraryPaths]\nSystemMusic=C:\\NewOS\\Resources\\Miusic\\\nSystemVideo=C:\\NewOS\\Resources\\Videos\\\nUserMusic=C:\\User\\Morgan\\Miusic\\\nUserVideo=C:\\User\\Morgan\\Video\\\n`;
+    fs.writeFileSync(path.join(catalogDir, 'PLAYER.INI'), playerIni);
+
+    const defaultPlaylist = `C:\\NewOS\\Resources\\Miusic\\WELCOME.WAV\nC:\\NewOS\\Resources\\Miusic\\SAMPLE.MP3\nC:\\NewOS\\Resources\\Videos\\NEWOS_INTRO.AVI\nC:\\NewOS\\Resources\\Videos\\SAMPLE.MP4\n`;
+    fs.writeFileSync(path.join(catalogDir, 'DEFAULT.PLAYLIST'), defaultPlaylist);
+
+    const defaultPlaylistIni = `[PlaylistInfo]\nName=Catalogo Multimediale Predefinito\nTotalItems=4\nCreatedDate=2026-10-23\nAuthor=NewSoft Media Subsystem\n\n[Item_0]\nPath=C:\\NewOS\\Resources\\Miusic\\WELCOME.WAV\nTitle=NewOS Welcome Symphony\nArtist=Newspoint Audio Lab\nType=Audio\nDurationSeconds=2\nSampleRate=44100\nChannels=2\n\n[Item_1]\nPath=C:\\NewOS\\Resources\\Miusic\\SAMPLE.MP3\nTitle=Digital Groove Sample\nArtist=NewSoft Synthesizer\nType=Audio\nDurationSeconds=225\nBitrate=192\n\n[Item_2]\nPath=C:\\NewOS\\Resources\\Videos\\NEWOS_INTRO.AVI\nTitle=Presentazione NewOS V1 64-bit\nType=Video\nDurationSeconds=48\nResolution=640x360\nFPS=30\n\n[Item_3]\nPath=C:\\NewOS\\Resources\\Videos\\SAMPLE.MP4\nTitle=Dimostrazione Video HD\nType=Video\nDurationSeconds=80\nResolution=640x360\nFPS=30\n`;
+    fs.writeFileSync(path.join(catalogDir, 'DEFAULT.PLAYLIST.INI'), defaultPlaylistIni);
+
+    // Risorse di fabbrica (NewOS/Resources/Miusic/ e NewOS/Resources/Videos/)
+    const musicDir = path.join(binDir, 'NewOS', 'Resources', 'Miusic');
+    const videoDir = path.join(binDir, 'NewOS', 'Resources', 'Videos');
+    if (!fs.existsSync(musicDir)) fs.mkdirSync(musicDir, { recursive: true });
+    if (!fs.existsSync(videoDir)) fs.mkdirSync(videoDir, { recursive: true });
+
+    // File audio reale WAV 44.1 kHz PCM
+    const wavBuffer = createWavSample(2.5, 440);
+    fs.writeFileSync(path.join(musicDir, 'WELCOME.WAV'), wavBuffer);
+
+    // File stub MP3 con tag ID3v2
+    const mp3Buf = Buffer.alloc(512, 0);
+    mp3Buf.write('ID3\x03\x00\x00\x00\x00\x01\x00', 0, 10, 'binary');
+    fs.writeFileSync(path.join(musicDir, 'SAMPLE.MP3'), mp3Buf);
+
+    // File video reale RIFF AVI
+    const aviBuffer = createAviStub(640, 360, 30);
+    fs.writeFileSync(path.join(videoDir, 'NEWOS_INTRO.AVI'), aviBuffer);
+
+    // File stub MP4
+    const mp4Buf = Buffer.alloc(512, 0);
+    mp4Buf.writeUInt32BE(0x18, 0);
+    mp4Buf.write('ftypisom', 4, 8, 'ascii');
+    fs.writeFileSync(path.join(videoDir, 'SAMPLE.MP4'), mp4Buf);
+
+    // Cartelle utente per Morgan e Default
+    const userDirs = [
+        path.join(binDir, 'User', 'Morgan', 'Miusic'),
+        path.join(binDir, 'User', 'Morgan', 'Video'),
+        path.join(binDir, 'User', 'Default', 'Miusic'),
+        path.join(binDir, 'User', 'Default', 'Video')
+    ];
+    for (const ud of userDirs) {
+        if (!fs.existsSync(ud)) fs.mkdirSync(ud, { recursive: true });
+        const isMusic = ud.endsWith('Miusic');
+        const infoTxt = isMusic ?
+            "Cartella musicale personale per file audio (.WAV, .MP3, .AAC, .OPUS, .FLAC).\nI file inseriti qui appariranno automaticamente nella libreria di NewOS Media Player.\n" :
+            "Cartella personale per file filmati e video (.AVI, .MP4, .MKV, .WEBM).\nI file inseriti qui appariranno automaticamente nella libreria di NewOS Media Player.\n";
+        fs.writeFileSync(path.join(ud, 'LEGGIMI.TXT'), infoTxt);
+    }
+
+    // Cartella di sistema NewOS/Update
+    const updateSysDir = path.join(binDir, 'NewOS', 'Update');
+    if (!fs.existsSync(updateSysDir)) fs.mkdirSync(updateSysDir, { recursive: true });
+    const whatsnewIni = path.join(updateSysDir, 'pending_whatsnew.ini');
+    const wnBuf = Buffer.alloc(512, 0x20);
+    wnBuf.write("[WhatsNew]\r\nShowOnFirstLogin=0\r\nBuildNumber=20261024\r\n", 0, 'utf8');
+    fs.writeFileSync(whatsnewIni, wnBuf);
+
+    const catalogIni = path.join(updateSysDir, 'CHANCECHATALOGY.ini');
+    const catBuf = Buffer.alloc(4096, 0x20);
+    catBuf.write("[Update_Catalog]\r\nPackageName=NewOS V1 Base Image\r\nTotalFiles=0\r\n\r\n[WhatsNew]\r\nItem_0=- Sistema NewOS V1 pronto per ricevere aggiornamenti.\r\n\r\n[Files]\r\n", 0, 'utf8');
+    fs.writeFileSync(catalogIni, catBuf);
+
+    console.log('[OK] Struttura delle cartelle NewOS V1 in build/bin/ popolata con successo (NewOS/Boot centralizzata, MultimediaCodec e Catalogo integrati).');
 }
 
 module.exports = { organizeBuildBin, createDriverSys, createPeStub, DRIVERS_SPEC };

@@ -204,8 +204,9 @@ bool e1000_init(pci_device_t* dev, net_nic_t* nic) {
                                   (15U << E1000_TCTL_CT_SHIFT) |
                                   (64U << E1000_TCTL_COLD_SHF));
 
-    // Abilita interrupt di ricezione
-    e1000_write32(E1000_REG_IMS, (1U << 2) | (1U << 4) | (1U << 6) | (1U << 7));
+    // La ricezione e trasmissione di rete opera in modalita' net_poll() (polling cooperativo)
+    // Disabilita gli interrupt hardware E1000 per evitare collisioni sulla linea IRQ PCI condivisa
+    e1000_write32(E1000_REG_IMC, 0xFFFFFFFF);
 
     // Link status
     uint32_t status = e1000_read32(E1000_REG_STATUS);

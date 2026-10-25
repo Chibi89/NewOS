@@ -1,0 +1,53 @@
+; ==============================================================================
+; NEWOS V1 - REGISTRY DIFFERENTIAL UPDATE PACKAGE (.UPDATE)
+; Generato da NewOS Registry Update CLI - Autorita' NewSoft
+; ==============================================================================
+[NewOS_Registry_Certificate]
+CertificateID=REG-AUTH-1792762425316-CLI
+Issuer=Newspoint Software - NewSoft Root Authority
+TargetOS=NewOS V1 (64-bit)
+TargetRegistry=C:\NewOS\Registry\REGISTRY.DAT
+PayloadDigest=CADB02524426B506150A2C186136C7053C68C623E9FD50571BC9E57C83BFF5BC
+Timestamp=2026-10-23T13:33:45.316Z
+SignatureTag=NEWSOFT-REG-AUTH-SIGNATURE-V1
+SignatureBytes=C8681EE0A672714DD0CCCC9F4EA538886235407147F2A3E56D9394344412E82C
+
+[RegistryUpdate_Header]
+TotalKeys=1
+TotalValues=3
+SafetyCheckEnabled=1
+MinBuildVersion=1.0.0
+GeneratedBy=NewOS Registry Update CLI Builder (Node.js)
+
+[Update_Item_0]
+Action=SET_VALUE
+KeyPath=HKEY_LOCAL_MACHINE\SYSTEM
+ValueName=ProductName
+ValueType=REG_SZ
+NewData=NewOS V1 64-bit Edition (Update 1)
+StabilityClass=STABLE
+
+[Update_Item_1]
+Action=SET_VALUE
+KeyPath=HKEY_LOCAL_MACHINE\SYSTEM
+ValueName=BuildNumber
+ValueType=REG_DWORD
+NewData=20261024
+StabilityClass=STABLE
+
+[Update_Item_2]
+Action=CREATE_KEY
+KeyPath=HKEY_LOCAL_MACHINE\SOFTWARE\NewSoft\UpdateSystem
+ValueName=Version
+ValueType=REG_SZ
+NewData=1.1.0
+StabilityClass=STABLE
+
+[Update_Item_3]
+Action=SET_VALUE
+KeyPath=HKEY_CLASSES_ROOT\.mp4
+ValueName=OpenWith
+ValueType=REG_SZ
+NewData=C:\NewOS\SystemProgram\PLAYER.EXE
+StabilityClass=STABLE
+

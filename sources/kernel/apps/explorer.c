@@ -186,6 +186,38 @@ static void explorer_load_items(explorer_state_t* state) {
             }
             outb(0x3F8, 'e');
 
+            // 4.b Hard Disk / SSD secondari montati dal VFS (es. E:, F:, ecc.)
+            char drv_letters[16];
+            int drv_count = vfs_list_drives(drv_letters, sizeof(drv_letters));
+            for (int k = 0; k < drv_count; k++) {
+                char let = drv_letters[k];
+                if (let == 'C' || let == 'A' || let == 'D' || let == 'U' || let == 'R') {
+                    continue; // Gia' gestiti sopra o riservati
+                }
+                vfs_drive_info_t dinfo;
+                if (vfs_get_drive_info(let, &dinfo)) {
+                    char sec_name[64];
+                    char sec_desc[64];
+                    if (dinfo.total_mb >= 1024) {
+                        mini_snprintf(sec_name, sizeof(sec_name), "Disco locale (%c:) [%d GB]", let, dinfo.total_mb / 1024);
+                    } else {
+                        mini_snprintf(sec_name, sizeof(sec_name), "Disco locale (%c:) [%d MB]", let, dinfo.total_mb);
+                    }
+                    mini_snprintf(sec_desc, sizeof(sec_desc), "Disco fisso (%s)", dinfo.fs_name);
+
+                    if (!state->search_active || state->search_filter[0] == '\0' || str_contains_nocase(sec_name, state->search_filter)) {
+                        explorer_item_t* sec_it = &state->items[state->num_items++];
+                        strcpy(sec_it->name, sec_name);
+                        strcpy(sec_it->desc, sec_desc);
+                        sec_it->size_bytes = (uint64_t)dinfo.total_mb * 1024 * 1024;
+                        sec_it->icon_id = ICON_HD;
+                        sec_it->is_drive = true;
+                        sec_it->is_folder = true;
+                        sec_it->content[0] = '\0';
+                    }
+                }
+            }
+
             // 5. Pannello di controllo
             if (!state->search_active || state->search_filter[0] == '\0' || str_contains_nocase("Pannello di controllo", state->search_filter)) {
                 explorer_item_t* cp = &state->items[state->num_items++];
@@ -204,7 +236,7 @@ static void explorer_load_items(explorer_state_t* state) {
             strcpy(state->current_path, "C:\\");
 
             vfs_dirent_t entries[MAX_EXPLORER_ITEMS];
-            int32_t count = vfs_readdir("/", entries, MAX_EXPLORER_ITEMS);
+            int32_t count = vfs_readdir("C:/", entries, MAX_EXPLORER_ITEMS);
             if (count > 0) {
                 for (int32_t i = 0; i < count && state->num_items < MAX_EXPLORER_ITEMS; i++) {
                     if (state->search_active && state->search_filter[0] != '\0') {
@@ -226,6 +258,9 @@ static void explorer_load_items(explorer_state_t* state) {
                         if (dot && (strcasecmp(dot, ".exe") == 0)) {
                             strcpy(it->desc, "Applicazione");
                             it->icon_id = ICON_RUN;
+                        } else if (dot && (strcasecmp(dot, ".cpl") == 0)) {
+                            strcpy(it->desc, "Applet di controllo");
+                            it->icon_id = ICON_RUN;
                         } else if (dot && (strcasecmp(dot, ".nor") == 0)) {
                             strcpy(it->desc, "Regola Ufficiale NewOS");
                             it->icon_id = ICON_DOCUMENT;
@@ -235,57 +270,24 @@ static void explorer_load_items(explorer_state_t* state) {
                         } else if (dot && (strcasecmp(dot, ".wav") == 0)) {
                             strcpy(it->desc, "File audio Wave");
                             it->icon_id = ICON_SOUND;
+                        } else if (dot && (strcasecmp(dot, ".htm") == 0 || strcasecmp(dot, ".html") == 0)) {
+                            strcpy(it->desc, "Documento HTML");
+                            it->icon_id = ICON_NET;
+                        } else if (dot && (strcasecmp(dot, ".ini") == 0 || strcasecmp(dot, ".cfg") == 0)) {
+                            strcpy(it->desc, "File di configurazione");
+                            it->icon_id = ICON_DOCUMENT;
+                        } else if (dot && (strcasecmp(dot, ".mod") == 0)) {
+                            strcpy(it->desc, "Modulo di avvio protetto");
+                            it->icon_id = ICON_DOCUMENT;
+                        } else if (dot && (strcasecmp(dot, ".pak") == 0)) {
+                            strcpy(it->desc, "Archivio compresso");
+                            it->icon_id = ICON_DOCUMENT;
                         } else {
                             strcpy(it->desc, "Documento di testo");
                             it->icon_id = ICON_DOCUMENT;
                         }
                     }
                 }
-            } else {
-                explorer_item_t* p = &state->items[state->num_items++];
-                strcpy(p->name, "SYSTEM");
-                strcpy(p->desc, "Cartella di file");
-                p->icon_id = ICON_FOLDER;
-                p->is_drive = false;
-                p->is_folder = true;
-                p->size_bytes = 0;
-                p->content[0] = '\0';
-
-                explorer_item_t* doc = &state->items[state->num_items++];
-                strcpy(doc->name, "DOCS");
-                strcpy(doc->desc, "Cartella di file");
-                doc->icon_id = ICON_FOLDER;
-                doc->is_drive = false;
-                doc->is_folder = true;
-                doc->size_bytes = 0;
-                doc->content[0] = '\0';
-
-                explorer_item_t* app = &state->items[state->num_items++];
-                strcpy(app->name, "APPS");
-                strcpy(app->desc, "Cartella di file");
-                app->icon_id = ICON_FOLDER;
-                app->is_drive = false;
-                app->is_folder = true;
-                app->size_bytes = 0;
-                app->content[0] = '\0';
-
-                explorer_item_t* usr = &state->items[state->num_items++];
-                strcpy(usr->name, "USER");
-                strcpy(usr->desc, "Cartella di file");
-                usr->icon_id = ICON_FOLDER;
-                usr->is_drive = false;
-                usr->is_folder = true;
-                usr->size_bytes = 0;
-                usr->content[0] = '\0';
-
-                explorer_item_t* src = &state->items[state->num_items++];
-                strcpy(src->name, "SOURCES");
-                strcpy(src->desc, "Cartella di file");
-                src->icon_id = ICON_FOLDER;
-                src->is_drive = false;
-                src->is_folder = true;
-                src->size_bytes = 0;
-                src->content[0] = '\0';
             }
             break;
         }
@@ -380,8 +382,13 @@ static void explorer_load_items(explorer_state_t* state) {
                     } else {
                         const char* dot = strstr(it->name, ".");
                         if (dot && (strcasecmp(dot, ".exe") == 0)) {
-                            strcpy(it->desc, "Applicazione");
-                            it->icon_id = ICON_RUN;
+                            if (strcasecmp(it->name, "PLAYER.EXE") == 0) {
+                                strcpy(it->desc, "Lettore Multimediale");
+                                it->icon_id = ICON_PLAY;
+                            } else {
+                                strcpy(it->desc, "Applicazione");
+                                it->icon_id = ICON_RUN;
+                            }
                         } else if (dot && (strcasecmp(dot, ".cpl") == 0)) {
                             strcpy(it->desc, "Applet di controllo");
                             it->icon_id = ICON_RUN;
@@ -397,116 +404,29 @@ static void explorer_load_items(explorer_state_t* state) {
                         } else if (dot && (strcasecmp(dot, ".jpg") == 0 || strcasecmp(dot, ".bmp") == 0 || strcasecmp(dot, ".png") == 0)) {
                             strcpy(it->desc, "Immagine grafica");
                             it->icon_id = ICON_IMAGE;
-                        } else if (dot && (strcasecmp(dot, ".wav") == 0)) {
-                            strcpy(it->desc, "File audio Wave");
+                        } else if (dot && (strcasecmp(dot, ".wav") == 0 || strcasecmp(dot, ".mp3") == 0 || strcasecmp(dot, ".flac") == 0 || strcasecmp(dot, ".alac") == 0)) {
+                            strcpy(it->desc, "File audio");
                             it->icon_id = ICON_SOUND;
+                        } else if (dot && (strcasecmp(dot, ".avi") == 0 || strcasecmp(dot, ".mp4") == 0 || strcasecmp(dot, ".av1") == 0 || strcasecmp(dot, ".webm") == 0)) {
+                            strcpy(it->desc, "File video");
+                            it->icon_id = ICON_PLAY;
+                        } else if (dot && strcasecmp(dot, ".cdc") == 0) {
+                            strcpy(it->desc, "Codec multimediale");
+                            it->icon_id = ICON_MAINTENANCE;
+                        } else if (dot && (strcasecmp(dot, ".htm") == 0 || strcasecmp(dot, ".html") == 0)) {
+                            strcpy(it->desc, "Documento HTML");
+                            it->icon_id = ICON_NET;
+                        } else if (dot && (strcasecmp(dot, ".mod") == 0)) {
+                            strcpy(it->desc, "Modulo di avvio protetto");
+                            it->icon_id = ICON_DOCUMENT;
+                        } else if (dot && (strcasecmp(dot, ".pak") == 0)) {
+                            strcpy(it->desc, "Archivio compresso");
+                            it->icon_id = ICON_DOCUMENT;
                         } else {
                             strcpy(it->desc, "Documento di testo");
                             it->icon_id = ICON_DOCUMENT;
                         }
                     }
-                }
-            } else {
-                // Navigazione gerarchica fallback (garantita a qualunque profondità)
-                if (strcasecmp(clean, "SYSTEM") == 0) {
-                    explorer_add_item(state, "DRIVERS", "Cartella di file", ICON_FOLDER, true, 0, NULL);
-                    explorer_add_item(state, "DEV", "Cartella di file", ICON_FOLDER, true, 0, NULL);
-                    explorer_add_item(state, "WALLPAPERS", "Cartella di file", ICON_FOLDER, true, 0, NULL);
-                    explorer_add_item(state, "SOUNDS", "Cartella di file", ICON_FOLDER, true, 0, NULL);
-                    explorer_add_item(state, "REGEDIT.EXE", "Applicazione", ICON_RUN, false, 49152, NULL);
-                    explorer_add_item(state, "REGEDIT.CPL", "Applet di controllo", ICON_RUN, false, 12288, NULL);
-                    explorer_add_item(state, "DEVMGMT.CPL", "Applet di controllo", ICON_RUN, false, 16384, NULL);
-                    explorer_add_item(state, "REGISTRY.DAT", "Database di sistema", ICON_DOCUMENT, false, 8192, NULL);
-                    explorer_add_item(state, "LEGGIMI.TXT", "Documento di testo", ICON_DOCUMENT, false, 512, "File e cartelle di sistema fondamentali di NewOS V1 (64-bit).\n");
-                } else if (strcasecmp(clean, "SYSTEM/DRIVERS") == 0) {
-                    explorer_add_item(state, "NET", "Cartella di file", ICON_FOLDER, true, 0, NULL);
-                    explorer_add_item(state, "PCI.SYS", "Driver di periferica", ICON_DOCUMENT, false, 8192, NULL);
-                    explorer_add_item(state, "PCI.INI", "Configurazione driver", ICON_DOCUMENT, false, 256, "[Driver]\nName=PCI Bus Driver\nStatus=Active\n");
-                    explorer_add_item(state, "ATA.SYS", "Driver di periferica", ICON_DOCUMENT, false, 12288, NULL);
-                    explorer_add_item(state, "ATA.INI", "Configurazione driver", ICON_DOCUMENT, false, 256, "[Driver]\nName=IDE ATA Controller\nStatus=Active\n");
-                    explorer_add_item(state, "VGA.SYS", "Driver di periferica", ICON_DOCUMENT, false, 8192, NULL);
-                    explorer_add_item(state, "VGA.INI", "Configurazione driver", ICON_DOCUMENT, false, 256, "[Driver]\nName=VGA/BGA Graphics\nStatus=Active\n");
-                    explorer_add_item(state, "AC97.SYS", "Driver di periferica", ICON_DOCUMENT, false, 8192, NULL);
-                    explorer_add_item(state, "AC97.INI", "Configurazione driver", ICON_DOCUMENT, false, 256, "[Driver]\nName=Intel AC97 Audio\nStatus=Active\n");
-                    explorer_add_item(state, "PS2MOUSE.SYS", "Driver di periferica", ICON_DOCUMENT, false, 4096, NULL);
-                    explorer_add_item(state, "PS2MOUSE.INI", "Configurazione driver", ICON_DOCUMENT, false, 256, "[Driver]\nName=PS/2 Mouse\nStatus=Active\n");
-                    explorer_add_item(state, "PS2KBD.SYS", "Driver di periferica", ICON_DOCUMENT, false, 4096, NULL);
-                    explorer_add_item(state, "PS2KBD.INI", "Configurazione driver", ICON_DOCUMENT, false, 256, "[Driver]\nName=PS/2 Keyboard\nStatus=Active\n");
-                    explorer_add_item(state, "RTC.SYS", "Driver di periferica", ICON_DOCUMENT, false, 2048, NULL);
-                    explorer_add_item(state, "POWER.SYS", "Driver di periferica", ICON_DOCUMENT, false, 4096, NULL);
-                    explorer_add_item(state, "E1000.SYS", "Driver di periferica", ICON_DOCUMENT, false, 16384, NULL);
-                    explorer_add_item(state, "RTL8139.SYS", "Driver di periferica", ICON_DOCUMENT, false, 16384, NULL);
-                    explorer_add_item(state, "LEGGIMI.TXT", "Documento di testo", ICON_DOCUMENT, false, 512, "Sottosistema driver modulare (.SYS + .INI) per periferiche hardware.\n");
-                } else if (strcasecmp(clean, "SYSTEM/DRIVERS/NET") == 0) {
-                    explorer_add_item(state, "E1000.SYS", "Driver di periferica", ICON_DOCUMENT, false, 16384, NULL);
-                    explorer_add_item(state, "E1000.INI", "Configurazione driver", ICON_DOCUMENT, false, 256, "[Driver]\nName=Intel PRO/1000 MT\nStatus=Active\n");
-                    explorer_add_item(state, "RTL8139.SYS", "Driver di periferica", ICON_DOCUMENT, false, 16384, NULL);
-                    explorer_add_item(state, "RTL8139.INI", "Configurazione driver", ICON_DOCUMENT, false, 256, "[Driver]\nName=Realtek RTL8139\nStatus=Active\n");
-                    explorer_add_item(state, "ETH.SYS.NET", "Driver protocollo rete", ICON_DOCUMENT, false, 8192, NULL);
-                    explorer_add_item(state, "IP.SYS.NET", "Driver protocollo rete", ICON_DOCUMENT, false, 8192, NULL);
-                    explorer_add_item(state, "UDP.SYS.NET", "Driver protocollo rete", ICON_DOCUMENT, false, 4096, NULL);
-                    explorer_add_item(state, "TCP.SYS.NET", "Driver protocollo rete", ICON_DOCUMENT, false, 8192, NULL);
-                    explorer_add_item(state, "DHCP.SYS.NET", "Driver protocollo rete", ICON_DOCUMENT, false, 4096, NULL);
-                    explorer_add_item(state, "TLS.SYS.NET", "Driver protocollo rete", ICON_DOCUMENT, false, 8192, NULL);
-                    explorer_add_item(state, "LEGGIMI.TXT", "Documento di testo", ICON_DOCUMENT, false, 512, "Stack di rete nativo: schede fisiche e protocolli TCP/IP.\n");
-                } else if (strcasecmp(clean, "SYSTEM/DEV") == 0) {
-                    explorer_add_item(state, "TCC", "Cartella di file", ICON_FOLDER, true, 0, NULL);
-                    explorer_add_item(state, "LEGGIMI.TXT", "Documento di testo", ICON_DOCUMENT, false, 256, "Ambiente di sviluppo software per NewOS V1 64-bit.\n");
-                } else if (strcasecmp(clean, "SYSTEM/DEV/TCC") == 0) {
-                    explorer_add_item(state, "CONFIG", "Cartella di file", ICON_FOLDER, true, 0, NULL);
-                    explorer_add_item(state, "INCLUDE", "Cartella di file", ICON_FOLDER, true, 0, NULL);
-                    explorer_add_item(state, "TEMP", "Cartella di file", ICON_FOLDER, true, 0, NULL);
-                    explorer_add_item(state, "TMP", "Cartella di file", ICON_FOLDER, true, 0, NULL);
-                    explorer_add_item(state, "TCC.EXE", "Applicazione", ICON_RUN, false, 131072, NULL);
-                    explorer_add_item(state, "LEGGIMI.TXT", "Documento di testo", ICON_DOCUMENT, false, 256, "Compilatore C nativo Tiny C Compiler (TCC 64-bit).\n");
-                } else if (strcasecmp(clean, "SYSTEM/DEV/TCC/CONFIG") == 0) {
-                    explorer_add_item(state, "TCC.CFG", "File di configurazione", ICON_DOCUMENT, false, 256, "[Compiler]\nTarget=x86_64-newos\nOptimization=O2\nSysInclude=C:\\SYSTEM\\DEV\\TCC\\INCLUDE\\\n");
-                } else if (strcasecmp(clean, "SYSTEM/DEV/TCC/INCLUDE") == 0) {
-                    explorer_add_item(state, "NEWOS.H", "Header C", ICON_DOCUMENT, false, 1024, "/**\n * newos.h - NewOS V1 Software Development Kit (SDK)\n */\n#ifndef _NEWOS_H_\n#define _NEWOS_H_\ntypedef unsigned long long uint64_t;\ntypedef unsigned int uint32_t;\nvoid sys_print(const char* str);\nvoid sys_exit(int code);\n#endif\n");
-                } else if (strcasecmp(clean, "SYSTEM/DEV/TCC/TEMP") == 0) {
-                    explorer_add_item(state, "TEMP.TXT", "Documento di testo", ICON_DOCUMENT, false, 64, "Directory per file temporanei di compilazione.\n");
-                } else if (strcasecmp(clean, "SYSTEM/DEV/TCC/TMP") == 0) {
-                    explorer_add_item(state, "TMP.TXT", "Documento di testo", ICON_DOCUMENT, false, 64, "Directory temporanea TMP per il compilatore TCC.\n");
-                } else if (strcasecmp(clean, "SYSTEM/WALLPAPERS") == 0) {
-                    explorer_add_item(state, "BLISS.BMP", "Immagine grafica", ICON_IMAGE, false, 150000, NULL);
-                    explorer_add_item(state, "FLOW.BMP", "Immagine grafica", ICON_IMAGE, false, 150000, NULL);
-                    explorer_add_item(state, "AUTUMN.JPG", "Immagine grafica", ICON_IMAGE, false, 120000, NULL);
-                    explorer_add_item(state, "OCEAN.JPG", "Immagine grafica", ICON_IMAGE, false, 120000, NULL);
-                    explorer_add_item(state, "SUNSET.JPG", "Immagine grafica", ICON_IMAGE, false, 120000, NULL);
-                    explorer_add_item(state, "LEGGIMI.TXT", "Documento di testo", ICON_DOCUMENT, false, 256, "Sfondi per il desktop di NewOS V1.\nFai doppio clic su un'immagine per impostarla come sfondo!\n");
-                } else if (strcasecmp(clean, "SYSTEM/SOUNDS") == 0) {
-                    explorer_add_item(state, "STARTUP.WAV", "File audio Wave", ICON_SOUND, false, 48000, NULL);
-                    explorer_add_item(state, "CHORD.WAV", "File audio Wave", ICON_SOUND, false, 24000, NULL);
-                    explorer_add_item(state, "DING.WAV", "File audio Wave", ICON_SOUND, false, 16000, NULL);
-                    explorer_add_item(state, "NOTIFY.WAV", "File audio Wave", ICON_SOUND, false, 20000, NULL);
-                    explorer_add_item(state, "SHUTDOWN.WAV", "File audio Wave", ICON_SOUND, false, 48000, NULL);
-                    explorer_add_item(state, "LEGGIMI.TXT", "Documento di testo", ICON_DOCUMENT, false, 256, "Suoni di sistema PCM Wave per schede audio AC97 e altoparlante PC.\n");
-                } else if (strcasecmp(clean, "DOCS") == 0) {
-                    explorer_add_item(state, "LEGGIMI.TXT", "Documento di testo", ICON_DOCUMENT, false, 1024, "================================================================\nBenvenuto in NewOS V1 (64-bit)!\nSistema Operativo con File System exFAT nativo e interfaccia GUI.\n================================================================\n");
-                    explorer_add_item(state, "BENVENUTO.TXT", "Documento di testo", ICON_DOCUMENT, false, 256, "NewOS V1 64-bit Edition.\nBuon divertimento!\n");
-                } else if (strcasecmp(clean, "APPS") == 0) {
-                    explorer_add_item(state, "LEGGIMI.TXT", "Documento di testo", ICON_DOCUMENT, false, 256, "Cartella riservata alle applicazioni utente e terze parti.\n");
-                } else if (strcasecmp(clean, "SOURCES") == 0) {
-                    explorer_add_item(state, "LEGGIMI.TXT", "Documento di testo", ICON_DOCUMENT, false, 512, "Sorgenti di sistema di NewOS V1 per la massima portabilita'.\n");
-                    explorer_add_item(state, "KERNEL.C", "Sorgente C", ICON_DOCUMENT, false, 16384, "/* Punto di ingresso principale del kernel 64-bit */\n");
-                    explorer_add_item(state, "REGEDIT.C", "Sorgente C", ICON_DOCUMENT, false, 8192, "/* Editor grafico del registro */\n");
-                    explorer_add_item(state, "REGISTRY.H", "Header C", ICON_DOCUMENT, false, 4096, "/* Header del registro */\n");
-                    explorer_add_item(state, "BOOTSECT.ASM", "Sorgente Assembly", ICON_DOCUMENT, false, 4096, "; Settore di avvio MBR per NewOS V1\n");
-                } else if (strcasecmp(clean, "USER") == 0) {
-                    explorer_add_item(state, "MORGAN", "Cartella di file", ICON_FOLDER, true, 0, NULL);
-                } else if (strcasecmp(clean, "USER/MORGAN") == 0) {
-                    explorer_add_item(state, "DESKTOP", "Cartella di file", ICON_FOLDER, true, 0, NULL);
-                    explorer_add_item(state, "USER.CFG", "File di configurazione", ICON_DOCUMENT, false, 128, "USER=Morgan\nPASS=\nHOST=NEWOS-PC\nTHEME=0\nPOWER=0\nINSTALLED=0\n");
-                } else if (strcasecmp(clean, "USER/MORGAN/DESKTOP") == 0) {
-                    explorer_add_item(state, "PROGETTI", "Cartella di file", ICON_FOLDER, true, 0, NULL);
-                    explorer_add_item(state, "NOTE.TXT", "Documento di testo", ICON_DOCUMENT, false, 128, "Note e appunti personali memorizzati in C:\\USER\\MORGAN\\DESKTOP\\\nFile System: exFAT Microsoft nativo.\n");
-                    explorer_add_item(state, "BENVENUTO.TXT", "Documento di testo", ICON_DOCUMENT, false, 128, "Benvenuto nel tuo Desktop personale di NewOS V1 64-bit!\nPercorso fisico: C:\\USER\\MORGAN\\DESKTOP\\\n");
-                    explorer_add_item(state, "SFONDO_BLISS.BMP", "Immagine grafica", ICON_IMAGE, false, 150000, NULL);
-                } else if (strcasecmp(clean, "USER/MORGAN/DESKTOP/PROGETTI") == 0) {
-                    explorer_add_item(state, "PROGETTO1.TXT", "Documento di testo", ICON_DOCUMENT, false, 128, "Bozza progetto software in C per NewOS V1 64-bit.\n");
-                } else {
-                    // Cartella vuota o personalizzata
-                    explorer_add_item(state, "LEGGIMI.TXT", "Documento di testo", ICON_DOCUMENT, false, 64, "Cartella vuota.\n");
                 }
             }
             break;
@@ -865,6 +785,36 @@ static void explorer_draw(window_t* win) {
     explorer_state_t* state = (explorer_state_t*)win->app_data;
     if (!state) return;
 
+    // Sincronizza dinamicamente il titolo della finestra con la modalita e cartella corrente
+    if (state->mode == EXPLORER_MODE_THIS_PC) {
+        strncpy(win->title, "Risorse del computer", sizeof(win->title) - 1);
+    } else if (state->mode == EXPLORER_MODE_DRIVE_C) {
+        strncpy(win->title, "Disco locale (C:)", sizeof(win->title) - 1);
+    } else if (state->mode == EXPLORER_MODE_DRIVE_D) {
+        strncpy(win->title, "Unita CD-ROM (D:)", sizeof(win->title) - 1);
+    } else if (state->mode == EXPLORER_MODE_DRIVE_A) {
+        strncpy(win->title, "Floppy (A:)", sizeof(win->title) - 1);
+    } else if (state->mode == EXPLORER_MODE_DRIVE_U) {
+        strncpy(win->title, "Disco rimovibile (U:)", sizeof(win->title) - 1);
+    } else if (state->mode == EXPLORER_MODE_RECYCLE_BIN) {
+        strncpy(win->title, "Cestino", sizeof(win->title) - 1);
+    } else if (state->mode == EXPLORER_MODE_CONTROL_PANEL) {
+        strncpy(win->title, "Pannello di controllo", sizeof(win->title) - 1);
+    } else if (state->mode == EXPLORER_MODE_FOLDER) {
+        const char* leaf = state->folder_name;
+        for (int k = 0; state->folder_name[k] != '\0'; k++) {
+            if ((state->folder_name[k] == '/' || state->folder_name[k] == '\\') && state->folder_name[k + 1] != '\0') {
+                leaf = &state->folder_name[k + 1];
+            }
+        }
+        if (leaf && *leaf) {
+            strncpy(win->title, leaf, sizeof(win->title) - 1);
+        } else {
+            strncpy(win->title, "Cartella", sizeof(win->title) - 1);
+        }
+    }
+    win->title[sizeof(win->title) - 1] = '\0';
+
     int32_t cx = win->x + 4;
     int32_t cy = win->y + 24;
     int32_t cw = win->width - 8;
@@ -1068,9 +1018,8 @@ static void explorer_draw(window_t* win) {
     int32_t info_y = body_y + 74;
     if (state->mode == EXPLORER_MODE_THIS_PC) {
         explorer_item_t* sel_it = (state->selected_item >= 0 && state->selected_item < state->num_items) ? &state->items[state->selected_item] : NULL;
-        if (sel_it && (strstr(sel_it->name, "Disco locale") || strstr(sel_it->name, "(C:)"))) {
+        if (sel_it && (strstr(sel_it->name, "(C:)") || strstr(sel_it->name, "(c:)"))) {
             const ata_device_t* pm = ata_get_primary_master();
-            const exfat_vbr_t* vbr = exfat_get_vbr();
 
             char fs_str[48];
             mini_snprintf(fs_str, sizeof(fs_str), "File system: %s", (pm && pm->part_fs[0]) ? pm->part_fs : "exFAT");
@@ -1088,11 +1037,13 @@ static void explorer_draw(window_t* win) {
             gfx_fill_rect(cx + 12, gauge_y + 16, bar_w, bar_h, 0xFFFFFF);
             gfx_draw_bevel_rect(cx + 12, gauge_y + 16, bar_w, bar_h, true);
 
-            uint32_t total_mb = (pm && pm->size_mb) ? pm->size_mb : 32;
-            uint32_t pct_used = (vbr && vbr->percent_in_use) ? vbr->percent_in_use : 23;
-            uint32_t used_mb = (total_mb * pct_used) / 100;
-            if (used_mb == 0 && pct_used > 0) used_mb = 1;
-            uint32_t free_mb = total_mb > used_mb ? (total_mb - used_mb) : 0;
+            vfs_drive_info_t dinfo;
+            bool has_c = vfs_get_drive_info('C', &dinfo);
+            uint32_t total_mb = has_c ? dinfo.total_mb : ((pm && pm->size_mb) ? pm->size_mb : 128);
+            uint32_t free_mb = has_c ? dinfo.free_mb : (total_mb > 64 ? total_mb - 64 : 0);
+            uint32_t used_mb = total_mb > free_mb ? (total_mb - free_mb) : 0;
+            int32_t pct_used = total_mb > 0 ? (int32_t)(((uint64_t)used_mb * 100) / total_mb) : 0;
+            if (pct_used == 0 && used_mb > 0) pct_used = 1;
 
             int32_t used_w = (bar_w - 4) * pct_used / 100;
             if (used_w < 2 && pct_used > 0) used_w = 2;
@@ -1103,10 +1054,20 @@ static void explorer_draw(window_t* win) {
 
             // Legenda usata/libera
             char used_str[32], free_str[32], cap_str[32];
-            mini_snprintf(used_str, sizeof(used_str), "Usato: %d MB", used_mb);
-            mini_snprintf(free_str, sizeof(free_str), "Libero: %d MB", free_mb);
-            if (pm && pm->size_gb > 0) {
-                mini_snprintf(cap_str, sizeof(cap_str), "Capacita: %d GB", pm->size_gb);
+            if (used_mb >= 1024) {
+                mini_snprintf(used_str, sizeof(used_str), "Usato: %d.%d GB", used_mb / 1024, (used_mb % 1024) / 100);
+            } else {
+                mini_snprintf(used_str, sizeof(used_str), "Usato: %d MB", used_mb);
+            }
+
+            if (free_mb >= 1024) {
+                mini_snprintf(free_str, sizeof(free_str), "Libero: %d.%d GB", free_mb / 1024, (free_mb % 1024) / 100);
+            } else {
+                mini_snprintf(free_str, sizeof(free_str), "Libero: %d MB", free_mb);
+            }
+
+            if (total_mb >= 1024) {
+                mini_snprintf(cap_str, sizeof(cap_str), "Capacita: %d GB", total_mb / 1024);
             } else {
                 mini_snprintf(cap_str, sizeof(cap_str), "Capacita: %d MB", total_mb);
             }
@@ -1124,6 +1085,34 @@ static void explorer_draw(window_t* win) {
             gfx_fill_rect(cx + 12, btn_y, side_w - 24, 22, COLOR_BTNFACE);
             gfx_draw_bevel_rect(cx + 12, btn_y, side_w - 24, 22, false);
             gfx_draw_string(cx + 38, btn_y + 4, "Apri C:\\", COLOR_WINDOWTEXT, 0, true);
+        } else if (sel_it && strchr(sel_it->name, '(') && strchr(sel_it->name, ':') && !strstr(sel_it->name, "(A:)") && !strstr(sel_it->name, "(D:)") && !strstr(sel_it->name, "(U:)")) {
+            // Dettagli per Hard Disk / SSD secondari
+            const char* op = strchr(sel_it->name, '(');
+            char drv_letter = (op && op[1] >= 'A' && op[1] <= 'Z') ? op[1] : 0;
+            vfs_drive_info_t dinfo;
+            bool has_info = drv_letter ? vfs_get_drive_info(drv_letter, &dinfo) : false;
+
+            char title_buf[32];
+            mini_snprintf(title_buf, sizeof(title_buf), "Disco locale (%c:)", drv_letter);
+            gfx_draw_string(cx + 12, info_y, title_buf, 0x0A246A, 0, true);
+            gfx_draw_string(cx + 12, info_y + 16, "Tipo: Disco locale", 0x404040, 0, true);
+            char fs_line[32];
+            mini_snprintf(fs_line, sizeof(fs_line), "File system: %s", has_info ? dinfo.fs_name : "RAW");
+            gfx_draw_string(cx + 12, info_y + 32, fs_line, 0x404040, 0, true);
+            char cap_line[32];
+            if (has_info && dinfo.total_mb >= 1024) {
+                mini_snprintf(cap_line, sizeof(cap_line), "Capacita: %d GB", dinfo.total_mb / 1024);
+            } else {
+                mini_snprintf(cap_line, sizeof(cap_line), "Capacita: %d MB", has_info ? dinfo.total_mb : 0);
+            }
+            gfx_draw_string(cx + 12, info_y + 48, cap_line, 0x404040, 0, true);
+
+            int32_t btn_y = info_y + 70;
+            gfx_fill_rect(cx + 12, btn_y, side_w - 24, 22, COLOR_BTNFACE);
+            gfx_draw_bevel_rect(cx + 12, btn_y, side_w - 24, 22, false);
+            char btn_lbl[16];
+            mini_snprintf(btn_lbl, sizeof(btn_lbl), "Apri %c:\\", drv_letter);
+            gfx_draw_string(cx + 38, btn_y + 4, btn_lbl, COLOR_WINDOWTEXT, 0, true);
         } else if (sel_it && (strstr(sel_it->name, "Floppy") || strstr(sel_it->name, "(A:)"))) {
             gfx_draw_string(cx + 12, info_y,      "Floppy da 3,5 (A:)", 0x0A246A, 0, true);
             gfx_draw_string(cx + 12, info_y + 16, "Tipo: Disco floppy", 0x404040, 0, true);
@@ -1217,20 +1206,32 @@ static void explorer_draw(window_t* win) {
             gfx_draw_string(cx + 12, info_y + 16, "personalizza", 0x0A246A, 0, true);
             gfx_draw_string(cx + 12, info_y + 32, "l'ambiente NewOS V1.", 0x404040, 0, true);
         }
-    } else {
         // Cartella o C: o D: o A:
-        const char* drive_or_folder = "Cartella di file";
-        if (state->mode == EXPLORER_MODE_DRIVE_C) drive_or_folder = "Disco locale (C:)";
-        else if (state->mode == EXPLORER_MODE_DRIVE_D) drive_or_folder = "CD-ROM (D:)";
-        else if (state->mode == EXPLORER_MODE_DRIVE_A) drive_or_folder = "Floppy (A:)";
-
-        gfx_draw_string(cx + 12, info_y, drive_or_folder, 0x0A246A, 0, true);
-        char buf_cnt[32];
-        mini_snprintf(buf_cnt, sizeof(buf_cnt), "Oggetti: %d", state->num_items);
-        gfx_draw_string(cx + 12, info_y + 18, buf_cnt, 0x404040, 0, true);
+        if (state->mode == EXPLORER_MODE_DRIVE_C) {
+            gfx_draw_string(cx + 12, info_y, "Tipo: Disco locale", 0x404040, 0, true);
+            gfx_draw_string(cx + 12, info_y + 16, "File system: exFAT", 0x404040, 0, true);
+            char buf_cnt[32];
+            mini_snprintf(buf_cnt, sizeof(buf_cnt), "Oggetti: %d", state->num_items);
+            gfx_draw_string(cx + 12, info_y + 32, buf_cnt, 0x404040, 0, true);
+        } else if (state->mode == EXPLORER_MODE_DRIVE_D) {
+            gfx_draw_string(cx + 12, info_y, "Tipo: Unita CD-ROM", 0x404040, 0, true);
+            char buf_cnt[32];
+            mini_snprintf(buf_cnt, sizeof(buf_cnt), "Oggetti: %d", state->num_items);
+            gfx_draw_string(cx + 12, info_y + 16, buf_cnt, 0x404040, 0, true);
+        } else if (state->mode == EXPLORER_MODE_DRIVE_A) {
+            gfx_draw_string(cx + 12, info_y, "Tipo: Unita Floppy (A:)", 0x404040, 0, true);
+            char buf_cnt[32];
+            mini_snprintf(buf_cnt, sizeof(buf_cnt), "Oggetti: %d", state->num_items);
+            gfx_draw_string(cx + 12, info_y + 16, buf_cnt, 0x404040, 0, true);
+        } else {
+            gfx_draw_string(cx + 12, info_y, "Cartella di file", 0x0A246A, 0, true);
+            char buf_cnt[32];
+            mini_snprintf(buf_cnt, sizeof(buf_cnt), "Oggetti: %d", state->num_items);
+            gfx_draw_string(cx + 12, info_y + 18, buf_cnt, 0x404040, 0, true);
+        }
 
         if (state->selected_item >= 0 && state->selected_item < state->num_items) {
-            int32_t btn_y = info_y + 44;
+            int32_t btn_y = info_y + 52;
             gfx_fill_rect(cx + 12, btn_y, side_w - 24, 22, COLOR_BTNFACE);
             gfx_draw_bevel_rect(cx + 12, btn_y, side_w - 24, 22, false);
             gfx_draw_string(cx + 46, btn_y + 4, "Apri", COLOR_WINDOWTEXT, 0, true);
@@ -1347,16 +1348,18 @@ static void explorer_draw(window_t* win) {
     int32_t sb1_w = cw - 170;
     gfx_draw_bevel_rect(cx + 2, sb_y, sb1_w, 18, true);
 
-    const ata_device_t* pm_sb = ata_get_primary_master();
-    const exfat_vbr_t* vbr_sb = exfat_get_vbr();
-    uint32_t tot_sb = (pm_sb && pm_sb->size_mb) ? pm_sb->size_mb : 32;
-    uint32_t pct_sb = (vbr_sb && vbr_sb->percent_in_use) ? vbr_sb->percent_in_use : 23;
-    uint32_t used_sb = (tot_sb * pct_sb) / 100;
-    if (used_sb == 0 && pct_sb > 0) used_sb = 1;
-    uint32_t free_sb = tot_sb > used_sb ? (tot_sb - used_sb) : 0;
+    vfs_drive_info_t dinfo_sb;
+    uint32_t free_sb = 64;
+    if (vfs_get_drive_info('C', &dinfo_sb)) {
+        free_sb = dinfo_sb.free_mb;
+    }
 
     char sb_text[64];
-    mini_snprintf(sb_text, sizeof(sb_text), "Oggetti: %d (Spazio libero: %d MB)", state->num_items, free_sb);
+    if (free_sb >= 1024) {
+        mini_snprintf(sb_text, sizeof(sb_text), "Oggetti: %d (Spazio libero: %d.%d GB)", state->num_items, free_sb / 1024, (free_sb % 1024) / 100);
+    } else {
+        mini_snprintf(sb_text, sizeof(sb_text), "Oggetti: %d (Spazio libero: %d MB)", state->num_items, free_sb);
+    }
     gfx_draw_string(cx + 8, sb_y + 2, sb_text, COLOR_WINDOWTEXT, 0, true);
 
     // Riquadro destro con icona PC
@@ -1526,16 +1529,24 @@ static void explorer_execute_selected(explorer_state_t* state) {
     explorer_item_t* it = &state->items[state->selected_item];
 
     if (state->mode == EXPLORER_MODE_THIS_PC) {
-        if (strstr(it->name, "Disco locale") || strstr(it->name, "(C:)")) {
+        if (strstr(it->name, "(C:)") || strstr(it->name, "(c:)")) {
             explorer_navigate_to(state, EXPLORER_MODE_DRIVE_C, "");
-        } else if (strstr(it->name, "Floppy") || strstr(it->name, "(A:)")) {
+        } else if (strstr(it->name, "Floppy") || strstr(it->name, "(A:)") || strstr(it->name, "(a:)")) {
             explorer_navigate_to(state, EXPLORER_MODE_DRIVE_A, "");
-        } else if (strstr(it->name, "CD-ROM") || strstr(it->name, "ottica") || strstr(it->name, "(D:)")) {
+        } else if (strstr(it->name, "CD-ROM") || strstr(it->name, "ottica") || strstr(it->name, "(D:)") || strstr(it->name, "(d:)")) {
             explorer_navigate_to(state, EXPLORER_MODE_DRIVE_D, "");
-        } else if (strstr(it->name, "rimovibile") || strstr(it->name, "(U:)")) {
+        } else if (strstr(it->name, "rimovibile") || strstr(it->name, "(U:)") || strstr(it->name, "(u:)")) {
             explorer_navigate_to(state, EXPLORER_MODE_DRIVE_U, "");
         } else if (strstr(it->name, "Pannello")) {
             explorer_navigate_to(state, EXPLORER_MODE_CONTROL_PANEL, "");
+        } else {
+            // Controlla se e' un'altra unita' disco secondaria montata es. "(E:)", "(F:)", ecc.
+            const char* op = strchr(it->name, '(');
+            if (op && op[1] >= 'A' && op[1] <= 'Z' && op[2] == ':' && op[3] == ')') {
+                char target_path[8];
+                mini_snprintf(target_path, sizeof(target_path), "%c:/", op[1]);
+                explorer_navigate_to(state, EXPLORER_MODE_FOLDER, target_path);
+            }
         }
         return;
     }
@@ -1568,8 +1579,12 @@ static void explorer_execute_selected(explorer_state_t* state) {
             }
 
             const char* dot = strstr(it->name, ".");
-            if (dot && (strcasecmp(dot, ".wav") == 0)) {
-                sound_play_wav_file(full_path);
+            if (dot && (strcasecmp(dot, ".wav") == 0 || strcasecmp(dot, ".mp3") == 0 ||
+                        strcasecmp(dot, ".flac") == 0 || strcasecmp(dot, ".alac") == 0 ||
+                        strcasecmp(dot, ".avi") == 0 || strcasecmp(dot, ".mp4") == 0 ||
+                        strcasecmp(dot, ".av1") == 0 || strcasecmp(dot, ".webm") == 0 ||
+                        strcasecmp(dot, ".playlist") == 0)) {
+                app_player_open_file(full_path);
             } else if (dot && (strcasecmp(dot, ".jpg") == 0 || strcasecmp(dot, ".bmp") == 0)) {
                 image_t* img = image_load_from_file(full_path);
                 if (img) {
@@ -1592,6 +1607,7 @@ static void explorer_execute_selected(explorer_state_t* state) {
                 else if (strcasecmp(it->name, "NOTEPAD.EXE") == 0) app_notepad_launch();
                 else if (strcasecmp(it->name, "CMD.EXE") == 0) app_cmd_launch();
                 else if (strcasecmp(it->name, "EXPLORER.EXE") == 0) app_explorer_open_this_pc();
+                else if (strcasecmp(it->name, "PLAYER.EXE") == 0) app_player_launch();
                 else if (strcasecmp(it->name, "REGEDIT.EXE") == 0) app_regedit_launch();
                 else if (strcasecmp(it->name, "RULES.EXE") == 0) app_rules_viewer_launch();
                 else if (strcasecmp(it->name, "WEBBROWSER.EXE") == 0 || strcasecmp(it->name, "BROWSER.EXE") == 0) app_browser_launch();
@@ -1857,7 +1873,13 @@ static void explorer_mouse(window_t* win, int32_t mx, int32_t my, bool clicked) 
                 parent[plen + last_slash] = '\0';
                 explorer_navigate_to(state, EXPLORER_MODE_FOLDER, parent);
             } else {
-                explorer_navigate_to(state, (drive_pfx == 'U') ? EXPLORER_MODE_DRIVE_U : EXPLORER_MODE_DRIVE_C, "");
+                if (drive_pfx == 'C') {
+                    explorer_navigate_to(state, EXPLORER_MODE_DRIVE_C, "");
+                } else if (drive_pfx == 'U') {
+                    explorer_navigate_to(state, EXPLORER_MODE_DRIVE_U, "");
+                } else {
+                    explorer_navigate_to(state, EXPLORER_MODE_THIS_PC, "");
+                }
             }
         } else if (state->mode == EXPLORER_MODE_DRIVE_C || state->mode == EXPLORER_MODE_DRIVE_D || 
                    state->mode == EXPLORER_MODE_DRIVE_A || state->mode == EXPLORER_MODE_DRIVE_U ||
@@ -2158,7 +2180,13 @@ static void explorer_key(window_t* win, char c) {
                 parent[plen + last_slash] = '\0';
                 explorer_navigate_to(state, EXPLORER_MODE_FOLDER, parent);
             } else {
-                explorer_navigate_to(state, (drive_pfx == 'U') ? EXPLORER_MODE_DRIVE_U : EXPLORER_MODE_DRIVE_C, "");
+                if (drive_pfx == 'C') {
+                    explorer_navigate_to(state, EXPLORER_MODE_DRIVE_C, "");
+                } else if (drive_pfx == 'U') {
+                    explorer_navigate_to(state, EXPLORER_MODE_DRIVE_U, "");
+                } else {
+                    explorer_navigate_to(state, EXPLORER_MODE_THIS_PC, "");
+                }
             }
         } else if (state->mode != EXPLORER_MODE_THIS_PC) {
             explorer_navigate_to(state, EXPLORER_MODE_THIS_PC, "");

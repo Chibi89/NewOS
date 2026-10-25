@@ -9,6 +9,7 @@
 #include <drivers/timer.h>
 #include <arch/x86_64/cpu.h>
 #include <mm/heap.h>
+#include <fs/vfs.h>
 #include <string.h>
 
 typedef struct {
@@ -431,6 +432,15 @@ static void installer_draw(window_t* win) {
         gfx_draw_bevel_rect(next_x, by, 80, 24, false);
         gfx_draw_string(next_x + 14, by + 5, next_label, 0x0A246A, 0, true);
 
+        // Opzione Aggiorna Sistema nel Passo 0 (Benvenuto)
+        if (state->current_step == 0) {
+            int32_t upd_x = cx + 14;
+            int32_t upd_w = 145;
+            gfx_fill_rect(upd_x, by, upd_w, 24, COLOR_BTNFACE);
+            gfx_draw_bevel_rect(upd_x, by, upd_w, 24, false);
+            gfx_draw_string(upd_x + 8, by + 5, "Aggiorna Sistema...", COLOR_WINDOWTEXT, 0, true);
+        }
+
     } else if (state->current_step == 5) {
         // [ Vai al Desktop ]
         int32_t live_x = cx + cw - 270;
@@ -583,6 +593,18 @@ static void installer_mouse(window_t* win, int32_t lx, int32_t ly, bool clicked)
                 state->current_step++;
             }
             return;
+        }
+
+        // Clic su [ Aggiorna Sistema... ] nel Passo 0
+        if (state->current_step == 0) {
+            int32_t upd_x = cx + 14;
+            int32_t upd_w = 145;
+            if (lx >= upd_x && lx <= upd_x + upd_w && ly >= by && ly <= by + 24) {
+                const char* boot_act = "Target=UPDATE.MOD\r\nAttempts=1\r\nMaxAttempts=2\r\n";
+                vfs_write_entire_file_inplace("C:\\NewOS\\Boot\\boot_action.ini", boot_act, strlen(boot_act));
+                power_reboot();
+                return;
+            }
         }
     } else if (state->current_step == 5) {
         // [ Vai al Desktop ]

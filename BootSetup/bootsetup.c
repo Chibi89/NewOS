@@ -445,14 +445,24 @@ int bootsetup_main(const kernel_api_t* api, const bootsetup_params_t* params) {
 
                     // Tentativo di lettura file SYSTEM.PAK
                     const char* pak_paths[] = {
-                        params->package_path,
+                        params ? params->package_path : NULL,
+                        "D:\\NewOS\\Boot\\SYSTEM.PAK",
+                        "D:\\BootSetup\\SYSTEM.PAK",
+                        "D:\\SYSTEM.PAK",
+                        "C:\\NewOS\\Boot\\SYSTEM.PAK",
                         "C:\\BootSetup\\SYSTEM.PAK",
+                        "C:\\SYSTEM.PAK",
+                        "E:\\NewOS\\Boot\\SYSTEM.PAK",
+                        "E:\\BootSetup\\SYSTEM.PAK",
+                        "U:\\NewOS\\Boot\\SYSTEM.PAK",
+                        "U:\\BootSetup\\SYSTEM.PAK",
+                        "/NewOS/Boot/SYSTEM.PAK",
                         "/BootSetup/SYSTEM.PAK",
                         "C:\\NewOS\\SystemProgram\\SYSTEM.PAK",
                         "SYSTEM.PAK"
                     };
 
-                    for (int p = 0; p < 5; p++) {
+                    for (int p = 0; p < (int)(sizeof(pak_paths) / sizeof(pak_paths[0])); p++) {
                         if (!pak_paths[p]) continue;
                         pak_buf = api->vfs_read_entire_file(pak_paths[p], &pak_size);
                         if (pak_buf && pak_size > sizeof(pak_header_t)) {

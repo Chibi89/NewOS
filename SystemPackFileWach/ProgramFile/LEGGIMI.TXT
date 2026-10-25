@@ -1,0 +1,25 @@
+================================================================================
+NewOS V1 - Linee Guida e Policy di Installazione (C:\ProgramFile)
+================================================================================
+Questa cartella e' riservata ESCLUSIVAMENTE alle applicazioni e ai software
+installati manualmente dall'utente finale o dai relativi installer di setup.
+
+STRUTTURA E REGOLE DI SISTEMA:
+1. Programmi Nativi di Sistema:
+   Tutti gli applicativi di sistema (CMD.EXE, CALC.EXE, NOTEPAD.EXE, EXPLORER.EXE,
+   REGEDIT.EXE, TASKMGR.EXE e applet .CPL) risiedono rigorosamente in:
+     -> C:\NewOS\SystemProgram\
+
+2. Ambiente di Sviluppo:
+   Il compilatore C nativo (TCC.EXE), gli header SDK e le directory temporanee
+   risiedono nella cartella:
+     -> C:\NewOS\Dev\
+
+3. Applicazioni Utente (Policy per gli Installer):
+   Tutti gli installer software (.EXE / .PKG / .MSI) devono fare riferimento
+   alla chiave di configurazione e registro di sistema:
+     [HKEY_LOCAL_MACHINE\NEWOS\INSTALLER]
+     ProgramFilesDir = "C:\ProgramFile"
+     DefaultInstallDir = "C:\ProgramFile"
+   I file dell'applicazione devono essere installati in una sottocartella dedicata:
+     -> C:\ProgramFile\<NomeApplicazione>\

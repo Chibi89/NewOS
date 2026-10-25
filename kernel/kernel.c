@@ -19,12 +19,15 @@
 #include <apps/oobe.h>
 #include <arch/x86_64/cpu.h>
 #include <drivers/ata.h>
+#include <drivers/ahci.h>
 #include <drivers/driver_mgr.h>
 #include <drivers/vga.h>
 #include <net/socket.h>
 #include <fs/registry.h>
 #include <gui/screen_mgr.h>
 #include <apps/autoplay.h>
+#include <apps/player.h>
+#include <apps/whatsnew.h>
 #include <drivers/usb/usb_msc.h>
 #include <string.h>
 
@@ -49,13 +52,16 @@ void kernel_main(BootInfo* binfo) {
     outb(0x3F8, 'K');
     serial_puts("\n=== NewOS V1 64-bit Kernel ===\nCopyright (C) @ Newspoint Software - NewSoft - NewOS V1\n");
 
-    // 1. Heap protetto: calibrato sulla memoria fisica rilevata (fino a 128 MB)
-    uint64_t total_ram = (binfo && binfo->total_memory_bytes > 0x400000) ? binfo->total_memory_bytes : (256ULL * 1024 * 1024);
+    // 1. Heap protetto: posizionato rigorosamente DOPO la fine del kernel BSS (_kernel_end)
+    extern uint8_t _kernel_end[];
+    uint64_t heap_start = ((uint64_t)_kernel_end + 0x0FFFFFULL) & ~0x0FFFFFULL;
+    if (heap_start < 0x400000ULL) heap_start = 0x400000ULL; // Cuscinetto di sicurezza minimo: 4 MB
+    uint64_t total_ram = (binfo && binfo->total_memory_bytes > heap_start) ? binfo->total_memory_bytes : (256ULL * 1024 * 1024);
     uint64_t heap_size = 128ULL * 1024 * 1024;
-    if (total_ram > 0x200000 && (total_ram - 0x200000) < heap_size) {
-        heap_size = total_ram - 0x200000;
+    if (total_ram > heap_start && (total_ram - heap_start) < heap_size) {
+        heap_size = total_ram - heap_start;
     }
-    heap_init(0x200000, heap_size);
+    heap_init(heap_start, heap_size);
     outb(0x3F8, '1');
 
     // Inizializza rilevazioni hardware reali (CPU e unità ATA)
@@ -102,6 +108,9 @@ void kernel_main(BootInfo* binfo) {
     sti();
     outb(0x3F8, '6');
 
+    // Abilita la modalita' asincrona ad interrupt per AHCI ora che IDT e PIC sono attivi
+    ahci_enable_interrupts();
+
     // Inizializzazione Stack di Rete dopo abilitazione interrupt
     net_init();
 
@@ -109,8 +118,19 @@ void kernel_main(BootInfo* binfo) {
     screen_mgr_init();
     screen_mgr_run_bootscreen();
 
+    // 7b. Controllo Azione Straordinaria di Aggiornamento Fuori Sessione (UPDATE.MOD)
+    bool was_updating = screen_mgr_has_pending_update();
+    if (was_updating) {
+        update_result_t up_res = screen_mgr_run_update();
+        if (up_res == UPDATE_ROLLBACK) {
+            serial_puts("[KERNEL] Aggiornamento terminato con rollback di emergenza.\n");
+        } else if (up_res == UPDATE_SUCCESS) {
+            serial_puts("[KERNEL] Aggiornamento completato con successo. Transizione diretta a LOGIN.MOD.\n");
+        }
+    }
+
     // 8. Schermata iniziale di Selezione Boot ("1. Live" o "2. Installa NewOS V1")
-    int boot_choice = boot_menu_show();
+    int boot_choice = was_updating ? 1 : boot_menu_show();
 
     // 9. Fase di Installazione / Accesso e Logon:
     // Se l'utente seleziona "2. Installa NewOS V1 fisicamente su questo PC":
@@ -121,14 +141,17 @@ void kernel_main(BootInfo* binfo) {
         bootsetup_result_t setup_res = screen_mgr_run_bootsetup();
         if (setup_res == BOOTSETUP_CANCELLED) {
             power_reboot();
-        }
-        int oobe_res = oobe_run_modal();
-        if (oobe_res == 1) {
-            power_shutdown();
-        } else if (oobe_res == 2) {
+        } else if (setup_res == BOOTSETUP_SUCCESS) {
+            int oobe_res = oobe_run_modal();
+            if (oobe_res == 1) {
+                power_shutdown();
+            } else if (oobe_res == 2) {
+                power_reboot();
+            }
+        } else {
             power_reboot();
         }
-    } else if (boot_choice != 1 && boot_choice != 4 && boot_choice != 3 && boot_choice != 6) {
+    } else if (boot_choice != 1 && boot_choice != 4 && boot_choice != 3 && boot_choice != 6 && boot_choice != 7) {
         bool first_time = !oobe_is_completed();
         if (first_time) {
             int oobe_res = oobe_run_modal();
@@ -166,17 +189,27 @@ void kernel_main(BootInfo* binfo) {
     } else {
         wm_set_background_type(BG_TEAL_2000);
     }
-    outb(0x3F8, '5');
-
     // Riproduce il suono di avvio reale .WAV da disco exFAT
     if (!sound_play_wav_file("C:\\NewOS\\Resources\\Sounds\\STARTUP.WAV") &&
         !sound_play_wav_file("/SYSTEM/SOUNDS/STARTUP.WAV")) {
         sound_play(SOUND_STARTUP);
     }
-    outb(0x3F8, 'S');
 
-    // 11. Applicazioni iniziali sul Desktop (l'OOBE non deve mai essere eseguito sul desktop)
-    if (boot_choice == 3) {
+    // 11. Applicazioni iniziali sul Desktop
+    bool show_whatsnew = false;
+    uint32_t wn_sz = 0;
+    char* wn_buf = (char*)vfs_read_entire_file("C:\\NewOS\\Update\\pending_whatsnew.ini", &wn_sz);
+    if (!wn_buf) wn_buf = (char*)vfs_read_entire_file("/NewOS/Update/pending_whatsnew.ini", &wn_sz);
+    if (wn_buf) {
+        if (strstr(wn_buf, "ShowOnFirstLogin=1")) {
+            show_whatsnew = true;
+        }
+        kfree(wn_buf);
+    }
+
+    if (show_whatsnew) {
+        app_whatsnew_launch();
+    } else if (boot_choice == 3) {
         app_display_props_launch();
     } else if (boot_choice == 4) {
         app_cmd_launch();
@@ -184,14 +217,11 @@ void kernel_main(BootInfo* binfo) {
         app_autoplay_launch('U');
     } else if (boot_choice == 6) {
         app_explorer_open_this_pc();
+    } else if (boot_choice == 7) {
+        app_player_launch();
     } else {
         app_explorer_open_this_pc();
-        if (usb_msc_is_present()) {
-            app_autoplay_launch('U');
-        }
-        app_browser_open_url("http://youtube.it");
     }
-    outb(0x3F8, '7');
 
     // 8. Ciclo principale del Kernel con Power Management e Throttling dinamico
     int loop_cnt = 0;

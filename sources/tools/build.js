@@ -11,6 +11,24 @@ if (!fs.existsSync(BUILD_DIR)) fs.mkdirSync(BUILD_DIR, { recursive: true });
 if (!fs.existsSync(BIN_DIR)) fs.mkdirSync(BIN_DIR, { recursive: true });
 if (!fs.existsSync(OBJ_DIR)) fs.mkdirSync(OBJ_DIR, { recursive: true });
 
+const BOOT_DIR = path.join(BIN_DIR, 'NewOS', 'Boot');
+if (!fs.existsSync(BOOT_DIR)) fs.mkdirSync(BOOT_DIR, { recursive: true });
+
+function getBootBin(name) {
+    const candidates = [
+        path.join(BOOT_DIR, name),
+        path.join(BOOT_DIR, name.toLowerCase()),
+        path.join(BOOT_DIR, name.toUpperCase()),
+        path.join(BIN_DIR, name),
+        path.join(BIN_DIR, name.toLowerCase()),
+        path.join(BIN_DIR, name.toUpperCase())
+    ];
+    for (const c of candidates) {
+        if (fs.existsSync(c)) return c;
+    }
+    return path.join(BOOT_DIR, name);
+}
+
 console.log('=== NewOS V1 64-bit Build System ===\n');
 
 // 1. Trova NASM
@@ -127,6 +145,10 @@ stage2Data.copy(stage2Padded);
 fs.writeFileSync(stage2Bin, stage2Padded);
 console.log(`[OK] Bootloader pronto (MBR: 512B, Stage2: ${STAGE2_SIZE}B)`);
 
+// 3b. Compilazione Bootloader Nativo UEFI (BOOTX64.EFI)
+const { buildEfiBootloader } = require('./build_efi.js');
+buildEfiBootloader(ROOT, BIN_DIR, OBJ_DIR, llvm);
+
 // 4. Assembla stubs 64-bit del kernel
 console.log('\n--> Assemblaggio stubs assembly a 64-bit...');
 const asmFiles = [
@@ -151,6 +173,7 @@ const cFiles = [
     'kernel/arch/x86_64/pic.c',
     'kernel/arch/x86_64/cpu.c',
     'kernel/drivers/pci.c',
+    'kernel/drivers/ahci.c',
     'kernel/drivers/speaker.c',
     'kernel/drivers/ac97.c',
     'kernel/drivers/sound_data.c',
@@ -173,6 +196,7 @@ const cFiles = [
     'kernel/apps/sound_props.c',
     'kernel/apps/explorer.c',
     'kernel/apps/autoplay.c',
+    'kernel/apps/player.c',
     'kernel/drivers/power.c',
     'kernel/apps/power_props.c',
     'kernel/apps/boot_menu.c',
@@ -219,6 +243,7 @@ const cFiles = [
     'kernel/apps/regedit.c',
     'kernel/apps/oobe.c',
     'kernel/apps/rules_viewer.c',
+    'kernel/apps/whatsnew.c',
     'WebBrowser/webbrowser.c',
     'kernel/gui/screen_mgr.c',
     'kernel/kernel.c'
@@ -232,11 +257,15 @@ const cFlags = [
     '-fno-builtin',
     '-nostdlib',
     '-mno-red-zone',
+    '-fno-jump-tables',
+    '-ffunction-sections',
+    '-fdata-sections',
     `-I"${path.join(ROOT, 'kernel')}"`,
     `-I"${path.join(ROOT, 'kernel', 'include')}"`,
     `-I"${path.join(ROOT, 'BootSetup')}"`,
     `-I"${path.join(ROOT, 'WebBrowser')}"`,
-    '-O2',
+    `-I"${path.join(ROOT, 'MultimediaCodec')}"`,
+    '-Os',
     '-Wall',
     '-Wno-unused-function'
 ].join(' ');
@@ -258,7 +287,7 @@ const kernelElf = path.join(BIN_DIR, 'kernel.elf');
 const kernelBin = path.join(BIN_DIR, 'kernel.bin');
 
 // Link a ELF64 prima
-const linkCmd = `${llvm.lld} -m elf_x86_64 -T "${linkerScript}" -o "${kernelElf}" ${allObjs}`;
+const linkCmd = `${llvm.lld} -m elf_x86_64 --gc-sections -T "${linkerScript}" -o "${kernelElf}" ${allObjs}`;
 execSync(linkCmd, { stdio: 'inherit' });
 
 // Estrazione in binario piatto grezzo tramite llvm-objcopy
@@ -286,7 +315,8 @@ const screenModules = [
     { src: 'bootscreen/bootscreen.c', ini: 'bootscreen/bootscreen.ini', out: 'BOOTSCR.MOD', iniOut: 'BOOTSCR.INI' },
     { src: 'loginscreen/loginscreen.c', ini: 'loginscreen/loginscreen.ini', out: 'LOGIN.MOD', iniOut: 'LOGIN.INI' },
     { src: 'logoutscreen/logoutscreen.c', ini: 'logoutscreen/logoutscreen.ini', out: 'LOGOUT.MOD', iniOut: 'LOGOUT.INI' },
-    { src: 'BootSetup/bootsetup.c', extraSrcs: ['BootSetup/aes256.c'], ini: 'BootSetup/bootsetup.ini', out: 'BOOTSETUP.MOD', iniOut: 'BOOTSETUP.INI' }
+    { src: 'BootSetup/bootsetup.c', extraSrcs: ['BootSetup/aes256.c'], ini: 'BootSetup/bootsetup.ini', out: 'BOOTSETUP.MOD', iniOut: 'BOOTSETUP.INI' },
+    { src: 'Update/update.c', extraSrcs: ['BootSetup/aes256.c'], ini: 'Update/update.ini', out: 'UPDATE.MOD', iniOut: 'UPDATE.INI' }
 ];
 
 const modLdScript = path.join(ROOT, 'tools', 'module.ld');
@@ -326,6 +356,42 @@ for (const sm of screenModules) {
     }
 }
 
+// 6b2. Compilazione e Firma Moduli Codec Multimediali (.CDC in NewOS/MultimediaCodec/)
+console.log('\n--> Compilazione e Firma Moduli Codec Multimediali (.CDC in NewOS/MultimediaCodec/)...');
+const codecModules = [
+    { src: 'MultimediaCodec/wavdec.c', out: 'WAVDEC.CDC' },
+    { src: 'MultimediaCodec/mp3dec.c', out: 'MP3DEC.CDC' },
+    { src: 'MultimediaCodec/flacdec.c', out: 'FLACDEC.CDC' },
+    { src: 'MultimediaCodec/avidec.c', out: 'AVIDEC.CDC' },
+    { src: 'MultimediaCodec/av1dec.c', out: 'AV1DEC.CDC' },
+    { src: 'MultimediaCodec/mp4dec.c', out: 'MP4DEC.CDC' }
+];
+
+const targetCodecDir = path.join(BIN_DIR, 'NewOS', 'MultimediaCodec');
+if (!fs.existsSync(targetCodecDir)) fs.mkdirSync(targetCodecDir, { recursive: true });
+
+for (const cm of codecModules) {
+    const srcPath = path.join(ROOT, cm.src);
+    const objPath = path.join(OBJ_DIR, `${path.basename(cm.src, '.c')}.o`);
+    const compileCmd = `${llvm.clang} ${cFlags} -fPIC -c "${srcPath}" -o "${objPath}"`;
+    execSync(compileCmd, { stdio: 'inherit' });
+
+    const binPath = path.join(targetCodecDir, cm.out);
+    const linkModCmd = `${llvm.lld} -m elf_x86_64 -T "${modLdScript}" --oformat binary "${objPath}" -o "${binPath}"`;
+    execSync(linkModCmd, { stdio: 'inherit' });
+
+    // Firma crittografica e checksum CRC32 del payload
+    const modBuf = fs.readFileSync(binPath);
+    if (modBuf.length >= 64) {
+        const payload = modBuf.subarray(64);
+        const checksum = crc32Buffer(payload);
+        modBuf.writeUInt32LE(payload.length, 16); // code_size (offset 16)
+        modBuf.writeUInt32LE(checksum, 24);      // checksum CRC32 (offset 24)
+        fs.writeFileSync(binPath, modBuf);
+        console.log(`  [OK] Modulo Codec generato e firmato: ${cm.out} (${modBuf.length} byte, CRC32: 0x${checksum.toString(16).toUpperCase()})`);
+    }
+}
+
 // 6c. Organizza e Popola l'albero completo NewOS V1 dentro build/bin/
 const { organizeBuildBin } = require('./tree_manager');
 organizeBuildBin(ROOT, BIN_DIR);
@@ -341,15 +407,18 @@ const TOTAL_IMG_SECTORS = 262144; // 128 MB
 const imgBuf = Buffer.alloc(TOTAL_IMG_SECTORS * 512, 0);
 
 // Settore 0: MBR
-const mbrBuf = fs.readFileSync(bootsectBin);
+const mbrFile = getBootBin('bootsect.bin');
+const mbrBuf = fs.readFileSync(mbrFile);
 mbrBuf.copy(imgBuf, 0);
 
 // Settori 1..64: Stage 2
-const s2Buf = fs.readFileSync(stage2Bin);
+const s2File = getBootBin('stage2.bin');
+const s2Buf = fs.readFileSync(s2File);
 s2Buf.copy(imgBuf, 512);
 
 // Settori 66..N: Kernel (LBA 66 = offset 66 * 512 = 33792)
-const kBuf = fs.readFileSync(kernelBin);
+const kFile = getBootBin('kernel.bin');
+const kBuf = fs.readFileSync(kFile);
 kBuf.copy(imgBuf, 66 * 512);
 
 // Iniezione repository icone native (LBA 1024 per fallback)
@@ -363,17 +432,38 @@ if (fs.existsSync(iconsPath)) {
 // 8. Generazione e Iniezione Volume File System exFAT (LBA 2048 in poi)
 console.log('\n--> Formattazione e popolamento Volume File System exFAT (C:\\)...');
 const { buildMyOsFileSystem } = require('./mkexfat.js');
-const exfatVolumeSectors = TOTAL_IMG_SECTORS - 2048; // 63488 settori (31 MB)
+const exfatVolumeSectors = 250000; // 250.000 settori (122 MB, compatibile con partizione 1 MBR)
 const exfatBuf = buildMyOsFileSystem(ROOT, exfatVolumeSectors, 2048);
 exfatBuf.copy(imgBuf, 2048 * 512);
 console.log(`[OK] Partizione exFAT iniettata a LBA 2048 (${exfatBuf.length} byte, C:\\ pronta)`);
+
+// 8b. Iniezione Partizione EFI System Partition (ESP) a LBA 256000 (Type 0xEF, 1.44 MB)
+const { createEfiFatImage } = require('./mkefifat.js');
+const efiBootCandidates = [
+    path.join(BIN_DIR, 'EFI', 'BOOT', 'BOOTX64.EFI'),
+    path.join(BOOT_DIR, 'BOOTX64.EFI'),
+    path.join(BOOT_DIR, 'bootx64.bin'),
+    path.join(BIN_DIR, 'BOOTX64.EFI')
+];
+let efiBootFile = null;
+for (const cand of efiBootCandidates) {
+    if (fs.existsSync(cand)) { efiBootFile = cand; break; }
+}
+
+if (efiBootFile && fs.existsSync(kFile)) {
+    const b64Data = fs.readFileSync(efiBootFile);
+    const kData = fs.readFileSync(kFile);
+    const efiFatBuf = createEfiFatImage(b64Data, kData);
+    efiFatBuf.copy(imgBuf, 256000 * 512);
+    console.log(`[OK] Partizione ESP FAT (UEFI) iniettata a LBA 256000 (${efiFatBuf.length} byte, Type 0xEF)`);
+}
 
 const buildImg = path.join(BUILD_DIR, 'NewOS_V1.img');
 fs.writeFileSync(buildImg, imgBuf);
 fs.writeFileSync(path.join(BUILD_DIR, 'myos.img'), imgBuf);
 fs.writeFileSync(path.join(ROOT, 'NewOS_V1.img'), imgBuf);
 fs.writeFileSync(path.join(ROOT, 'myos.img'), imgBuf);
-console.log(`[OK] Immagine disco: ${buildImg} (${TOTAL_IMG_SECTORS * 512 / 1024 / 1024} MB, Kernel a LBA 66, exFAT a LBA 2048)`);
+console.log(`[OK] Immagine disco: ${buildImg} (${TOTAL_IMG_SECTORS * 512 / 1024 / 1024} MB, Dual-Boot: BIOS LBA 0 + UEFI ESP LBA 256000)`);
 
 // 9. Aggiornamento opzionale immagini VirtualBox VDI
 const vboxManage = 'C:\\Program Files\\Oracle\\VirtualBox\\VBoxManage.exe';
@@ -423,4 +513,9 @@ console.log(`[OK] Immagine ISO avviabile: ${rootIso} pronta (disponibile anche c
 const { syncSources } = require('./sync_sources.js');
 syncSources();
 
+// 12. Sincronizzazione cartella Release ufficiale (Release/)
+const { syncRelease } = require('./sync_release.js');
+syncRelease(ROOT);
+
 console.log('\n=== BUILD COMPLETATA: NUOVO FILE ISO PRONTO: NewOS_V1.iso ===');
+

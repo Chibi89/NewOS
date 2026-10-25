@@ -67,7 +67,7 @@ static void decode_iso_name(const uint8_t* raw_name, uint8_t len, bool is_joliet
 static bool iso9660_vfs_mount(vfs_mount_t* mnt) {
     if (!mnt) return false;
 
-    const ata_device_t* dev = find_atapi_cdrom();
+    const ata_device_t* dev = (mnt && mnt->priv_data) ? (const ata_device_t*)mnt->priv_data : find_atapi_cdrom();
     if (!dev) {
         mnt->read_only = true;
         mnt->total_mb = 650;
@@ -241,6 +241,9 @@ static bool iso9660_vfs_open(vfs_mount_t* mnt, const char* rel_path, vfs_file_t*
     char temp_path[VFS_MAX_PATH];
     strncpy(temp_path, rel_path, sizeof(temp_path) - 1);
     temp_path[sizeof(temp_path) - 1] = '\0';
+    for (int k = 0; temp_path[k] != '\0'; k++) {
+        if (temp_path[k] == '\\') temp_path[k] = '/';
+    }
 
     uint32_t cur_dir_lba = g_iso_vol.root_lba;
     uint32_t cur_dir_size = g_iso_vol.root_size;
