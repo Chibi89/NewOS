@@ -15,7 +15,7 @@ Manuale Utente Ufficiale - NewOS V1 (64-bit Edition)
    - C:\NewOS\Font           : Font e caratteri
    - C:\NewOS\Help           : Guide e documentazione
    - C:\NewOS\Diagnostic     : Utility di test hardware
-   - C:\NewOS\Themes         : Temi grafici (Classic, Liquid Glass)
+   - C:\NewOS\Resource\Themes: Temi grafici (Mica, Fluent Glass, Classic, Liquid Glass)
    - C:\NewOS\Language       : Pacchetti di localizzazione (IT, EN)
    - C:\NewOS\SystemProgram  : Applicativi e moduli nativi (CMD, CALC, NOTEPAD, EXPLORER, REGEDIT)
    - C:\NewOS\Registry       : Database cifrato del registro di sistema (REGISTRY.DAT)

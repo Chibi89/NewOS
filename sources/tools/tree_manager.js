@@ -198,10 +198,10 @@ function organizeBuildBin(rootDir, binDir) {
         'NewOS/Resources/Web',
         'NewOS/Resource/cursor',
         'NewOS/Resource/wallpapers',
+        'NewOS/Resource/Themes',
         'NewOS/Font',
         'NewOS/Help',
         'NewOS/Diagnostic',
-        'NewOS/Themes',
         'NewOS/Language',
         'NewOS/SystemProgram',
         'NewOS/OOBE',
@@ -394,41 +394,18 @@ Manuale Utente Ufficiale - NewOS V1 (64-bit Edition)
     fs.writeFileSync(path.join(diagDir, 'SYSINFO.TXT'), "NewOS V1 System Telemetry: CPU x86_64, VBE 1024x768x32bpp, RAM 256MB+, exFAT C:\\.\n");
     fs.writeFileSync(path.join(diagDir, 'DIAG.LOG'), "[DIAGNOSTIC] Verifica hardware e integrita' kernel completata con successo.\n");
 
-    // 6. Popola Themes (C:\NewOS\Themes\)
-    const themeDir = path.join(binDir, 'NewOS', 'Themes');
-    const themesIni =
-`[Themes]
-Current=Classic
-Available=Classic,LiquidGlass,DarkNavy
+    // 6. Popola Themes (esclusivamente C:\NewOS\Resource\Themes\)
+    const resThemeDir = path.join(binDir, 'NewOS', 'Resource', 'Themes');
+    if (!fs.existsSync(resThemeDir)) fs.mkdirSync(resThemeDir, { recursive: true });
 
-[Classic]
-Name=Windows 2000 Classic
-DesktopColor=0x008080
-ActiveTitle=0x0A246A
-BtnFace=0xD4D0C8
-Window=0xFFFFFF
-WindowText=0x000000
-
-[LiquidGlass]
-Name=Liquid Glass Modern
-DesktopColor=0x0B192C
-ActiveTitle=0x1E3E62
-BtnFace=0x000000
-Window=0x1E222B
-WindowText=0xFFFFFF
-
-[DarkNavy]
-Name=Dark Navy Blue
-DesktopColor=0x050C1A
-ActiveTitle=0x18345C
-BtnFace=0x1A2238
-Window=0x0F172A
-WindowText=0xE2E8F0
-`;
-    fs.writeFileSync(path.join(themeDir, 'THEMES.INI'), themesIni);
-    fs.writeFileSync(path.join(themeDir, 'CLASSIC.THM'), "Theme=Classic\nStyle=Win2000\n");
-    fs.writeFileSync(path.join(themeDir, 'LIQUID_GLASS.THM'), "Theme=LiquidGlass\nStyle=GlassModern\n");
-    fs.writeFileSync(path.join(themeDir, 'DARK_NAVY.THM'), "Theme=DarkNavy\nStyle=DeepNavy\n");
+    // Sincronizza i file di tema unicamente da SystemPackFileWach/NewOS/Resource/Themes
+    const syspackResThemes = path.join(__dirname, '..', 'SystemPackFileWach', 'NewOS', 'Resource', 'Themes');
+    if (fs.existsSync(syspackResThemes)) {
+        const themeFiles = fs.readdirSync(syspackResThemes);
+        for (const tf of themeFiles) {
+            fs.copyFileSync(path.join(syspackResThemes, tf), path.join(resThemeDir, tf));
+        }
+    }
 
     // 7. Popola Language (C:\NewOS\Language\)
     const langDir = path.join(binDir, 'NewOS', 'Language');
@@ -439,9 +416,25 @@ WindowText=0xE2E8F0
 
     // 8. Popola SystemProgram (C:\NewOS\SystemProgram\)
     const sysProgDir = path.join(binDir, 'NewOS', 'SystemProgram');
-    for (const prog of ['PLAYER.EXE', 'REGEDIT.EXE', 'TASKMGR.EXE', 'EXPLORER.EXE', 'CMD.EXE', 'CALC.EXE', 'NOTEPAD.EXE', 'RULES.EXE', 'WEBBROWSER.EXE', 'DISKMGMT.EXE', 'CHKDSK.EXE', 'EVENTVWR.EXE',
+    for (const prog of ['PLAYER.EXE', 'REGEDIT.EXE', 'TASKMGR.EXE', 'EXPLORER.EXE', 'CMD.EXE', 'CALC.EXE', 'NOTEPAD.EXE', 'RULES.EXE', 'WEBBROWSER.EXE', 'OOBE.EXE', 'SETUP.EXE', 'DISKMGMT.EXE', 'CHKDSK.EXE', 'EVENTVWR.EXE',
                        'DISPLAY.CPL', 'POWER.CPL', 'NETWORK.CPL', 'DEVMGMT.CPL', 'SOUND.CPL', 'DATEANDTIME.CPL', 'PROGRAMS.CPL', 'ACCESSIBILITY.CPL', 'REGEDIT.CPL']) {
         fs.writeFileSync(path.join(sysProgDir, prog), peStub);
+    }
+    const appInis = [
+        { src: path.join(rootDir, 'explorer', 'explorer.ini'), dst: 'EXPLORER.INI' },
+        { src: path.join(rootDir, 'notepad', 'notepad.ini'), dst: 'NOTEPAD.INI' },
+        { src: path.join(rootDir, 'calculator', 'calculator.ini'), dst: 'CALCULATOR.INI' },
+        { src: path.join(rootDir, 'player', 'player.ini'), dst: 'PLAYER.INI' },
+        { src: path.join(rootDir, 'rules_viewer', 'rules_viewer.ini'), dst: 'RULES_VIEWER.INI' },
+        { src: path.join(rootDir, 'whatsnew', 'whatsnew.ini'), dst: 'WHATSNEW.INI' },
+        { src: path.join(rootDir, 'autoplay', 'autoplay.ini'), dst: 'AUTOPLAY.INI' },
+        { src: path.join(rootDir, 'taskmgr', 'taskmgr.ini'), dst: 'TASKMGR.INI' },
+        { src: path.join(rootDir, 'control_panel', 'control_panel.ini'), dst: 'CONTROL_PANEL.INI' }
+    ];
+    for (const ini of appInis) {
+        if (fs.existsSync(ini.src)) {
+            fs.copyFileSync(ini.src, path.join(sysProgDir, ini.dst));
+        }
     }
     // Copia i moduli protetti compilati (.MOD e .INI)
     const newosBootDir = path.join(binDir, 'NewOS', 'Boot');
@@ -468,9 +461,16 @@ WindowText=0xE2E8F0
 
     // 9. Popola OOBE (C:\NewOS\OOBE\)
     const oobeDir = path.join(binDir, 'NewOS', 'OOBE');
-    const oobeIniInit = "[OOBE]\nCompleted=0\nSetupStage=Welcome\nLanguage=IT_IT\nDefaultUser=Morgan\nAllowSkip=1\n";
-    fs.writeFileSync(path.join(oobeDir, 'OOBE.INI'), oobeIniInit.padEnd(256, ' ') + "\n");
+    if (!fs.existsSync(oobeDir)) fs.mkdirSync(oobeDir, { recursive: true });
+    const oobeIniSrc = path.join(rootDir, 'oobe', 'oobe.ini');
+    if (fs.existsSync(oobeIniSrc)) {
+        fs.copyFileSync(oobeIniSrc, path.join(oobeDir, 'OOBE.INI'));
+    } else {
+        const oobeIniInit = "[OOBE]\nCompleted=0\nSetupStage=Welcome\nLanguage=IT_IT\nDefaultUser=Morgan\nAllowSkip=1\n";
+        fs.writeFileSync(path.join(oobeDir, 'OOBE.INI'), oobeIniInit.padEnd(256, ' ') + "\n");
+    }
     fs.writeFileSync(path.join(oobeDir, 'SETUP.EXE'), peStub);
+    fs.writeFileSync(path.join(oobeDir, 'OOBE.EXE'), peStub);
     fs.writeFileSync(path.join(oobeDir, 'WELCOME.TXT'), "Esperienza iniziale di benvenuto NewOS V1 (OOBE)\n");
 
     // 9b. Database del Registro di Sistema (C:\NewOS\Registry\REGISTRY.DAT e REGISTRY.LOG)
@@ -1050,7 +1050,19 @@ STRUTTURA E REGOLE DI SISTEMA:
     catBuf.write("[Update_Catalog]\r\nPackageName=NewOS V1 Base Image\r\nTotalFiles=0\r\n\r\n[WhatsNew]\r\nItem_0=- Sistema NewOS V1 pronto per ricevere aggiornamenti.\r\n\r\n[Files]\r\n", 0, 'utf8');
     fs.writeFileSync(catalogIni, catBuf);
 
-    console.log('[OK] Struttura delle cartelle NewOS V1 in build/bin/ popolata con successo (NewOS/Boot centralizzata, MultimediaCodec e Catalogo integrati).');
+    // Cartella di sistema NewOS/SystemLibrary (Librerie dinamiche out-of-kernel .DLL)
+    const sysLibDir = path.join(binDir, 'NewOS', 'SystemLibrary');
+    if (!fs.existsSync(sysLibDir)) fs.mkdirSync(sysLibDir, { recursive: true });
+    const rootLibDir = path.join(rootDir, 'SystemLibrary');
+    if (fs.existsSync(rootLibDir)) {
+        for (const f of fs.readdirSync(rootLibDir)) {
+            if (f.endsWith('.INI') || f.endsWith('.ini')) {
+                fs.copyFileSync(path.join(rootLibDir, f), path.join(sysLibDir, f));
+            }
+        }
+    }
+
+    console.log('[OK] Struttura delle cartelle NewOS V1 in build/bin/ popolata con successo (NewOS/Boot centralizzata, MultimediaCodec, SystemLibrary e Catalogo integrati).');
 }
 
 module.exports = { organizeBuildBin, createDriverSys, createPeStub, DRIVERS_SPEC };

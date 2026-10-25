@@ -15,6 +15,7 @@
 #define MODULE_TYPE_BOOTSETUP    4
 #define MODULE_TYPE_CODEC        5
 #define MODULE_TYPE_UPDATE       6
+#define MODULE_TYPE_SYSTEM_LIBRARY 7
 
 #define SEC_FLAG_PROTECTED       0x01
 #define SEC_FLAG_SYSTEM_SIGNED   0x02
@@ -98,6 +99,7 @@ typedef struct {
     // VFS e Memoria
     uint8_t* (*vfs_read_entire_file)(const char* path, uint32_t* out_size);
     int32_t  (*vfs_write_entire_file_inplace)(const char* path, const void* buf, uint32_t count);
+    int32_t  (*vfs_readdir)(const char* dir_path, void* entries, int32_t max_entries);
     bool     (*vfs_exists)(const char* path);
     void*    (*kmalloc)(size_t size);
     void     (*kfree)(void* ptr);

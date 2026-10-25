@@ -75,3 +75,11 @@ Questo documento definisce le regole comportamentali, i vincoli architetturali e
 - **Temporizzazione Hardware Reale Calibrata**: I timeout di sicurezza non devono mai essere loop software a vuoto dipendenti dalla frequenza della CPU, bensì basati su contatori hardware fisici stabili (`rdtsc` Time Stamp Counter x86_64, PIT a 100 Hz o HPET).
 - **Prevenzione di Interrupt Storm su Linee Condivise**: Gestire l'instradamento delle linee IRQ PCI tenendo conto che su macchine reali più periferiche condividono la stessa linea fisica level-triggered (IRQ sharing). Applicare mascheramento one-shot o disabilitazione degli interrupt non gestiti per impedire affamamento della CPU.
 
+---
+
+## 9. Nuovi Componenti e Librerie Fuori dal Kernel (Out-of-Kernel Architecture)
+- **Nuova Direttiva Architetturale**: Tutti i nuovi componenti, librerie, codec e moduli di estensione devono tassativamente risiedere ed essere eseguiti **fuori dal Kernel Mode**, scorporati dal file binario piatto `kernel.bin`.
+- **Formato Ufficiale**: Le librerie dinamiche di sistema devono essere fornite in formato binario `.DLL` con relativo file descrittore `.INI` collocate nella cartella di sistema:
+  `C:\NewOS\SystemLibrary\` (es. `THEMEMGR.DLL` e `THEMEMGR.INI`).
+- **Interfaccia di Comunicazione**: Il caricamento avviene a runtime tramite VFS; l'interoperabilità tra kernel/applicazioni e la libreria esterna avviene tramite tabella di esportazione simboli (`exports_t`) e puntatori a funzione tipizzati, garantendo isolamento del codice, zero spreco di budget kernel e modularità assoluta.
+

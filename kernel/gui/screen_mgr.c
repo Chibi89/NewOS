@@ -95,12 +95,13 @@ void screen_mgr_init(void) {
     // VFS & Memoria
     g_kernel_api.vfs_read_entire_file          = (uint8_t*(*)(const char*, uint32_t*))vfs_read_entire_file;
     g_kernel_api.vfs_write_entire_file_inplace = vfs_write_entire_file_inplace;
+    g_kernel_api.vfs_readdir                   = (int32_t(*)(const char*, void*, int32_t))vfs_readdir;
     g_kernel_api.vfs_exists                    = vfs_exists;
     g_kernel_api.kmalloc                       = kmalloc;
     g_kernel_api.kfree                         = kfree;
 
     g_api_initialized = true;
-    serial_log("[SCREEN_MGR] Tabella API Kernel collegata con successo (33 Entrypoint).\n");
+    serial_log("[SCREEN_MGR] Tabella API Kernel collegata con successo (34 Entrypoint).\n");
 }
 
 const kernel_api_t* screen_mgr_get_api(void) {

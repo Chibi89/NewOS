@@ -2,7 +2,7 @@
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 [![Arch](https://img.shields.io/badge/architecture-x86__64%20(Long%20Mode)-blue.svg)]()
-[![Kernel Size](https://img.shields.io/badge/kernel%20size-312%20KB%20%2F%20480%20KB-brightgreen.svg)]()
+[![Kernel Size](https://img.shields.io/badge/kernel%20size-317%20KB%20%2F%20480%20KB-brightgreen.svg)]()
 [![Dual Boot](https://img.shields.io/badge/boot-BIOS%20MBR%20%2B%20UEFI%2064--bit-blueviolet.svg)]()
 [![Filesystem](https://img.shields.io/badge/filesystems-exFAT%20%7C%20NTFS--3G%20%7C%20ISO%209660%20%7C%20UDF%20%7C%20RamFS-purple.svg)]()
 [![UI](https://img.shields.io/badge/GUI-Classic%20Windows%202000-lightgrey.svg)]()
@@ -78,6 +78,11 @@ Tutte le applicazioni accessorie e i tool di sistema sono stati estratti dal ker
 - [`control_panel/`](file:///c:/Users/morga/Desktop/MyOS/control_panel/): **Pannello di Controllo** con applet per Proprietà Schermo, Audio, Alimentazione, Gestione Dispositivi e Informazioni di Sistema.
 - [`WebBrowser/`](file:///c:/Users/morga/Desktop/MyOS/WebBrowser/): **NewSoft Web Browser** con motore di rendering HTML integrato e navigazione web.
 
+### 7. Librerie Dinamiche Out-of-Kernel (`C:\NewOS\SystemLibrary\`)
+In base alla Direttiva Architetturale (Regola 9), tutti i nuovi moduli e librerie operano al di fuori del Kernel Mode:
+- **`THEMEMGR.DLL` & `THEMEMGR.INI`**: Libreria dinamica per la scansione autonoma, decodifica file `.THEMES` / `.THM`, parsing INI riga per riga e ordinamento automatico (alfabetico e per motore grafico).
+- **Client Loader Leggero**: Il kernel dialoga con la DLL tramite [`kernel/gui/theme_loader.c`](file:///c:/Users/morga/Desktop/MyOS/kernel/gui/theme_loader.c), eseguendo verifica crittografica `NOSM` e dispatching protetto con fallback di emergenza.
+
 ---
 
 ## Struttura del Repository
@@ -96,13 +101,14 @@ Tutte le applicazioni accessorie e i tool di sistema sono stati estratti dal ker
 │   ├── arch/x86_64/         # Syscall, SMP, Scheduler, IDT, PIC, AP trampoline, entry asm
 │   ├── drivers/             # Driver AC97, ATA, PCI, VGA, Power, Timer, USB (xHCI/UHCI), Net (E1000/Wi-Fi)
 │   ├── fs/                  # exFAT, NTFS-3G, ISO 9660, UDF, RamFS, VFS e Registry cifrato
-│   ├── gui/                 # Window Manager, griglia desktop, menu contestuale, rendering 2D e font
+│   ├── gui/                 # Window Manager, griglia desktop, menu contestuale, theme loader, font
 │   ├── ipc/                 # Meccanismi di comunicazione inter-processo (IPC)
 │   ├── lib/                 # Librerie freestanding, AES-256, gestione utenti
 │   ├── mm/                  # Gestione memoria, heap manager e paging PML4 a 4 livelli
 │   └── net/                 # Network stack (Ethernet, ARP, IPv4, ICMP, UDP, TCP, DHCP, DNS)
 ├── loginscreen/             # Schermata di autenticazione utente (LOGIN.MOD)
 ├── logoutscreen/            # Schermata di disconnessione e spegnimento (LOGOUT.MOD)
+├── MultimediaCodec/         # Moduli Codec indipendenti (.CDC: WAV, MP3, FLAC, AVI, AV1, MP4)
 ├── notepad/                 # Sottosistema Blocco Note (notepad.c, notepad.ini, LEGGIMI.TXT)
 ├── oobe/                    # Sottosistema procedura guidata OOBE (oobe.c, oobe.ini, LEGGIMI.TXT)
 ├── player/                  # Sottosistema NewOS Media Player (player.c, player.ini, LEGGIMI.TXT)
@@ -111,6 +117,7 @@ Tutte le applicazioni accessorie e i tool di sistema sono stati estratti dal ker
 ├── rules/                   # Regole di comportamento e sviluppo (comportamenti.md)
 ├── rules_viewer/            # Sottosistema visualizzatore regole .NOR (rules_viewer.c, LEGGIMI.TXT)
 ├── sources/                 # Snapshot portabile dei sorgenti distribuito nell'immagine ISO
+├── SystemLibrary/           # Librerie dinamiche out-of-kernel (.DLL: THEMEMGR.DLL + THEMEMGR.INI)
 ├── taskmgr/                 # Sottosistema Gestione Attività (taskmgr.c, taskmgr.ini, LEGGIMI.TXT)
 ├── tools/                   # Toolchain Node.js/PowerShell (build.js, tree_manager.js, sync_sources.js)
 ├── WebBrowser/              # NewSoft Web Browser nativo

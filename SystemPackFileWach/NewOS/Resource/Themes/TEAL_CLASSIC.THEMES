@@ -1,0 +1,45 @@
+; NewOS V1 Visual Theme
+; Variant: Windows 2000 Classic Teal
+[Theme]
+Name=Windows 2000 Classic Teal
+Author=Morgan
+Version=1.0
+StyleEngine=Classic3D
+Description=Interfaccia classica a rilievo 3D con barra blu cobalto e desktop verde acqua (autolive_screen.png)
+
+[Metrics]
+CornerRadius=0
+TitleHeight=20
+BorderWidth=3
+DropShadow=0
+
+[Colors]
+DesktopColor=0x008080
+SurfaceBase=0xD4D0C8
+SurfaceAlpha=255
+ActiveTitle=0x0A246A
+ActiveTitleText=0xFFFFFF
+InactiveTitle=0x808080
+InactiveTitleText=0xD4D0C8
+WindowBg=0xFFFFFF
+WindowText=0x000000
+BtnFace=0xD4D0C8
+BtnText=0x000000
+BorderColor=0x808080
+AccentColor=0x0A246A
+SelectionColor=0x0A246A
+SelectionText=0xFFFFFF
+CloseHoverBg=0xD4D0C8
+
+[Taskbar]
+TaskbarColor=0xD4D0C8
+TaskbarAlpha=255
+ActiveTabIndicator=0x000000
+
+[Wallpaper]
+File=none
+Style=Center
+
+[Sounds]
+Startup=C:\NewOS\Resource\sounds\STARTUP.WAV
+Click=C:\NewOS\Resource\sounds\CLICK.WAV

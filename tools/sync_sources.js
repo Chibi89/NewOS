@@ -61,8 +61,8 @@ function syncSources() {
     const oldSourcesOobe = path.join(SOURCES_DIR, 'kernel', 'apps', 'oobe.c');
     if (fs.existsSync(oldSourcesOobe)) { try { fs.unlinkSync(oldSourcesOobe); } catch (e) {} }
 
-    // 2e. Sottosistemi scorporati dal Kernel Core (Applicazioni e Applet)
-    const unbundledModules = ['notepad', 'calculator', 'player', 'rules_viewer', 'whatsnew', 'autoplay', 'taskmgr', 'control_panel'];
+    // 2e. Sottosistemi scorporati dal Kernel Core (Applicazioni, Applet, Codec e Librerie di Sistema)
+    const unbundledModules = ['notepad', 'calculator', 'player', 'rules_viewer', 'whatsnew', 'autoplay', 'taskmgr', 'control_panel', 'MultimediaCodec', 'SystemLibrary'];
     for (const mod of unbundledModules) {
         copyFolderRecursiveSync(path.join(ROOT, mod), path.join(SOURCES_DIR, mod));
     }

@@ -1,0 +1,45 @@
+; NewOS V1 Visual Theme
+; Variant: Apple Liquid Glass
+[Theme]
+Name=Liquid Glass Modern
+Author=Morgan
+Version=1.0
+StyleEngine=LiquidGlass
+Description=Stile frosted glass scuro ispirato ad Apple con capsule glass e curvature morbide
+
+[Metrics]
+CornerRadius=12
+TitleHeight=22
+BorderWidth=1
+DropShadow=1
+
+[Colors]
+DesktopColor=0x0B192C
+SurfaceBase=0x1E222B
+SurfaceAlpha=140
+ActiveTitle=0x4080FF
+ActiveTitleText=0xFFFFFF
+InactiveTitle=0x808090
+InactiveTitleText=0xC0C0C8
+WindowBg=0x1E222B
+WindowText=0xFFFFFF
+BtnFace=0x000000
+BtnText=0xFFFFFF
+BorderColor=0x507090
+AccentColor=0x4080FF
+SelectionColor=0x4080FF
+SelectionText=0xFFFFFF
+CloseHoverBg=0xFF3030
+
+[Taskbar]
+TaskbarColor=0x101018
+TaskbarAlpha=170
+ActiveTabIndicator=0x4080FF
+
+[Wallpaper]
+File=C:\NewOS\Resource\wallpapers\HERO.BMP
+Style=Stretch
+
+[Sounds]
+Startup=C:\NewOS\Resource\sounds\STARTUP.WAV
+Click=C:\NewOS\Resource\sounds\CLICK.WAV

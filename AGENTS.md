@@ -13,3 +13,4 @@ Le regole di comportamento, vincoli tecnici e direttive operative per lo svilupp
 6. **Gerarchia File System**: File di sistema in `C:\NewOS\`, software utente/terze parti solo in `C:\ProgramFile`.
 7. **Registro**: Sola lettura pre-desktop, scrittura consentita solo a sessione autenticata.
 8. **Hardware Reale Bare-Metal**: Componenti vecchi e nuovi devono essere sviluppati e collaudati per l'uso su silicio fisico x86_64 e non solo su VM/emulatori (handshake BIOS/OS, temporizzazioni PHY, allineamenti DMA).
+9. **Componenti e Librerie Fuori dal Kernel (Out-of-Kernel)**: Tutti i nuovi componenti, moduli e librerie (es. `.DLL` e `.INI` in `C:\NewOS\SystemLibrary\`) devono risiedere ed essere eseguiti fuori dal Kernel Mode, scorporati dal file monolitico `kernel.bin` e caricati dinamicamente per preservare il budget kernel.

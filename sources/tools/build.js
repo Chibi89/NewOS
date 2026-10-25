@@ -195,6 +195,7 @@ const cFiles = [
     'kernel/gui/icons.c',
     'kernel/gui/wm.c',
     'kernel/gui/context_menu.c',
+    'kernel/gui/theme_loader.c',
     'kernel/apps/cmd.c',
     'notepad/notepad.c',
     'calculator/calculator.c',
@@ -407,6 +408,45 @@ for (const cm of codecModules) {
         modBuf.writeUInt32LE(checksum, 24);      // checksum CRC32 (offset 24)
         fs.writeFileSync(binPath, modBuf);
         console.log(`  [OK] Modulo Codec generato e firmato: ${cm.out} (${modBuf.length} byte, CRC32: 0x${checksum.toString(16).toUpperCase()})`);
+    }
+}
+
+// 6b3. Compilazione e Firma Librerie Dinamiche di Sistema (.DLL in NewOS/SystemLibrary/)
+console.log('\n--> Compilazione e Firma Librerie Dinamiche (.DLL in NewOS/SystemLibrary/)...');
+const systemLibraries = [
+    { src: 'SystemLibrary/theme_mgr.c', ini: 'SystemLibrary/THEMEMGR.INI', out: 'THEMEMGR.DLL', iniOut: 'THEMEMGR.INI' }
+];
+
+const targetLibDir = path.join(BIN_DIR, 'NewOS', 'SystemLibrary');
+if (!fs.existsSync(targetLibDir)) fs.mkdirSync(targetLibDir, { recursive: true });
+
+for (const sl of systemLibraries) {
+    const srcPath = path.join(ROOT, sl.src);
+    const objPath = path.join(OBJ_DIR, `${path.basename(sl.src, '.c')}_dll.o`);
+    const compileCmd = `${llvm.clang} ${cFlags} -fPIC -c "${srcPath}" -o "${objPath}"`;
+    execSync(compileCmd, { stdio: 'inherit' });
+
+    const binPath = path.join(targetLibDir, sl.out);
+    const linkModCmd = `${llvm.lld} -m elf_x86_64 -T "${modLdScript}" --oformat binary "${objPath}" -o "${binPath}"`;
+    execSync(linkModCmd, { stdio: 'inherit' });
+
+    // Firma crittografica e checksum CRC32 del payload
+    const modBuf = fs.readFileSync(binPath);
+    if (modBuf.length >= 64) {
+        const payload = modBuf.subarray(64);
+        const checksum = crc32Buffer(payload);
+        modBuf.writeUInt32LE(payload.length, 16); // code_size (offset 16)
+        modBuf.writeUInt32LE(checksum, 24);      // checksum CRC32 (offset 24)
+        fs.writeFileSync(binPath, modBuf);
+        console.log(`  [OK] Libreria Dinamica generata e firmata: ${sl.out} (${modBuf.length} byte, CRC32: 0x${checksum.toString(16).toUpperCase()})`);
+    }
+
+    if (sl.ini) {
+        const iniSrc = path.join(ROOT, sl.ini);
+        if (fs.existsSync(iniSrc)) {
+            fs.copyFileSync(iniSrc, path.join(targetLibDir, sl.iniOut || path.basename(sl.ini)));
+            console.log(`  [OK] Descrittore INI sincronizzato: ${sl.iniOut || path.basename(sl.ini)}`);
+        }
     }
 }
 

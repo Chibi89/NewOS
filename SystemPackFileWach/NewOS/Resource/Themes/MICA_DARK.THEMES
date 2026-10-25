@@ -1,0 +1,45 @@
+; NewOS V1 Visual Theme
+; Variant: Windows 11 Mica Dark (Night)
+[Theme]
+Name=Windows 11 Mica Dark
+Author=Morgan
+Version=1.0
+StyleEngine=MicaDark
+Description=Tema scuro moderno basato su materiale Mica e Fluent Design con riflessi cromatici dal wallpaper
+
+[Metrics]
+CornerRadius=8
+TitleHeight=22
+BorderWidth=1
+DropShadow=1
+
+[Colors]
+DesktopColor=0x0B0F19
+SurfaceBase=0x202025
+SurfaceAlpha=225
+ActiveTitle=0x202025
+ActiveTitleText=0xFFFFFF
+InactiveTitle=0x18181C
+InactiveTitleText=0x8A8A8E
+WindowBg=0x1C1C21
+WindowText=0xE2E8F0
+BtnFace=0x2A2A32
+BtnText=0xFFFFFF
+BorderColor=0x383838
+AccentColor=0x0078D4
+SelectionColor=0x0078D4
+SelectionText=0xFFFFFF
+CloseHoverBg=0xC42B1C
+
+[Taskbar]
+TaskbarColor=0x16161B
+TaskbarAlpha=215
+ActiveTabIndicator=0x0078D4
+
+[Wallpaper]
+File=C:\NewOS\Resource\wallpapers\FLOW.BMP
+Style=Stretch
+
+[Sounds]
+Startup=C:\NewOS\Resource\sounds\STARTUP.WAV
+Click=C:\NewOS\Resource\sounds\CLICK.WAV

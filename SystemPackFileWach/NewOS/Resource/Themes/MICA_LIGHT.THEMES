@@ -1,0 +1,45 @@
+; NewOS V1 Visual Theme
+; Variant: Windows 11 Mica Light (Semi-opaco)
+[Theme]
+Name=Windows 11 Mica Light
+Author=Morgan
+Version=1.0
+StyleEngine=MicaLight
+Description=Tema chiaro raffinato in materiale Mica semi-opaco (92%) con campionamento del colore d'ambiente
+
+[Metrics]
+CornerRadius=8
+TitleHeight=22
+BorderWidth=1
+DropShadow=1
+
+[Colors]
+DesktopColor=0x1E2A38
+SurfaceBase=0xF8F9FA
+SurfaceAlpha=235
+ActiveTitle=0xF8F9FA
+ActiveTitleText=0x1F1F1F
+InactiveTitle=0xEAECEF
+InactiveTitleText=0x757575
+WindowBg=0xFFFFFF
+WindowText=0x1E1E1E
+BtnFace=0xF0F2F5
+BtnText=0x1E1E1E
+BorderColor=0xE2E2E2
+AccentColor=0x0078D4
+SelectionColor=0xCCE8FF
+SelectionText=0x004578
+CloseHoverBg=0xE81123
+
+[Taskbar]
+TaskbarColor=0xF3F3F7
+TaskbarAlpha=225
+ActiveTabIndicator=0x0078D4
+
+[Wallpaper]
+File=C:\NewOS\Resource\wallpapers\FLOW.BMP
+Style=Stretch
+
+[Sounds]
+Startup=C:\NewOS\Resource\sounds\STARTUP.WAV
+Click=C:\NewOS\Resource\sounds\CLICK.WAV

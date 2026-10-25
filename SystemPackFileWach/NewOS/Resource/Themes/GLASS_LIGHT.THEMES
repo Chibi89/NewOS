@@ -1,0 +1,45 @@
+; NewOS V1 Visual Theme
+; Variant: Windows 11 Fluent Glass Light (Alta Trasparenza)
+[Theme]
+Name=Windows 11 Fluent Glass Light
+Author=Morgan
+Version=1.0
+StyleEngine=FluentGlassLight
+Description=Vetro satinato frosted glass ad alta trasparenza (65%) con rifrazione del wallpaper e testi ad alto contrasto
+
+[Metrics]
+CornerRadius=8
+TitleHeight=22
+BorderWidth=1
+DropShadow=1
+
+[Colors]
+DesktopColor=0x1E2A38
+SurfaceBase=0xFFFFFF
+SurfaceAlpha=165
+ActiveTitle=0xFFFFFF
+ActiveTitleText=0x1A1A1A
+InactiveTitle=0xEFEFEF
+InactiveTitleText=0x666666
+WindowBg=0xFFFFFF
+WindowText=0x1A1A1A
+BtnFace=0xF5F7FA
+BtnText=0x1A1A1A
+BorderColor=0xE8E8E8
+AccentColor=0x0078D4
+SelectionColor=0xB8DDFF
+SelectionText=0x003366
+CloseHoverBg=0xE81123
+
+[Taskbar]
+TaskbarColor=0xFFFFFF
+TaskbarAlpha=160
+ActiveTabIndicator=0x0078D4
+
+[Wallpaper]
+File=C:\NewOS\Resource\wallpapers\FLOW.BMP
+Style=Stretch
+
+[Sounds]
+Startup=C:\NewOS\Resource\sounds\STARTUP.WAV
+Click=C:\NewOS\Resource\sounds\CLICK.WAV

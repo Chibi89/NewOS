@@ -198,10 +198,10 @@ function organizeBuildBin(rootDir, binDir) {
         'NewOS/Resources/Web',
         'NewOS/Resource/cursor',
         'NewOS/Resource/wallpapers',
+        'NewOS/Resource/Themes',
         'NewOS/Font',
         'NewOS/Help',
         'NewOS/Diagnostic',
-        'NewOS/Themes',
         'NewOS/Language',
         'NewOS/SystemProgram',
         'NewOS/OOBE',
@@ -394,41 +394,18 @@ Manuale Utente Ufficiale - NewOS V1 (64-bit Edition)
     fs.writeFileSync(path.join(diagDir, 'SYSINFO.TXT'), "NewOS V1 System Telemetry: CPU x86_64, VBE 1024x768x32bpp, RAM 256MB+, exFAT C:\\.\n");
     fs.writeFileSync(path.join(diagDir, 'DIAG.LOG'), "[DIAGNOSTIC] Verifica hardware e integrita' kernel completata con successo.\n");
 
-    // 6. Popola Themes (C:\NewOS\Themes\)
-    const themeDir = path.join(binDir, 'NewOS', 'Themes');
-    const themesIni =
-`[Themes]
-Current=Classic
-Available=Classic,LiquidGlass,DarkNavy
+    // 6. Popola Themes (esclusivamente C:\NewOS\Resource\Themes\)
+    const resThemeDir = path.join(binDir, 'NewOS', 'Resource', 'Themes');
+    if (!fs.existsSync(resThemeDir)) fs.mkdirSync(resThemeDir, { recursive: true });
 
-[Classic]
-Name=Windows 2000 Classic
-DesktopColor=0x008080
-ActiveTitle=0x0A246A
-BtnFace=0xD4D0C8
-Window=0xFFFFFF
-WindowText=0x000000
-
-[LiquidGlass]
-Name=Liquid Glass Modern
-DesktopColor=0x0B192C
-ActiveTitle=0x1E3E62
-BtnFace=0x000000
-Window=0x1E222B
-WindowText=0xFFFFFF
-
-[DarkNavy]
-Name=Dark Navy Blue
-DesktopColor=0x050C1A
-ActiveTitle=0x18345C
-BtnFace=0x1A2238
-Window=0x0F172A
-WindowText=0xE2E8F0
-`;
-    fs.writeFileSync(path.join(themeDir, 'THEMES.INI'), themesIni);
-    fs.writeFileSync(path.join(themeDir, 'CLASSIC.THM'), "Theme=Classic\nStyle=Win2000\n");
-    fs.writeFileSync(path.join(themeDir, 'LIQUID_GLASS.THM'), "Theme=LiquidGlass\nStyle=GlassModern\n");
-    fs.writeFileSync(path.join(themeDir, 'DARK_NAVY.THM'), "Theme=DarkNavy\nStyle=DeepNavy\n");
+    // Sincronizza i file di tema unicamente da SystemPackFileWach/NewOS/Resource/Themes
+    const syspackResThemes = path.join(__dirname, '..', 'SystemPackFileWach', 'NewOS', 'Resource', 'Themes');
+    if (fs.existsSync(syspackResThemes)) {
+        const themeFiles = fs.readdirSync(syspackResThemes);
+        for (const tf of themeFiles) {
+            fs.copyFileSync(path.join(syspackResThemes, tf), path.join(resThemeDir, tf));
+        }
+    }
 
     // 7. Popola Language (C:\NewOS\Language\)
     const langDir = path.join(binDir, 'NewOS', 'Language');
@@ -1073,7 +1050,19 @@ STRUTTURA E REGOLE DI SISTEMA:
     catBuf.write("[Update_Catalog]\r\nPackageName=NewOS V1 Base Image\r\nTotalFiles=0\r\n\r\n[WhatsNew]\r\nItem_0=- Sistema NewOS V1 pronto per ricevere aggiornamenti.\r\n\r\n[Files]\r\n", 0, 'utf8');
     fs.writeFileSync(catalogIni, catBuf);
 
-    console.log('[OK] Struttura delle cartelle NewOS V1 in build/bin/ popolata con successo (NewOS/Boot centralizzata, MultimediaCodec e Catalogo integrati).');
+    // Cartella di sistema NewOS/SystemLibrary (Librerie dinamiche out-of-kernel .DLL)
+    const sysLibDir = path.join(binDir, 'NewOS', 'SystemLibrary');
+    if (!fs.existsSync(sysLibDir)) fs.mkdirSync(sysLibDir, { recursive: true });
+    const rootLibDir = path.join(rootDir, 'SystemLibrary');
+    if (fs.existsSync(rootLibDir)) {
+        for (const f of fs.readdirSync(rootLibDir)) {
+            if (f.endsWith('.INI') || f.endsWith('.ini')) {
+                fs.copyFileSync(path.join(rootLibDir, f), path.join(sysLibDir, f));
+            }
+        }
+    }
+
+    console.log('[OK] Struttura delle cartelle NewOS V1 in build/bin/ popolata con successo (NewOS/Boot centralizzata, MultimediaCodec, SystemLibrary e Catalogo integrati).');
 }
 
 module.exports = { organizeBuildBin, createDriverSys, createPeStub, DRIVERS_SPEC };

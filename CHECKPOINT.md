@@ -1,8 +1,8 @@
 # Checkpoint Stato di Avanzamento — NewOS V1 (64-bit)
 
-**Data Checkpoint**: 25 Ottobre 2026, 15:30  
+**Data Checkpoint**: 25 Ottobre 2026, 22:40  
 **Stato Build**: Superata con successo (Codice di uscita: 0)  
-**File Prodotti**: `NewOS_V1.iso` (190.10 MB), `NewOS_V1.img` (128 MB), `NewOS_V1.vdi`, `BOOTX64.EFI` (7.6 KB), `BOOTSETUP.MOD`, `BOOTSCR.MOD`, `LOGIN.MOD`, `LOGOUT.MOD`, `UPDATE.MOD`, `WAVDEC.CDC`, `MP3DEC.CDC`, `FLACDEC.CDC`, `AVIDEC.CDC`, `AV1DEC.CDC`, `MP4DEC.CDC`, `SYSTEM.PAK` (28.54 MB), `resources/icons.bin` (150.5 KB), Modulo autonomo `explorer/` operativo.
+**File Prodotti**: `NewOS_V1.iso` (190.17 MB), `NewOS_V1.img` (128 MB), `NewOS_V1.vdi`, `BOOTX64.EFI` (7.6 KB), `BOOTSETUP.MOD`, `BOOTSCR.MOD`, `LOGIN.MOD`, `LOGOUT.MOD`, `UPDATE.MOD`, `WAVDEC.CDC`, `MP3DEC.CDC`, `FLACDEC.CDC`, `AVIDEC.CDC`, `AV1DEC.CDC`, `MP4DEC.CDC`, `THEMEMGR.DLL` (4.8 KB), `THEMEMGR.INI`, `SYSTEM.PAK` (28.56 MB), `resources/icons.bin` (150.5 KB), Modulo autonomo `explorer/` operativo.
 
 ---
 
@@ -649,3 +649,47 @@
   - Dimensione `kernel.bin`: **319.952 byte** (limite max: 480 KB / 491.520 byte).
   - Warning del compilatore: **0**.
   - Errori del compilatore: **0**.
+
+---
+
+## 27. Direttiva Componenti Out-of-Kernel e Sistema Librerie Dinamiche (.DLL + .INI) (25/10/2026)
+
+- **Nuova Direttiva Architetturale (Regola 9)**:
+  - Aggiornate le direttive primarie in [`AGENTS.md`](file:///c:/Users/morga/Desktop/MyOS/AGENTS.md), [`.agents/rules/comportamenti.md`](file:///c:/Users/morga/Desktop/MyOS/.agents/rules/comportamenti.md) e [`rules/comportamenti.md`](file:///c:/Users/morga/Desktop/MyOS/rules/comportamenti.md).
+  - Tutti i nuovi componenti, moduli e librerie devono risiedere ed essere eseguiti fuori dal Kernel Mode, scorporati dal file monolitico `kernel.bin` e collocati in `C:\NewOS\SystemLibrary\` come file `.DLL` e `.INI`.
+
+- **Scorporo della Gestione Temi dal Kernel**:
+  - Il gestore dei temi `theme_mgr.c` è stato rimosso dalla compilazione del kernel monolitico.
+  - Implementata la libreria dinamica out-of-kernel [`SystemLibrary/theme_mgr.c`](file:///c:/Users/morga/Desktop/MyOS/SystemLibrary/theme_mgr.c) e il descrittore [`SystemLibrary/THEMEMGR.INI`](file:///c:/Users/morga/Desktop/MyOS/SystemLibrary/THEMEMGR.INI).
+  - La libreria scansiona in autonomia la cartella `C:\NewOS\Resource\Themes`, apre ed effettua il parsing INI riga per riga di tutti i file `.THEMES` e `.THM` (senza mutazione del buffer di lettura), ed esegue l'ordinamento automatico sia alfabetico che per stile visivo (Mica, Glass, Classic).
+  - **Architettura Protetta Zero-BSS**: Per evitare corruzioni di memoria heap nei binari piatti senza rilocazione dinamica ELF, la libreria non utilizza variabili `.bss` statiche giganti; opera tramite dispatch ad entry point unico all'offset fisso 64 (`.text.entry`) con passaggio puntatori e strutture dal chiamante.
+
+- **Client Loader Leggero in Kernel Mode ([`kernel/gui/theme_loader.c`](file:///c:/Users/morga/Desktop/MyOS/kernel/gui/theme_loader.c))**:
+  - Il kernel include un loader client snello che carica `THEMEMGR.DLL` tramite VFS, convalida l'header crittografico `NOSM`, la firma del produttore `NEWSOFT` e il checksum CRC32.
+  - Inoltra le richieste di scansione e ordinamento alla DLL tramite `thememgr_entry_fn` (`THEME_CMD_SCAN`, `THEME_CMD_SORT`), memorizza i temi validi in un buffer protetto del kernel e applica il tema attivo al Window Manager (`wm_set_theme`).
+  - Meccanismo di sicurezza di fallback incorporato con 2 temi predefiniti in caso di indisponibilità della DLL.
+
+- **Rinnovamento Tab "Tema" in Proprietà Schermo ([`control_panel/display.c`](file:///c:/Users/morga/Desktop/MyOS/control_panel/display.c))**:
+  - **Anteprima Live Monitor**: Finestra vuota attiva renderizzata su sfondo dinamico (Teal classico o toni Modern/Mica).
+  - **Galleria Temi a Scorrimento**: Galleria orizzontale con miniature dei temi scansionati dalla DLL, scrollbar orizzontale reattiva a click del mouse e tasti tastiera (frecce / A / D / W / S).
+  - **Testi Protetti Anti-Overflow**: Titoli, percorsi e descrizioni formattati rigorosamente per rimanere all'interno dei confini della finestra (nessun testo esce o tocca i bordi).
+
+- **Integrazione Toolchain di Build e Sincronizzazione**:
+  - [`tools/build.js`](file:///c:/Users/morga/Desktop/MyOS/tools/build.js): Step 6b3 per la compilazione indipendente con `clang -fPIC`, linking binario piatto con `module.ld`, calcolo CRC32, firma e copia in `build/bin/NewOS/SystemLibrary/THEMEMGR.DLL` e `THEMEMGR.INI`.
+  - [`tools/tree_manager.js`](file:///c:/Users/morga/Desktop/MyOS/tools/tree_manager.js): Aggiornato per includere `NewOS/SystemLibrary/` nell'albero di sistema certificato.
+  - [`tools/sync_sources.js`](file:///c:/Users/morga/Desktop/MyOS/tools/sync_sources.js): Inclusa la cartella [`sources/SystemLibrary/`](file:///c:/Users/morga/Desktop/MyOS/sources/SystemLibrary) nello snapshot portabile dei sorgenti.
+
+- **Metriche di Compilazione e Collaudo**:
+  - Dimensione `kernel.bin`: **325.008 byte** (risparmio netto e ampio margine rispetto al vincolo di 480 KB / 491.520 byte).
+  - Dimensione `THEMEMGR.DLL`: **4.799 byte** (CRC32: `0x38CA9554`).
+  - Errori compilatore: **0**.
+  - Avvisi compilatore: **0**.
+  - **Serial Log QEMU**:
+    ```text
+    [SECURITY OK] Modulo 'THEMEMGR.DLL' verificato e autenticato con successo (CRC32: 0x38ca9554)
+    [THEMEMGR.DLL] Scansione temi fuori dal kernel in: C:/NewOS/Resource/Themes
+    [THEMEMGR.DLL] Scansione completata con successo.
+    ```
+  - **Validazione Visiva QEMU**:
+    - [`screenshot_theme_tab.png`](file:///C:/Users/morga/.gemini/antigravity-ide/brain/b87b31dd-8d16-4d98-8cff-28574ce5e3ae/screenshot_theme_tab.png): Finestra Proprietà Schermo con 8 temi rilevati dalla DLL, anteprima visuale corretta, scrollbar e didascalia integra.
+

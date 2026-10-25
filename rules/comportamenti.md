@@ -42,7 +42,7 @@ Questo documento definisce le regole comportamentali, i vincoli architetturali e
 
 ## 5. Stile di Comunicazione e Trasparenza
 - **Lingua Ufficiale**: Tutte le risposte, report e spiegazioni all'utente devono essere formulate in lingua italiana.
-- **Formattazione e Link**: Creare link cliccabili conformi a GitHub Markdown con schema `file:///` e barre normalizzate in avanti (`/`) per tutti i file e simboli menzionati (es. `[explorer.c](file:///c:/Users/morga/Desktop/MyOS/kernel/apps/explorer.c)`).
+- **Formattazione e Link**: Creare link cliccabili conformi a GitHub Markdown con schema `file:///` e barre normalizzate in avanti (`/`) per tutti i file e simboli menzionati (es. `[explorer.c](file:///c:/Users/[USERNAME]/Desktop/MyOS/kernel/apps/explorer.c)`).
 - **Metriche in Evidenza**: Includere sempre dimensione del kernel in byte, stato del build e riferimenti agli screenshot di prova salvati nella cartella degli artefatti.
 
 ---
@@ -74,4 +74,12 @@ Questo documento definisce le regole comportamentali, i vincoli architetturali e
 - **Conformità e Allineamento DMA Fisico**: Rispettare rigorosamente gli allineamenti hardware dei descrittori (es. 1024B per command list, 256B per FIS, 128B per command table) ed evitare l'attraversamento di confini fisici di 4 MB o 64 KB. Fornire sempre meccanismi di rimbalzo protetto (`Bounce Buffer`) allineati per garantire la sicurezza del bus contro disallineamenti di memoria.
 - **Temporizzazione Hardware Reale Calibrata**: I timeout di sicurezza non devono mai essere loop software a vuoto dipendenti dalla frequenza della CPU, bensì basati su contatori hardware fisici stabili (`rdtsc` Time Stamp Counter x86_64, PIT a 100 Hz o HPET).
 - **Prevenzione di Interrupt Storm su Linee Condivise**: Gestire l'instradamento delle linee IRQ PCI tenendo conto che su macchine reali più periferiche condividono la stessa linea fisica level-triggered (IRQ sharing). Applicare mascheramento one-shot o disabilitazione degli interrupt non gestiti per impedire affamamento della CPU.
+
+---
+
+## 9. Nuovi Componenti e Librerie Fuori dal Kernel (Out-of-Kernel Architecture)
+- **Nuova Direttiva Architetturale**: Tutti i nuovi componenti, librerie, codec e moduli di estensione devono tassativamente risiedere ed essere eseguiti **fuori dal Kernel Mode**, scorporati dal file binario piatto `kernel.bin`.
+- **Formato Ufficiale**: Le librerie dinamiche di sistema devono essere fornite in formato binario `.DLL` con relativo file descrittore `.INI` collocate nella cartella di sistema:
+  `C:\NewOS\SystemLibrary\` (es. `THEMEMGR.DLL` e `THEMEMGR.INI`).
+- **Interfaccia di Comunicazione**: Il caricamento avviene a runtime tramite VFS; l'interoperabilità tra kernel/applicazioni e la libreria esterna avviene tramite tabella di esportazione simboli (`exports_t`) e puntatori a funzione tipizzati, garantendo isolamento del codice, zero spreco di budget kernel e modularità assoluta.
 
