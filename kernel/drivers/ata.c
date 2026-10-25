@@ -1,10 +1,16 @@
 #include <drivers/ata.h>
 #include <drivers/ahci.h>
+#include <fs/fs_probe.h>
 #include <arch/x86_64/io.h>
 #include <string.h>
 
 bool storage_is_ahci_active(void) {
     return ahci_is_active();
+}
+
+bool ata_read_device_sectors(const ata_device_t* dev, uint64_t lba, uint32_t count, void* buffer);
+static bool ata_probe_sector_reader(void* ctx, uint64_t lba, uint32_t count, void* buf) {
+    return ata_read_device_sectors((const ata_device_t*)ctx, lba, count, buf);
 }
 
 #define ATA_PRIMARY_IO      0x1F0
@@ -274,7 +280,17 @@ static bool ata_identify_drive(uint8_t channel, uint8_t drive, ata_device_t* dev
                 dev->part_lba = *(uint32_t*)&mbr[446 + 8];
                 dev->part_sectors = *(uint32_t*)&mbr[446 + 12];
 
-                if (dev->part_type == 0x07) {
+                if (dev->part_type == 0xEE) {
+                    // Partizione GPT Protettiva (UEFI / Dischi > 2TB)
+                    uint64_t gpt_lba = 0, gpt_sec = 0;
+                    char gpt_fs[16] = "exFAT";
+                    if (gpt_probe_table(ata_probe_sector_reader, dev, &gpt_lba, &gpt_sec, gpt_fs, sizeof(gpt_fs))) {
+                        dev->has_gpt = true;
+                        dev->part_lba = gpt_lba;
+                        dev->part_sectors = gpt_sec;
+                        strncpy(dev->part_fs, gpt_fs, sizeof(dev->part_fs) - 1);
+                    }
+                } else if (dev->part_type == 0x07) {
                     // Controlla se exFAT verificando VBR a part_lba
                     uint8_t vbr[512];
                     if (ata_read_device_sectors(dev, dev->part_lba, 1, vbr)) {
@@ -370,6 +386,7 @@ void ata_init(void) {
             dev->size_mb = ad->size_mb;
             dev->size_gb = ad->size_gb;
             dev->has_mbr = ad->has_mbr;
+            dev->has_gpt = ad->has_gpt;
             dev->part_type = ad->part_type;
             dev->part_lba = ad->part_lba;
             dev->part_sectors = ad->part_sectors;
@@ -430,7 +447,7 @@ const ata_device_t* ata_get_primary_master(void) {
     return NULL;
 }
 
-bool ata_read_device_sectors(const ata_device_t* dev, uint32_t lba, uint32_t count, void* buffer) {
+bool ata_read_device_sectors(const ata_device_t* dev, uint64_t lba, uint32_t count, void* buffer) {
     if (!dev || !buffer || count == 0) return false;
 
     if (dev->is_ahci) {
@@ -439,9 +456,9 @@ bool ata_read_device_sectors(const ata_device_t* dev, uint32_t lba, uint32_t cou
             uint8_t cd_buf[2048];
             uint8_t* dst = (uint8_t*)buffer;
             for (uint32_t i = 0; i < count; i++) {
-                uint32_t cur_lba = lba + i;
-                uint32_t cd_sec = base_sec + (cur_lba / 4);
-                uint32_t sub_offset = (cur_lba % 4) * 512;
+                uint64_t cur_lba = lba + i;
+                uint32_t cd_sec = base_sec + (uint32_t)(cur_lba / 4);
+                uint32_t sub_offset = (uint32_t)(cur_lba % 4) * 512;
                 if (!ahci_read_cd_sector(dev->ahci_port, cd_sec, cd_buf)) {
                     return false;
                 }
@@ -458,9 +475,9 @@ bool ata_read_device_sectors(const ata_device_t* dev, uint32_t lba, uint32_t cou
         uint8_t cd_buf[2048];
         uint8_t* dst = (uint8_t*)buffer;
         for (uint32_t i = 0; i < count; i++) {
-            uint32_t cur_lba = lba + i;
-            uint32_t cd_sec = base_sec + (cur_lba / 4);
-            uint32_t sub_offset = (cur_lba % 4) * 512;
+            uint64_t cur_lba = lba + i;
+            uint32_t cd_sec = base_sec + (uint32_t)(cur_lba / 4);
+            uint32_t sub_offset = (uint32_t)(cur_lba % 4) * 512;
             if (!atapi_read_cd_sector(dev, cd_sec, cd_buf)) {
                 return false;
             }
@@ -477,13 +494,27 @@ bool ata_read_device_sectors(const ata_device_t* dev, uint32_t lba, uint32_t cou
         uint32_t batch = (count > 255) ? 255 : count;
 
         ata_wait_bsy_port(io);
-        outb(io + ATA_REG_DRIVE_SEL, drive_sel | ((lba >> 24) & 0x0F));
-        for (int i = 0; i < 4; i++) inb(io + ATA_REG_STATUS);
-        outb(io + ATA_REG_SEC_COUNT, (uint8_t)batch);
-        outb(io + ATA_REG_LBA_LO, (uint8_t)lba);
-        outb(io + ATA_REG_LBA_MID, (uint8_t)(lba >> 8));
-        outb(io + ATA_REG_LBA_HI, (uint8_t)(lba >> 16));
-        outb(io + ATA_REG_COMMAND, ATA_CMD_READ_PIO);
+        if (lba > 0x0FFFFFFF) {
+            // LBA48 PIO: invia byte alti prima dei byte bassi (Standard ATA-6+)
+            outb(io + ATA_REG_DRIVE_SEL, drive_sel);
+            outb(io + ATA_REG_SEC_COUNT, 0);
+            outb(io + ATA_REG_SEC_COUNT, (uint8_t)batch);
+            outb(io + ATA_REG_LBA_LO, (uint8_t)(lba >> 24));
+            outb(io + ATA_REG_LBA_LO, (uint8_t)lba);
+            outb(io + ATA_REG_LBA_MID, (uint8_t)(lba >> 32));
+            outb(io + ATA_REG_LBA_MID, (uint8_t)(lba >> 8));
+            outb(io + ATA_REG_LBA_HI, (uint8_t)(lba >> 40));
+            outb(io + ATA_REG_LBA_HI, (uint8_t)(lba >> 16));
+            outb(io + ATA_REG_COMMAND, 0x24); // ATA_CMD_READ_PIO_EXT
+        } else {
+            outb(io + ATA_REG_DRIVE_SEL, drive_sel | ((lba >> 24) & 0x0F));
+            for (int i = 0; i < 4; i++) inb(io + ATA_REG_STATUS);
+            outb(io + ATA_REG_SEC_COUNT, (uint8_t)batch);
+            outb(io + ATA_REG_LBA_LO, (uint8_t)lba);
+            outb(io + ATA_REG_LBA_MID, (uint8_t)(lba >> 8));
+            outb(io + ATA_REG_LBA_HI, (uint8_t)(lba >> 16));
+            outb(io + ATA_REG_COMMAND, ATA_CMD_READ_PIO);
+        }
         for (int i = 0; i < 4; i++) inb(io + ATA_REG_STATUS);
 
         for (uint32_t s = 0; s < batch; s++) {
@@ -502,7 +533,7 @@ bool ata_read_device_sectors(const ata_device_t* dev, uint32_t lba, uint32_t cou
     return true;
 }
 
-bool ata_read_sectors(uint32_t lba, uint32_t count, void* buffer) {
+bool ata_read_sectors(uint64_t lba, uint32_t count, void* buffer) {
     const ata_device_t* dev = ata_get_primary_master();
     if (dev) {
         return ata_read_device_sectors(dev, lba, count, buffer);
@@ -518,7 +549,7 @@ bool ata_read_sectors(uint32_t lba, uint32_t count, void* buffer) {
     return ata_read_device_sectors(&def, lba, count, buffer);
 }
 
-bool ata_write_sectors(uint32_t lba, uint32_t count, const void* buffer) {
+bool ata_write_sectors(uint64_t lba, uint32_t count, const void* buffer) {
     const ata_device_t* dev = ata_get_primary_master();
     if (dev && dev->is_atapi) return false;
     if (dev && dev->is_ahci) {
@@ -536,12 +567,26 @@ bool ata_write_sectors(uint32_t lba, uint32_t count, const void* buffer) {
         uint32_t batch = (count > 255) ? 255 : count;
 
         ata_wait_bsy_port(io);
-        outb(io + ATA_REG_DRIVE_SEL, drive_sel | ((lba >> 24) & 0x0F));
-        outb(io + ATA_REG_SEC_COUNT, (uint8_t)batch);
-        outb(io + ATA_REG_LBA_LO, (uint8_t)lba);
-        outb(io + ATA_REG_LBA_MID, (uint8_t)(lba >> 8));
-        outb(io + ATA_REG_LBA_HI, (uint8_t)(lba >> 16));
-        outb(io + ATA_REG_COMMAND, ATA_CMD_WRITE_PIO);
+        if (lba > 0x0FFFFFFF) {
+            // LBA48 PIO: invia byte alti prima dei byte bassi (Standard ATA-6+)
+            outb(io + ATA_REG_DRIVE_SEL, drive_sel);
+            outb(io + ATA_REG_SEC_COUNT, 0);
+            outb(io + ATA_REG_SEC_COUNT, (uint8_t)batch);
+            outb(io + ATA_REG_LBA_LO, (uint8_t)(lba >> 24));
+            outb(io + ATA_REG_LBA_LO, (uint8_t)lba);
+            outb(io + ATA_REG_LBA_MID, (uint8_t)(lba >> 32));
+            outb(io + ATA_REG_LBA_MID, (uint8_t)(lba >> 8));
+            outb(io + ATA_REG_LBA_HI, (uint8_t)(lba >> 40));
+            outb(io + ATA_REG_LBA_HI, (uint8_t)(lba >> 16));
+            outb(io + ATA_REG_COMMAND, 0x34); // ATA_CMD_WRITE_PIO_EXT
+        } else {
+            outb(io + ATA_REG_DRIVE_SEL, drive_sel | ((lba >> 24) & 0x0F));
+            outb(io + ATA_REG_SEC_COUNT, (uint8_t)batch);
+            outb(io + ATA_REG_LBA_LO, (uint8_t)lba);
+            outb(io + ATA_REG_LBA_MID, (uint8_t)(lba >> 8));
+            outb(io + ATA_REG_LBA_HI, (uint8_t)(lba >> 16));
+            outb(io + ATA_REG_COMMAND, ATA_CMD_WRITE_PIO);
+        }
 
         for (uint32_t s = 0; s < batch; s++) {
             ata_wait_bsy_port(io);

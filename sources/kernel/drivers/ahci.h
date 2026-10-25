@@ -148,9 +148,10 @@ typedef struct {
     uint32_t size_mb;
     uint32_t size_gb;
     bool     has_mbr;
+    bool     has_gpt;
     uint8_t  part_type;
-    uint32_t part_lba;
-    uint32_t part_sectors;
+    uint64_t part_lba;
+    uint64_t part_sectors;
     uint32_t boot_lba;
     char     part_fs[16];
 } ahci_device_t;

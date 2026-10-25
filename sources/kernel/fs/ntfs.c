@@ -10,11 +10,11 @@ static ntfs_volume_t g_ntfs_vol;
 
 static bool ntfs_io_read(const ntfs_volume_t* vol, uint32_t lba, uint32_t count, void* buf) {
     if (!vol || !buf || count == 0) return false;
-    uint32_t abs_lba = vol->partition_lba + lba;
+    uint64_t abs_lba = vol->partition_lba + (uint64_t)lba;
 
     if (vol->is_usb) {
         for (uint32_t i = 0; i < count; i++) {
-            if (!usb_msc_read_sector(abs_lba + i, (uint8_t*)buf + i * NTFS_SECTOR_SIZE)) {
+            if (!usb_msc_read_sector((uint32_t)(abs_lba + i), (uint8_t*)buf + i * NTFS_SECTOR_SIZE)) {
                 return false;
             }
         }
@@ -28,11 +28,11 @@ static bool ntfs_io_read(const ntfs_volume_t* vol, uint32_t lba, uint32_t count,
 
 static bool ntfs_io_write(const ntfs_volume_t* vol, uint32_t lba, uint32_t count, const void* buf) {
     if (!vol || !buf || count == 0) return false;
-    uint32_t abs_lba = vol->partition_lba + lba;
+    uint64_t abs_lba = vol->partition_lba + (uint64_t)lba;
 
     if (vol->is_usb) {
         for (uint32_t i = 0; i < count; i++) {
-            if (!usb_msc_write_sector(abs_lba + i, (const uint8_t*)buf + i * NTFS_SECTOR_SIZE)) {
+            if (!usb_msc_write_sector((uint32_t)(abs_lba + i), (const uint8_t*)buf + i * NTFS_SECTOR_SIZE)) {
                 return false;
             }
         }
@@ -45,12 +45,12 @@ static bool ntfs_io_write(const ntfs_volume_t* vol, uint32_t lba, uint32_t count
     }
 }
 
-bool ntfs_probe_partition(bool is_usb, uint32_t dev_id, uint32_t part_lba, ntfs_boot_sector_t* out_bs) {
+bool ntfs_probe_partition(bool is_usb, uint32_t dev_id, uint64_t part_lba, ntfs_boot_sector_t* out_bs) {
     uint8_t sec[NTFS_SECTOR_SIZE];
     bool ok = false;
 
     if (is_usb) {
-        ok = usb_msc_read_sector(part_lba, sec);
+        ok = usb_msc_read_sector((uint32_t)part_lba, sec);
     } else {
         const ata_device_t* dev = ata_get_device(dev_id);
         if (dev) {

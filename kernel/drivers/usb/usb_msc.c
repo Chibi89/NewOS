@@ -28,7 +28,7 @@ bool usb_msc_init(void) {
         strncpy(g_msc.product, dev->product[0] ? dev->product : "USB Flash Disk", sizeof(g_msc.product) - 1);
 
         // Riconoscimento automatico del filesystem nativo del dispositivo USB (NTFS, exFAT, FAT32, FAT16)
-        uint32_t part_lba = 0;
+        uint64_t part_lba = 0;
         char fs_name[16] = "exFAT";
         char label[32];
         fs_probe_usb_device(&part_lba, fs_name, sizeof(fs_name), label, sizeof(label));

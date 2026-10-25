@@ -207,7 +207,8 @@ vfs_file_t* vfs_open(const char* path) {
     normalize_path(path, clean, sizeof(clean));
 
     exfat_item_info_t info;
-    if (resolve_path_exfat(clean, &info, NULL)) {
+    uint32_t parent_cl = exfat_get_root_cluster();
+    if (resolve_path_exfat(clean, &info, &parent_cl)) {
         strncpy(f->name, info.name, sizeof(f->name) - 1);
         f->name[sizeof(f->name) - 1] = '\0';
         f->size = info.size;
@@ -216,7 +217,8 @@ vfs_file_t* vfs_open(const char* path) {
         f->is_directory = info.is_directory;
         f->no_fat_chain = info.no_fat_chain;
         f->drive_letter = 'C';
-        f->driver_data = NULL;
+        f->driver_data = vfs_resolve_path_mount("C:", NULL);
+        f->dir_cluster = parent_cl;
         f->is_open = true;
         return f;
     }
@@ -251,8 +253,11 @@ int32_t vfs_read(vfs_file_t* file, void* buf, uint32_t count) {
 int32_t vfs_write(vfs_file_t* file, const void* buf, uint32_t count) {
     if (!file || !file->is_open || !buf || count == 0) return 0;
 
-    if (file->driver_data) {
-        vfs_mount_t* mnt = (vfs_mount_t*)file->driver_data;
+    vfs_mount_t* mnt = (vfs_mount_t*)file->driver_data;
+    if (!mnt) {
+        mnt = vfs_resolve_path_mount("C:", NULL);
+    }
+    if (mnt) {
         if (mnt->read_only) return -1;
         if (mnt->driver && mnt->driver->write) {
             return mnt->driver->write(mnt, file, buf, count);
@@ -413,8 +418,73 @@ bool vfs_mkdir(const char* path) {
     return false;
 }
 
+static bool path_starts_with_nocase(const char* str, const char* prefix) {
+    while (*prefix) {
+        char c1 = *str++;
+        char c2 = *prefix++;
+        if (c1 >= 'a' && c1 <= 'z') c1 -= 32;
+        if (c2 >= 'a' && c2 <= 'z') c2 -= 32;
+        if (c1 != c2) return false;
+    }
+    return true;
+}
+
+bool vfs_is_protected(const char* path) {
+    if (!path) return false;
+
+    // Rimuove eventuale lettera di unita' (es. "C:" o "C:\")
+    const char* p = path;
+    if ((p[0] >= 'A' && p[0] <= 'Z' && p[1] == ':') ||
+        (p[0] >= 'a' && p[0] <= 'z' && p[1] == ':')) {
+        p += 2;
+    }
+    while (*p == '\\' || *p == '/') p++;
+
+    // 1. Binari critici del kernel, bootloader e archivio di sistema
+    if (strcasecmp(p, "KERNEL.BIN") == 0 || strcasecmp(p, "KERNEL.ELF") == 0 ||
+        strcasecmp(p, "STAGE2.BIN") == 0 || strcasecmp(p, "BOOTSECT.BIN") == 0 ||
+        strcasecmp(p, "BOOTX64.EFI") == 0 || strcasecmp(p, "BOOTX64.BIN") == 0 ||
+        strcasecmp(p, "SYSTEM.PAK") == 0 || strcasecmp(p, "BootSetup/SYSTEM.PAK") == 0 ||
+        strcasecmp(p, "BootSetup\\SYSTEM.PAK") == 0) {
+        return true;
+    }
+
+    // 2. Moduli protetti di boot e codec (.MOD e .CDC)
+    if (strcasecmp(p, "BOOTSCR.MOD") == 0 || strcasecmp(p, "LOGIN.MOD") == 0 ||
+        strcasecmp(p, "LOGOUT.MOD") == 0 || strcasecmp(p, "BOOTSETUP.MOD") == 0 ||
+        strcasecmp(p, "UPDATE.MOD") == 0) {
+        return true;
+    }
+
+    // 3. Cartelle radice di sistema inamovibili
+    if (strcasecmp(p, "NewOS") == 0 || strcasecmp(p, "ProgramFile") == 0 ||
+        strcasecmp(p, "User") == 0 || strcasecmp(p, "EFI") == 0 ||
+        strcasecmp(p, "Boot") == 0) {
+        return true;
+    }
+
+    return false;
+}
+
+bool vfs_is_program_file_path(const char* path) {
+    if (!path) return false;
+    const char* p = path;
+    if ((p[0] >= 'A' && p[0] <= 'Z' && p[1] == ':') ||
+        (p[0] >= 'a' && p[0] <= 'z' && p[1] == ':')) {
+        p += 2;
+    }
+    while (*p == '\\' || *p == '/') p++;
+
+    return (path_starts_with_nocase(p, "ProgramFile") || path_starts_with_nocase(p, "User"));
+}
+
 bool vfs_unlink(const char* path) {
     if (!path) return false;
+
+    // Protezione WAF: rifiuta l'eliminazione di file critici o cartelle di sistema
+    if (vfs_is_protected(path)) {
+        return false;
+    }
 
     const char* rel_path = NULL;
     vfs_mount_t* mnt = vfs_resolve_path_mount(path, &rel_path);

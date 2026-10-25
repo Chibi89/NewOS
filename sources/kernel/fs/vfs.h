@@ -33,6 +33,7 @@ typedef struct {
     bool     is_open;
     char     drive_letter;
     void*    driver_data;
+    uint32_t dir_cluster;
 } vfs_file_t;
 
 // Inizializza il layer VFS, monta la partizione primaria exFAT C:, il CD-ROM D: e il RamFS R:
@@ -79,5 +80,9 @@ void* vfs_read_entire_file(const char* path, uint32_t* out_size);
 
 // Utility: scrive dati in-place su un file esistente su disco exFAT
 int32_t vfs_write_entire_file_inplace(const char* path, const void* buf, uint32_t count);
+
+// Controllo di protezione gerarchica del filesystem (WAF / Access Control)
+bool vfs_is_protected(const char* path);
+bool vfs_is_program_file_path(const char* path);
 
 #endif // FS_VFS_H

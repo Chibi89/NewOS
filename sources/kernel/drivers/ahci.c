@@ -1,10 +1,16 @@
 #include <drivers/ahci.h>
 #include <drivers/pci.h>
+#include <fs/fs_probe.h>
 #include <arch/x86_64/io.h>
 #include <arch/x86_64/idt.h>
 #include <arch/x86_64/pic.h>
 #include <drivers/timer.h>
 #include <string.h>
+
+static bool ahci_probe_sector_reader(void* ctx, uint64_t lba, uint32_t count, void* buf) {
+    uint32_t port = (uint32_t)(uintptr_t)ctx;
+    return ahci_read_sectors(port, lba, count, buf);
+}
 
 static ahci_hba_mem_t* g_hba = NULL;
 static ahci_device_t   g_ahci_devices[AHCI_SUPPORTED_PORTS];
@@ -343,7 +349,17 @@ static bool ahci_identify_device(ahci_port_regs_t* port, int port_index, ahci_de
                 dev->part_sectors = (uint32_t)p[12] | ((uint32_t)p[13] << 8) |
                                     ((uint32_t)p[14] << 16) | ((uint32_t)p[15] << 24);
 
-                if (dev->part_type == 0x07) {
+                if (dev->part_type == 0xEE) {
+                    // Partizione GPT Protettiva (UEFI / Dischi > 2TB)
+                    uint64_t gpt_lba = 0, gpt_sec = 0;
+                    char gpt_fs[16] = "exFAT";
+                    if (gpt_probe_table(ahci_probe_sector_reader, (void*)(uintptr_t)port_index, &gpt_lba, &gpt_sec, gpt_fs, sizeof(gpt_fs))) {
+                        dev->has_gpt = true;
+                        dev->part_lba = gpt_lba;
+                        dev->part_sectors = gpt_sec;
+                        strncpy(dev->part_fs, gpt_fs, sizeof(dev->part_fs) - 1);
+                    }
+                } else if (dev->part_type == 0x07) {
                     strcpy(dev->part_fs, "exFAT");
                 } else if (dev->part_type == 0x0B || dev->part_type == 0x0C) {
                     strcpy(dev->part_fs, "FAT32");

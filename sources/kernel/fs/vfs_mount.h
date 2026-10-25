@@ -45,7 +45,7 @@ typedef struct vfs_mount {
     uint32_t            total_mb;
     uint32_t            free_mb;
     uint32_t            device_id;      // Indice periferica (ATA master = 0, slave = 1, ecc.)
-    uint32_t            partition_lba;  // LBA di partenza sul disco
+    uint64_t            partition_lba;  // LBA di partenza sul disco (64-bit per GPT)
     const vfs_driver_t* driver;         // Driver assegnato dinamicamente
     void*               priv_data;      // Dati specifici del driver montato
 } vfs_mount_t;
@@ -70,7 +70,7 @@ bool vfs_register_driver(const vfs_driver_t* driver);
 const vfs_driver_t* vfs_find_driver(const char* name);
 
 // Monta un'unità con associazione dinamica del driver
-bool vfs_mount_drive(char drive_letter, const char* fs_name, const char* label, uint32_t dev_id, uint32_t lba, bool read_only, void* priv);
+bool vfs_mount_drive(char drive_letter, const char* fs_name, const char* label, uint32_t dev_id, uint64_t lba, bool read_only, void* priv);
 
 // Smonta un'unità
 bool vfs_unmount_drive(char drive_letter);

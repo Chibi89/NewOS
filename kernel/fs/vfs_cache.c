@@ -16,7 +16,7 @@ void vfs_cache_init(void) {
     g_dentry_clock = 1;
 }
 
-bool vfs_cache_read_sector(uint32_t dev_id, uint32_t lba, void* buffer) {
+bool vfs_cache_read_sector(uint32_t dev_id, uint64_t lba, void* buffer) {
     if (!buffer) return false;
 
     // 1. Cerca nella cache
@@ -67,7 +67,7 @@ bool vfs_cache_read_sector(uint32_t dev_id, uint32_t lba, void* buffer) {
     return true;
 }
 
-bool vfs_cache_write_sector(uint32_t dev_id, uint32_t lba, const void* buffer) {
+bool vfs_cache_write_sector(uint32_t dev_id, uint64_t lba, const void* buffer) {
     if (!buffer) return false;
 
     // Write-through: aggiorna fisicamente sul disco ATA

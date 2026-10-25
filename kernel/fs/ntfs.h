@@ -165,7 +165,7 @@ typedef struct __attribute__((packed)) {
 
 // Stato del Volume NTFS Montato
 typedef struct {
-    uint32_t partition_lba;
+    uint64_t partition_lba;
     uint16_t bytes_per_sec;
     uint8_t  sec_per_clust;
     uint32_t bytes_per_clust;
@@ -181,7 +181,7 @@ typedef struct {
 void ntfs_init(void);
 
 // Rileva se la partizione o unità specificata è formattata in NTFS
-bool ntfs_probe_partition(bool is_usb, uint32_t dev_id, uint32_t part_lba, ntfs_boot_sector_t* out_bs);
+bool ntfs_probe_partition(bool is_usb, uint32_t dev_id, uint64_t part_lba, ntfs_boot_sector_t* out_bs);
 
 // Restituisce il driver VFS per NTFS
 const vfs_driver_t* ntfs_get_vfs_driver(void);

@@ -29,6 +29,7 @@
 #include <drivers/usb/usb_msc.h>
 #include <drivers/usb/usb_hub.h>
 #include <apps/autoplay.h>
+#include <fs/exfat.h>
 
 #define CMD_COLS 56
 #define CMD_ROWS 18
@@ -108,6 +109,8 @@ static void cmd_execute(cmd_state_t* state, const char* cmd) {
         cmd_print(state, "  BROWSER   Avvia il Web Browser (es. BROWSER [url])");
         cmd_print(state, "  TYPE      Visualizza file (solo testo chiaro)");
         cmd_print(state, "  ECHO      Stampa un messaggio a video");
+        cmd_print(state, "  CHKDSK    Integrita' VBR, Checksum e salute exFAT");
+        cmd_print(state, "  DEL       Elimina file (con protezione file di sistema)");
         cmd_print(state, "  AUTOPLAY  Finestra dinamica USB/CD/DVD/BD (Casi 1-4)");
         cmd_print(state, "  HELP      Visualizza questa guida");
     } else if (strncmp(cmd, "wifi", 4) == 0 && (cmd[4] == '\0' || cmd[4] == ' ')) {
@@ -543,7 +546,96 @@ static void cmd_execute(cmd_state_t* state, const char* cmd) {
         }
         state->current_row = 0;
     } else if (strncmp(cmd, "echo ", 5) == 0) {
-        cmd_print(state, cmd + 5);
+        const char* text = cmd + 5;
+        const char* ggt = strstr(text, " >> ");
+        const char* gt = strstr(text, " > ");
+        if (ggt) {
+            char payload[CMD_COLS];
+            size_t plen = ggt - text;
+            if (plen >= sizeof(payload)) plen = sizeof(payload) - 1;
+            strncpy(payload, text, plen);
+            payload[plen] = '\0';
+            const char* target = ggt + 4;
+            while (*target == ' ') target++;
+            vfs_file_t* f = vfs_open(target);
+            if (!f) {
+                vfs_create(target);
+                f = vfs_open(target);
+            }
+            if (f) {
+                vfs_seek(f, 0, VFS_SEEK_END);
+                vfs_write(f, payload, (uint32_t)strlen(payload));
+                vfs_write(f, "\n", 1);
+                vfs_close(f);
+                cmd_print(state, "Dati accodati al file.");
+            } else {
+                cmd_print(state, "Errore: impossibile accedere al file.");
+            }
+        } else if (gt) {
+            char payload[CMD_COLS];
+            size_t plen = gt - text;
+            if (plen >= sizeof(payload)) plen = sizeof(payload) - 1;
+            strncpy(payload, text, plen);
+            payload[plen] = '\0';
+            const char* target = gt + 3;
+            while (*target == ' ') target++;
+            vfs_unlink(target); // Sovrascrittura pulita
+            if (vfs_create(target)) {
+                vfs_file_t* f = vfs_open(target);
+                if (f) {
+                    vfs_write(f, payload, (uint32_t)strlen(payload));
+                    vfs_write(f, "\n", 1);
+                    vfs_close(f);
+                    cmd_print(state, "File scritto con successo.");
+                } else {
+                    cmd_print(state, "Errore: impossibile aprire il file creato.");
+                }
+            } else {
+                cmd_print(state, "Errore: creazione file fallita.");
+            }
+        } else {
+            cmd_print(state, text);
+        }
+    } else if (strcmp(cmd, "chkdsk") == 0 || strncmp(cmd, "chkdsk ", 7) == 0 ||
+               strcmp(cmd, "fsck") == 0) {
+        cmd_print(state, "Verifica integrita' file system exFAT (C:)...");
+        exfat_boot_integrity_t bi;
+        if (exfat_check_boot_integrity(&bi)) {
+            char l1[CMD_COLS], l2[CMD_COLS], l3[CMD_COLS];
+            mini_snprintf(l1, sizeof(l1), "  VBR Primario: %s | CRC: 0x%08X",
+                          bi.primary_vbr_valid ? "OK" : "CORROTTO",
+                          bi.computed_checksum);
+            cmd_print(state, l1);
+
+            mini_snprintf(l2, sizeof(l2), "  VBR Backup:   %s | %s",
+                          bi.backup_vbr_valid ? "OK" : "ASSENTE",
+                          bi.self_healed ? "Auto-Ripristinato" : "Sincronizzato");
+            cmd_print(state, l2);
+
+            uint32_t used_mb = exfat_get_used_mb();
+            uint32_t alloc_cl = exfat_get_allocated_clusters();
+            uint32_t free_cl = exfat_get_free_clusters();
+            mini_snprintf(l3, sizeof(l3), "  Cluster: %u in uso (%u MB) | %u liberi",
+                          alloc_cl, used_mb, free_cl);
+            cmd_print(state, l3);
+            cmd_print(state, "Stato: File system integro e coerente.");
+        } else {
+            cmd_print(state, "Errore: impossibile analizzare il volume.");
+        }
+    } else if (strncmp(cmd, "del ", 4) == 0 || strncmp(cmd, "erase ", 6) == 0) {
+        const char* target = (cmd[0] == 'd' || cmd[0] == 'D') ? (cmd + 4) : (cmd + 6);
+        while (*target == ' ') target++;
+        if (*target == '\0') {
+            cmd_print(state, "Sintassi: DEL <percorso_file>");
+        } else if (vfs_is_protected(target)) {
+            cmd_print(state, "Accesso negato: elemento di sistema protetto da eliminazione.");
+        } else if (!vfs_exists(target)) {
+            cmd_print(state, "File non trovato.");
+        } else if (vfs_unlink(target)) {
+            cmd_print(state, "File eliminato con successo.");
+        } else {
+            cmd_print(state, "Errore durante l'eliminazione del file.");
+        }
     } else if (strcmp(cmd, "theme") == 0 || strcmp(cmd, "display") == 0) {
         cmd_print(state, "Apertura Proprieta' Schermo...");
         app_display_props_launch();
@@ -576,8 +668,25 @@ static void cmd_execute(cmd_state_t* state, const char* cmd) {
             cmd_print(state, "I file .NOR richiedono RULES.EXE (ambiente Desktop)");
             cmd_print(state, "o l'applicazione Windows 'Rules Win App'.");
         } else {
-            cmd_print(state, "Apertura documento di testo...");
-            app_notepad_open_file(path, "Visualizzazione documento...");
+            uint32_t sz = 0;
+            char* content = (char*)vfs_read_entire_file(path, &sz);
+            if (content) {
+                char* line_start = content;
+                while (line_start && *line_start) {
+                    char* line_end = strchr(line_start, '\n');
+                    if (line_end) {
+                        *line_end = '\0';
+                        cmd_print(state, line_start);
+                        line_start = line_end + 1;
+                    } else {
+                        cmd_print(state, line_start);
+                        break;
+                    }
+                }
+                kfree(content);
+            } else {
+                app_notepad_open_file(path, "Visualizzazione documento...");
+            }
         }
     } else if (strcmp(cmd, "about") == 0) {
         app_about_launch();

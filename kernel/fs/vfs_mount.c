@@ -103,7 +103,7 @@ static const vfs_driver_t g_raw_driver = {
     .stat = NULL
 };
 
-bool vfs_mount_drive(char drive_letter, const char* fs_name, const char* label, uint32_t dev_id, uint32_t lba, bool read_only, void* priv) {
+bool vfs_mount_drive(char drive_letter, const char* fs_name, const char* label, uint32_t dev_id, uint64_t lba, bool read_only, void* priv) {
     char letter = normalize_drive_letter(drive_letter);
     if (letter < 'A' || letter > 'Z') return false;
 

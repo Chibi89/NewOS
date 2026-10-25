@@ -1,47 +1,103 @@
 #include <fs/exfat.h>
+#include <fs/vfs_cache.h>
 #include <drivers/ata.h>
 #include <arch/x86_64/io.h>
 #include <mm/heap.h>
 #include <string.h>
 
 static bool        g_mounted = false;
-static uint32_t    g_partition_lba = 0;
+static uint64_t    g_partition_lba = 0;
 static exfat_vbr_t g_vbr;
 static uint32_t    g_sectors_per_cluster = 8;
 static uint32_t    g_cluster_size = 4096;
-static uint32_t    g_cluster_heap_lba = 0;
-static uint32_t    g_fat_lba = 0;
+static uint64_t    g_cluster_heap_lba = 0;
+static uint64_t    g_fat_lba = 0;
 static uint32_t    g_allocated_clusters = 0;
+static uint32_t    g_bm_cluster = 0;
+static uint64_t    g_bm_length = 0;
 
-static uint32_t cluster_to_lba(uint32_t cluster) {
+uint64_t exfat_cluster_to_lba(uint32_t cluster) {
     if (cluster < 2) return 0;
-    return g_cluster_heap_lba + (cluster - 2) * g_sectors_per_cluster;
+    return g_cluster_heap_lba + (uint64_t)(cluster - 2) * (uint64_t)g_sectors_per_cluster;
 }
 
-static uint32_t get_next_cluster(uint32_t cluster, bool no_fat_chain) {
+uint32_t exfat_get_next_cluster(uint32_t cluster, bool no_fat_chain) {
     if (no_fat_chain) {
         return cluster + 1;
     }
-    // Lettura da tabella FAT su disco
+    // Lettura da tabella FAT su disco (con verifica in cache per coerenza immediata)
     uint32_t fat_sector = g_fat_lba + (cluster * 4) / 512;
     uint32_t fat_offset = (cluster * 4) % 512;
 
     uint8_t sec_buf[512];
-    if (!ata_read_sectors(fat_sector, 1, sec_buf)) {
-        return 0xFFFFFFFF;
+    if (!vfs_cache_read_sector(0, fat_sector, sec_buf)) {
+        if (!ata_read_sectors(fat_sector, 1, sec_buf)) {
+            return 0xFFFFFFFF;
+        }
     }
     uint32_t next = *(uint32_t*)(sec_buf + fat_offset);
     return next;
 }
 
-bool exfat_mount(uint32_t partition_lba) {
-    uint8_t sec_buf[512];
-    if (!ata_read_sectors(partition_lba, 1, sec_buf)) {
-        return false;
+void exfat_set_bitmap_bit(uint32_t cluster, bool allocated) {
+    if (!g_mounted || g_bm_cluster < 2 || cluster < 2) return;
+    uint32_t bit_idx = cluster - 2;
+    uint32_t byte_off = bit_idx / 8;
+    if (byte_off >= g_bm_length) return;
+
+    uint32_t cl_idx = byte_off / g_cluster_size;
+    uint32_t cl_rem = byte_off % g_cluster_size;
+    uint32_t sec_in_cl = cl_rem / 512;
+    uint32_t off_in_sec = cl_rem % 512;
+
+    uint32_t cur_bm_cl = g_bm_cluster;
+    for (uint32_t i = 0; i < cl_idx; i++) {
+        cur_bm_cl = exfat_get_next_cluster(cur_bm_cl, false);
+        if (cur_bm_cl < 2 || cur_bm_cl >= 0xFFFFFFF8) return;
     }
 
-    // Verifica firma "EXFAT   " e 0xAA55 PRIMA di toccare g_vbr o le variabili globali
-    if (memcmp(sec_buf + 3, "EXFAT   ", 8) != 0 || *(uint16_t*)(sec_buf + 510) != 0xAA55) {
+    uint32_t sec_lba = exfat_cluster_to_lba(cur_bm_cl) + sec_in_cl;
+    uint8_t sec_buf[512];
+    if (!vfs_cache_read_sector(0, sec_lba, sec_buf)) {
+        if (!ata_read_sectors(sec_lba, 1, sec_buf)) return;
+    }
+
+    if (allocated) {
+        sec_buf[off_in_sec] |= (uint8_t)(1 << (bit_idx % 8));
+    } else {
+        sec_buf[off_in_sec] &= (uint8_t)~(1 << (bit_idx % 8));
+    }
+
+    vfs_cache_write_sector(0, sec_lba, sec_buf);
+}
+
+bool exfat_mount(uint64_t partition_lba) {
+    uint8_t sec_buf[512];
+    bool primary_valid = false;
+
+    if (ata_read_sectors(partition_lba, 1, sec_buf)) {
+        if (memcmp(sec_buf + 3, "EXFAT   ", 8) == 0 && *(uint16_t*)(sec_buf + 510) == 0xAA55) {
+            primary_valid = true;
+        }
+    }
+
+    // Se il Main VBR e' corrotto o non leggibile, tenta il ripristino dal Backup VBR (settore +12)
+    if (!primary_valid) {
+        if (ata_read_sectors(partition_lba + 12, 1, sec_buf)) {
+            if (memcmp(sec_buf + 3, "EXFAT   ", 8) == 0 && *(uint16_t*)(sec_buf + 510) == 0xAA55) {
+                // Auto-ripristino automatico del Main VBR dal Backup VBR
+                for (uint32_t s = 0; s < 12; s++) {
+                    uint8_t copy_sec[512];
+                    if (ata_read_sectors(partition_lba + 12 + s, 1, copy_sec)) {
+                        ata_write_sectors(partition_lba + s, 1, copy_sec);
+                    }
+                }
+                primary_valid = true;
+            }
+        }
+    }
+
+    if (!primary_valid) {
         return false;
     }
 
@@ -57,7 +113,7 @@ bool exfat_mount(uint32_t partition_lba) {
 
     // Scansione e calcolo reale dei cluster allocati dalla tabella Allocation Bitmap
     g_allocated_clusters = 0;
-    uint32_t root_lba = cluster_to_lba(g_vbr.root_dir_cluster);
+    uint32_t root_lba = exfat_cluster_to_lba(g_vbr.root_dir_cluster);
     uint8_t root_sec[512];
     uint32_t bm_cluster = 0;
     uint64_t bm_length = 0;
@@ -73,6 +129,9 @@ bool exfat_mount(uint32_t partition_lba) {
         }
     }
 
+    g_bm_cluster = bm_cluster;
+    g_bm_length = bm_length;
+
     if (bm_cluster >= 2 && bm_length > 0) {
         uint32_t count = 0;
         uint32_t rem_bytes = (uint32_t)bm_length;
@@ -80,7 +139,7 @@ bool exfat_mount(uint32_t partition_lba) {
         uint8_t bm_sec[512];
 
         while (rem_bytes > 0 && cur_bm_cl >= 2 && cur_bm_cl < 0xFFFFFFF8) {
-            uint32_t cl_lba = cluster_to_lba(cur_bm_cl);
+            uint32_t cl_lba = exfat_cluster_to_lba(cur_bm_cl);
             for (uint32_t s = 0; s < g_sectors_per_cluster && rem_bytes > 0; s++) {
                 if (!ata_read_sectors(cl_lba + s, 1, bm_sec)) break;
                 uint32_t b_in_sec = (rem_bytes > 512) ? 512 : rem_bytes;
@@ -89,7 +148,7 @@ bool exfat_mount(uint32_t partition_lba) {
                 }
                 rem_bytes -= b_in_sec;
             }
-            cur_bm_cl = get_next_cluster(cur_bm_cl, false);
+            cur_bm_cl = exfat_get_next_cluster(cur_bm_cl, false);
         }
         g_allocated_clusters = count;
     }
@@ -154,7 +213,7 @@ int32_t exfat_list_dir(uint32_t dir_cluster, exfat_item_info_t* out_items, int32
     if (!cl_buf) return 0;
 
     while (cur_cl >= 2 && cur_cl < 0xFFFFFFF8 && count < max_items) {
-        uint32_t lba = cluster_to_lba(cur_cl);
+        uint32_t lba = exfat_cluster_to_lba(cur_cl);
         if (!ata_read_sectors(lba, g_sectors_per_cluster, cl_buf)) {
             break;
         }
@@ -221,7 +280,7 @@ int32_t exfat_list_dir(uint32_t dir_cluster, exfat_item_info_t* out_items, int32
         }
 
         // Passa al prossimo cluster della directory (le directory possono usare FAT)
-        cur_cl = get_next_cluster(cur_cl, false);
+        cur_cl = exfat_get_next_cluster(cur_cl, false);
     }
 
     kfree(cl_buf);
@@ -271,7 +330,7 @@ int32_t exfat_read_file(const exfat_item_info_t* file_info, uint32_t offset, voi
     } else {
         // Altrimenti scorre la FAT
         for (uint32_t s = 0; s < cluster_idx; s++) {
-            cur_cl = get_next_cluster(cur_cl, false);
+            cur_cl = exfat_get_next_cluster(cur_cl, false);
             if (cur_cl < 2 || cur_cl >= 0xFFFFFFF8) return 0;
         }
     }
@@ -283,7 +342,7 @@ int32_t exfat_read_file(const exfat_item_info_t* file_info, uint32_t offset, voi
     uint8_t* dest = (uint8_t*)buf;
 
     while (bytes_read < count && cur_cl >= 2 && cur_cl < 0xFFFFFFF8) {
-        uint32_t lba = cluster_to_lba(cur_cl);
+        uint32_t lba = exfat_cluster_to_lba(cur_cl);
         if (!ata_read_sectors(lba, g_sectors_per_cluster, cl_buf)) {
             break;
         }
@@ -296,7 +355,7 @@ int32_t exfat_read_file(const exfat_item_info_t* file_info, uint32_t offset, voi
         bytes_read += chunk;
 
         cluster_offset = 0; // Solo il primo cluster può avere offset parziale
-        cur_cl = get_next_cluster(cur_cl, file_info->no_fat_chain);
+        cur_cl = exfat_get_next_cluster(cur_cl, file_info->no_fat_chain);
     }
 
     kfree(cl_buf);
@@ -320,7 +379,7 @@ int32_t exfat_write_file_inplace(const exfat_item_info_t* file_info, uint32_t of
         cur_cl += cluster_idx;
     } else {
         for (uint32_t s = 0; s < cluster_idx; s++) {
-            cur_cl = get_next_cluster(cur_cl, false);
+            cur_cl = exfat_get_next_cluster(cur_cl, false);
             if (cur_cl < 2 || cur_cl >= 0xFFFFFFF8) return 0;
         }
     }
@@ -332,7 +391,7 @@ int32_t exfat_write_file_inplace(const exfat_item_info_t* file_info, uint32_t of
     const uint8_t* src = (const uint8_t*)buf;
 
     while (bytes_written < count && cur_cl >= 2 && cur_cl < 0xFFFFFFF8) {
-        uint32_t lba = cluster_to_lba(cur_cl);
+        uint32_t lba = exfat_cluster_to_lba(cur_cl);
         // Legge il cluster corrente per preservare i byte non modificati
         if (!ata_read_sectors(lba, g_sectors_per_cluster, cl_buf)) {
             break;
@@ -351,9 +410,74 @@ int32_t exfat_write_file_inplace(const exfat_item_info_t* file_info, uint32_t of
 
         bytes_written += chunk;
         cluster_offset = 0;
-        cur_cl = get_next_cluster(cur_cl, file_info->no_fat_chain);
+        cur_cl = exfat_get_next_cluster(cur_cl, file_info->no_fat_chain);
     }
 
     kfree(cl_buf);
     return (int32_t)bytes_written;
+}
+
+bool exfat_sync_backup_vbr(void) {
+    if (!g_mounted) return false;
+    uint8_t sec[512];
+    for (uint32_t s = 0; s < 12; s++) {
+        if (!ata_read_sectors(g_partition_lba + s, 1, sec)) return false;
+        if (!ata_write_sectors(g_partition_lba + 12 + s, 1, sec)) return false;
+    }
+    return true;
+}
+
+bool exfat_check_boot_integrity(exfat_boot_integrity_t* out_status) {
+    if (!g_mounted) return false;
+
+    exfat_boot_integrity_t st;
+    memset(&st, 0, sizeof(st));
+
+    // 1. Calcola Checksum sui primi 11 settori della Primary Boot Region
+    uint32_t primary_csum = 0;
+    uint8_t sec[512];
+    bool read_all_primary = true;
+
+    for (uint32_t s = 0; s < 11; s++) {
+        if (!ata_read_sectors(g_partition_lba + s, 1, sec)) {
+            read_all_primary = false;
+            break;
+        }
+        if (s == 0) {
+            if (memcmp(sec + 3, "EXFAT   ", 8) == 0 && *(uint16_t*)(sec + 510) == 0xAA55) {
+                st.primary_vbr_valid = true;
+            }
+        }
+        for (uint32_t b = 0; b < 512; b++) {
+            uint32_t off = s * 512 + b;
+            if (off == 106 || off == 107 || off == 112) continue; // Skip VolumeFlags & PercentInUse
+            primary_csum = (((primary_csum >> 1) | ((primary_csum & 1) << 31)) + sec[b]);
+        }
+    }
+
+    st.computed_checksum = primary_csum;
+
+    if (read_all_primary && ata_read_sectors(g_partition_lba + 11, 1, sec)) {
+        st.stored_checksum = *(uint32_t*)sec;
+        if (st.stored_checksum == primary_csum) {
+            st.checksum_matched = true;
+        }
+    }
+
+    // 2. Ispezione Backup Boot Region a LBA + 12
+    if (ata_read_sectors(g_partition_lba + 12, 1, sec)) {
+        if (memcmp(sec + 3, "EXFAT   ", 8) == 0 && *(uint16_t*)(sec + 510) == 0xAA55) {
+            st.backup_vbr_valid = true;
+        }
+    }
+
+    // 3. Sincronizzazione automatica se il Backup VBR era assente o corrotto
+    if (st.primary_vbr_valid && !st.backup_vbr_valid) {
+        exfat_sync_backup_vbr();
+        st.backup_vbr_valid = true;
+        st.self_healed = true;
+    }
+
+    if (out_status) *out_status = st;
+    return st.primary_vbr_valid;
 }

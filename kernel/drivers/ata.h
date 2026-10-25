@@ -19,9 +19,10 @@ typedef struct {
     uint32_t size_mb;       // Dimensione reale in MB
     uint32_t size_gb;       // Dimensione reale in GB
     bool     has_mbr;       // Tabella MBR con firma 0xAA55 presente
-    uint8_t  part_type;     // Tipo partizione primaria (es. 0x07 exFAT)
-    uint32_t part_lba;      // LBA iniziale della partizione 1 (es. 2048)
-    uint32_t part_sectors;  // Numero di settori della partizione 1
+    bool     has_gpt;       // Tabella GPT (GUID Partition Table) a 64-bit presente
+    uint8_t  part_type;     // Tipo partizione primaria (es. 0x07 exFAT, 0xEE GPT)
+    uint64_t part_lba;      // LBA iniziale della partizione 1 (64-bit per GPT e LBA48)
+    uint64_t part_sectors;  // Numero di settori della partizione 1 (64-bit)
     uint32_t boot_lba;      // Settore CD LBA di avvio El Torito (es. 31138 o 32)
     char     part_fs[16];   // "exFAT", "FAT32", "NTFS", "RAW"
     bool     is_ahci;       // true = Dispositivo controllato tramite Serial ATA AHCI (prioritario)
@@ -43,12 +44,12 @@ const ata_device_t* ata_get_device(int index);
 // Restituisce il disco fisso primario di sistema (Primary Master 0x1F0)
 const ata_device_t* ata_get_primary_master(void);
 
-// Lettura e scrittura a basso livello (sul disco primario di boot)
-bool ata_read_sectors(uint32_t lba, uint32_t count, void* buffer);
-bool ata_write_sectors(uint32_t lba, uint32_t count, const void* buffer);
+// Lettura e scrittura a basso livello (sul disco primario di boot con supporto 64-bit LBA)
+bool ata_read_sectors(uint64_t lba, uint32_t count, void* buffer);
+bool ata_write_sectors(uint64_t lba, uint32_t count, const void* buffer);
 
-// Lettura e scrittura da una specifica unità
-bool ata_read_device_sectors(const ata_device_t* dev, uint32_t lba, uint32_t count, void* buffer);
+// Lettura e scrittura da una specifica unità con supporto 64-bit LBA
+bool ata_read_device_sectors(const ata_device_t* dev, uint64_t lba, uint32_t count, void* buffer);
 
 // Lettura diretta blocco da 2048 byte da unità ottica ATAPI (CD-ROM / DVD / Blu-Ray)
 bool atapi_read_cd_sector(const ata_device_t* dev, uint32_t cd_lba, void* buf2048);

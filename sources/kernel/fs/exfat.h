@@ -55,11 +55,13 @@ typedef struct {
     bool     no_fat_chain;
 } exfat_item_info_t;
 
-bool exfat_mount(uint32_t partition_lba);
+bool exfat_mount(uint64_t partition_lba);
 bool exfat_is_mounted(void);
 const exfat_vbr_t* exfat_get_vbr(void);
 uint32_t exfat_get_root_cluster(void);
 uint32_t exfat_cluster_size(void);
+uint64_t exfat_cluster_to_lba(uint32_t cluster);
+uint32_t exfat_get_next_cluster(uint32_t cluster, bool no_fat_chain);
 
 // Ricerca un elemento all'interno di una directory (tramite il cluster di inizio della dir)
 bool exfat_find_in_dir(uint32_t dir_cluster, const char* name, exfat_item_info_t* out_info);
@@ -73,11 +75,28 @@ int32_t exfat_read_file(const exfat_item_info_t* file_info, uint32_t offset, voi
 // Scrive dati in-place su un file esistente preservando i cluster
 int32_t exfat_write_file_inplace(const exfat_item_info_t* file_info, uint32_t offset, const void* buf, uint32_t count);
 
+// Diagnostica e verifica integrita' regione di avvio exFAT (VBR primario e secondario)
+typedef struct {
+    bool     primary_vbr_valid;
+    bool     backup_vbr_valid;
+    bool     checksum_matched;
+    bool     self_healed;
+    uint32_t computed_checksum;
+    uint32_t stored_checksum;
+} exfat_boot_integrity_t;
+
+// Verifica l'integrita' della regione di avvio e sincronizza Main e Backup VBR
+bool exfat_check_boot_integrity(exfat_boot_integrity_t* out_status);
+
+// Sincronizza i 12 settori del VBR Primario nel VBR di Backup
+bool exfat_sync_backup_vbr(void);
+
 // Interrogazione spazio e cluster allocati reali
 uint32_t exfat_get_allocated_clusters(void);
 uint32_t exfat_get_used_mb(void);
 uint32_t exfat_get_free_clusters(void);
 void     exfat_notify_cluster_allocated(void);
 void     exfat_notify_cluster_freed(void);
+void     exfat_set_bitmap_bit(uint32_t cluster, bool allocated);
 
 #endif // FS_EXFAT_H

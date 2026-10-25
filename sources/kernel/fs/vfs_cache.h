@@ -8,7 +8,7 @@
 
 typedef struct {
     uint32_t dev_id;
-    uint32_t lba;
+    uint64_t lba;
     uint32_t age;
     bool     valid;
     bool     dirty;
@@ -29,9 +29,9 @@ typedef struct {
 // Inizializza il sottosistema di cache VFS
 void vfs_cache_init(void);
 
-// Lettura e scrittura a livello di settore con cache LRU integrata
-bool vfs_cache_read_sector(uint32_t dev_id, uint32_t lba, void* buffer);
-bool vfs_cache_write_sector(uint32_t dev_id, uint32_t lba, const void* buffer);
+// Lettura e scrittura a livello di settore con cache LRU integrata (supporto 64-bit LBA)
+bool vfs_cache_read_sector(uint32_t dev_id, uint64_t lba, void* buffer);
+bool vfs_cache_write_sector(uint32_t dev_id, uint64_t lba, const void* buffer);
 void vfs_cache_flush(void);
 
 // Ricerca e inserimento nella Dentry Path Cache
