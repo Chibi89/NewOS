@@ -1,0 +1,19 @@
+================================================================================
+               NEWOS V1 - WHATSNEW (NOVITÀ DEL SISTEMA)
+================================================================================
+
+Descrizione:
+Visualizzatore interattivo delle novita' e degli aggiornamenti (WHATSNEW.EXE) per
+NewOS V1 (64-bit). Scorporato dal kernel core in un sottosistema autonomo.
+
+Caratteristiche:
+- Parsing automatico del catalogo di sistema C:\NewOS\SystemProgram\UPDATE_CATALOG.INI
+- Visualizzazione gerarchica di:
+  * Informazioni pacchetto di aggiornamento (Nome, Data di rilascio, Versione)
+  * Elenco dei file di sistema e moduli esterni aggiunti o aggiornati
+  * Nuove caratteristiche e novita' funzionali
+- Scrollbar interattiva con supporto mouse e tastiera
+- File di configurazione: C:\NewOS\SystemProgram\WHATSNEW.INI
+
+(C) Newspoint Software - NewSoft - NewOS V1 (64-bit)
+================================================================================

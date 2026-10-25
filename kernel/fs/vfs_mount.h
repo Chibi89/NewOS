@@ -33,6 +33,7 @@ typedef struct vfs_driver {
     bool     (*create)(struct vfs_mount* mnt, const char* rel_path, uint16_t attributes);
     bool     (*mkdir)(struct vfs_mount* mnt, const char* rel_path);
     bool     (*unlink)(struct vfs_mount* mnt, const char* rel_path);
+    bool     (*rename)(struct vfs_mount* mnt, const char* old_path, const char* new_path);
     bool     (*stat)(struct vfs_mount* mnt, const char* rel_path, vfs_dirent_t* out_stat);
 } vfs_driver_t;
 

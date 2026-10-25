@@ -24,7 +24,8 @@ typedef enum {
     APP_AUTOPLAY,
     APP_BROWSER,
     APP_PLAYER,
-    APP_WHATSNEW
+    APP_WHATSNEW,
+    APP_TASKMGR
 } app_type_t;
 
 typedef struct window window_t;
@@ -65,6 +66,7 @@ int  wm_get_background_type(void);
 void wm_set_theme(int theme);
 int  wm_get_theme(void);
 void wm_add_desktop_file(const char* name, bool is_folder);
+void wm_rearrange_desktop_icons(void);
 
 void wm_update(mouse_state_t* mouse, char key);
 void wm_render(void);
@@ -93,6 +95,7 @@ void app_browser_open_url(const char* url);
 void app_player_launch(void);
 void app_player_open_file(const char* filepath);
 void app_whatsnew_launch(void);
+void app_taskmgr_launch(void);
 
 void wm_on_resolution_changed(uint32_t old_w, uint32_t old_h, uint32_t new_w, uint32_t new_h);
 

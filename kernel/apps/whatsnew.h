@@ -1,11 +1,10 @@
-#ifndef APPS_WHATSNEW_H
-#define APPS_WHATSNEW_H
-
-#include <types.h>
+#ifndef KERNEL_APPS_WHATSNEW_H
+#define KERNEL_APPS_WHATSNEW_H
 
 /**
- * Avvia l'applicazione desktop WhatsNew (Novità dell'aggiornamento di sistema)
+ * kernel/apps/whatsnew.h
+ * Bridge di retrocompatibilita' verso il sottosistema autonomo WhatsNew.
  */
-void app_whatsnew_launch(void);
+#include <whatsnew.h>
 
-#endif // APPS_WHATSNEW_H
+#endif // KERNEL_APPS_WHATSNEW_H

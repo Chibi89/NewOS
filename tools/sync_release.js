@@ -30,6 +30,19 @@ function syncRelease(rootDir) {
         }
     }
 
+    function safeCopy(src, dst) {
+        try {
+            if (fs.existsSync(dst)) fs.unlinkSync(dst);
+        } catch(e) {}
+        try {
+            fs.copyFileSync(src, dst);
+        } catch(e) {
+            try {
+                fs.writeFileSync(dst, fs.readFileSync(src));
+            } catch(e2) {}
+        }
+    }
+
     // 3. Copia file in Release/BootSetup/
     const bootSetupSrc = path.join(BIN_DIR, 'BootSetup');
     const bootSetupDst = path.join(RELEASE_DIR, 'BootSetup');
@@ -37,7 +50,7 @@ function syncRelease(rootDir) {
     for (const f of bootSetupFiles) {
         const src = path.join(bootSetupSrc, f);
         if (fs.existsSync(src)) {
-            fs.copyFileSync(src, path.join(bootSetupDst, f));
+            safeCopy(src, path.join(bootSetupDst, f));
         }
     }
 
@@ -45,7 +58,7 @@ function syncRelease(rootDir) {
     const efiSrc = path.join(BIN_DIR, 'EFI', 'BOOT', 'BOOTX64.EFI');
     const efiDst = path.join(RELEASE_DIR, 'EFI', 'BOOT', 'BOOTX64.EFI');
     if (fs.existsSync(efiSrc)) {
-        fs.copyFileSync(efiSrc, efiDst);
+        safeCopy(efiSrc, efiDst);
     }
 
     // 5. Copia file di boot in Release/NewOS/Boot/ (Escluso kernel.elf di debug)
@@ -70,7 +83,7 @@ function syncRelease(rootDir) {
     for (const f of bootFiles) {
         const src = path.join(newOsBootSrc, f);
         if (fs.existsSync(src)) {
-            fs.copyFileSync(src, path.join(newOsBootDst, f));
+            safeCopy(src, path.join(newOsBootDst, f));
         }
     }
 

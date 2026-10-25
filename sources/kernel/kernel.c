@@ -2,14 +2,20 @@
 #include <arch/x86_64/idt.h>
 #include <arch/x86_64/pic.h>
 #include <arch/x86_64/io.h>
+#include <arch/x86_64/smp.h>
+#include <arch/x86_64/sched.h>
+#include <arch/x86_64/syscall.h>
+#include <ipc/ipc.h>
 #include <drivers/timer.h>
 #include <drivers/keyboard.h>
 #include <drivers/mouse.h>
 #include <drivers/rtc.h>
 #include <drivers/power.h>
 #include <mm/heap.h>
+#include <mm/paging.h>
 #include <gui/graphics.h>
 #include <gui/wm.h>
+#include <gui/context_menu.h>
 #include <drivers/sound.h>
 #include <drivers/sound_wav.h>
 #include <fs/vfs.h>
@@ -44,6 +50,13 @@ static void serial_puts(const char* s) {
     }
 }
 
+static void sys_monitor_task(void* arg) {
+    (void)arg;
+    while (1) {
+        sched_sleep(1000);
+    }
+}
+
 void kernel_main(BootInfo* binfo) {
     if (binfo) {
         memcpy(&g_boot_info, binfo, sizeof(BootInfo));
@@ -62,6 +75,7 @@ void kernel_main(BootInfo* binfo) {
         heap_size = total_ram - heap_start;
     }
     heap_init(heap_start, heap_size);
+    paging_init();
     outb(0x3F8, '1');
 
     // Inizializza rilevazioni hardware reali (CPU e unità ATA)
@@ -87,6 +101,11 @@ void kernel_main(BootInfo* binfo) {
 
     // 4. Drivers
     timer_init(100);
+    smp_init();
+    sched_init();
+    ipc_init();
+    syscall_init();
+    task_create("SysMonitor", sys_monitor_task, NULL, 2);
     keyboard_init();
     mouse_init(binfo->width, binfo->height);
     sound_init();
@@ -181,6 +200,7 @@ void kernel_main(BootInfo* binfo) {
     registry_set_read_only(false);
     outb(0x3F8, 'C');
     wm_init();
+    context_menu_init();
     outb(0x3F8, 'D');
     if (vfs_exists("C:\\NewOS\\Resources\\Wallpapers\\FLOW.BMP") ||
         vfs_exists("C:\\NewOS\\Resource\\wallpapers\\FLOW.BMP") ||

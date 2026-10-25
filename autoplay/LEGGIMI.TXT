@@ -1,0 +1,20 @@
+================================================================================
+                    NEWOS V1 - AUTOPLAY SUBSYSTEM
+================================================================================
+
+Descrizione:
+Sottosistema di rilevamento e gestione supporti rimovibili (AUTOPLAY.EXE) per
+NewOS V1 (64-bit). Scorporato dal kernel core in un modulo autonomo.
+
+Caratteristiche:
+- Riconoscimento dinamico dei dispositivi di archiviazione USB (MSC) e CD/DVD
+- Classificazione intelligente dei contenuti in 4 casi operativi:
+  * Caso 1: Mass Storage (esplorazione gerarchica delle cartelle)
+  * Caso 2: Multimedia Player (riproduzione automatica tracce musicali e video)
+  * Caso 3: Photo Manager (galleria immagini BMP)
+  * Caso 4: Standard Dialog (scelta utente con memorizzazione preferenza)
+- Integrazione con notifica acustica hardware AC97
+- File di configurazione: C:\NewOS\SystemProgram\AUTOPLAY.INI
+
+(C) Newspoint Software - NewSoft Media Subsystem - NewOS V1 (64-bit)
+================================================================================

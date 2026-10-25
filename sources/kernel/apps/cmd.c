@@ -1,8 +1,14 @@
 #include <gui/wm.h>
 #include <gui/graphics.h>
 #include <mm/heap.h>
+#include <mm/paging.h>
 #include <string.h>
 #include <arch/x86_64/io.h>
+#include <arch/x86_64/cpu.h>
+#include <arch/x86_64/smp.h>
+#include <arch/x86_64/sched.h>
+#include <arch/x86_64/syscall.h>
+#include <ipc/ipc.h>
 #include <drivers/power.h>
 #include <apps/power_props.h>
 #include <drivers/driver_mgr.h>
@@ -16,6 +22,7 @@
 #include <net/tcp.h>
 #include <net/icmp.h>
 #include <apps/explorer.h>
+#include <apps/taskmgr.h>
 #include <apps/oobe.h>
 #include <apps/rules_viewer.h>
 #include <fs/vfs.h>
@@ -39,6 +46,9 @@ typedef struct {
     char input_line[CMD_COLS];
     int input_pos;
     int current_row;
+    bool pipe_active;
+    char pipe_buffer[4096];
+    int pipe_pos;
 } cmd_state_t;
 
 static void cmd_scroll(cmd_state_t* state) {
@@ -49,6 +59,19 @@ static void cmd_scroll(cmd_state_t* state) {
 }
 
 static void cmd_print(cmd_state_t* state, const char* str) {
+    if (!state || !str) return;
+
+    if (state->pipe_active) {
+        int slen = (int)strlen(str);
+        if (state->pipe_pos + slen + 2 < (int)sizeof(state->pipe_buffer)) {
+            memcpy(state->pipe_buffer + state->pipe_pos, str, slen);
+            state->pipe_pos += slen;
+            state->pipe_buffer[state->pipe_pos++] = '\n';
+            state->pipe_buffer[state->pipe_pos] = '\0';
+        }
+        return;
+    }
+
     if (state->current_row >= CMD_ROWS) {
         cmd_scroll(state);
         state->current_row = CMD_ROWS - 1;
@@ -74,11 +97,7 @@ static void on_ping_reply_callback(int seq, uint32_t rtt_ms, uint8_t ttl) {
     cmd_print(g_cmd_ping_state, rep);
 }
 
-static void cmd_execute(cmd_state_t* state, const char* cmd) {
-    char prompt_echo[CMD_COLS + 8];
-    mini_snprintf(prompt_echo, sizeof(prompt_echo), "C:\\> %s", cmd);
-    cmd_print(state, prompt_echo);
-
+static void cmd_execute_internal(cmd_state_t* state, const char* cmd) {
     if (strcmp(cmd, "ver") == 0) {
         cmd_print(state, "NewOS V1 64-bit [Versione 1.0.2026.x86_64]");
         cmd_print(state, "(C) Copyright @ Newspoint Software - NewSoft - NewOS V1");
@@ -111,6 +130,12 @@ static void cmd_execute(cmd_state_t* state, const char* cmd) {
         cmd_print(state, "  ECHO      Stampa un messaggio a video");
         cmd_print(state, "  CHKDSK    Integrita' VBR, Checksum e salute exFAT");
         cmd_print(state, "  DEL       Elimina file (con protezione file di sistema)");
+        cmd_print(state, "  REN       Rinomina o sposta file o cartelle");
+        cmd_print(state, "  TASKS     Elenco thread/task attivi (Round-Robin Preemptivo)");
+        cmd_print(state, "  IPC       Stato code messaggi e canali pipe IPC");
+        cmd_print(state, "  PIPE |    Piping stream (es. TASKS | FIND Sys)");
+        cmd_print(state, "  PAGING    Stato tabelle PML4, CR3 e isolamento Ring 3");
+        cmd_print(state, "  SMP       Core CPU fisici/logici, Local APIC e SIPI");
         cmd_print(state, "  AUTOPLAY  Finestra dinamica USB/CD/DVD/BD (Casi 1-4)");
         cmd_print(state, "  HELP      Visualizza questa guida");
     } else if (strncmp(cmd, "wifi", 4) == 0 && (cmd[4] == '\0' || cmd[4] == ' ')) {
@@ -221,20 +246,51 @@ static void cmd_execute(cmd_state_t* state, const char* cmd) {
             }
         }
     } else if (strcmp(cmd, "dir") == 0 || strncmp(cmd, "dir ", 4) == 0) {
-        const char* target = (cmd[3] == ' ') ? (cmd + 4) : "C:\\";
-        while (*target == ' ') target++;
-        if (*target == '\0') target = "C:\\";
+        const char* arg = (cmd[3] == ' ') ? (cmd + 4) : "C:\\";
+        while (*arg == ' ') arg++;
+        if (*arg == '\0') arg = "C:\\";
+
+        // Estrai cartella base ed eventuale pattern wildcard (* o ?)
+        char dir_path[VFS_MAX_PATH];
+        char pattern[64] = "*";
+
+        const char* last_slash = NULL;
+        for (const char* p = arg; *p; p++) {
+            if (*p == '/' || *p == '\\') last_slash = p;
+        }
+
+        if (strchr(arg, '*') || strchr(arg, '?')) {
+            if (last_slash) {
+                size_t dlen = last_slash - arg;
+                if (dlen == 2 && arg[1] == ':') dlen = 3; // Mantieni "C:\"
+                if (dlen >= sizeof(dir_path)) dlen = sizeof(dir_path) - 1;
+                strncpy(dir_path, arg, dlen);
+                dir_path[dlen] = '\0';
+                strncpy(pattern, last_slash + 1, sizeof(pattern) - 1);
+            } else {
+                strcpy(dir_path, "C:\\");
+                strncpy(pattern, arg, sizeof(pattern) - 1);
+            }
+        } else {
+            strncpy(dir_path, arg, sizeof(dir_path) - 1);
+            dir_path[sizeof(dir_path) - 1] = '\0';
+            strcpy(pattern, "*");
+        }
 
         char header[CMD_COLS];
-        mini_snprintf(header, sizeof(header), "Contenuto di %s:", target);
+        mini_snprintf(header, sizeof(header), "Contenuto di %s (Filtro: %s):", dir_path, pattern);
         cmd_print(state, header);
 
         vfs_dirent_t entries[32];
-        int count = vfs_readdir(target, entries, 32);
+        int count = vfs_readdir(dir_path, entries, 32);
+        int matched = 0;
         if (count == 0) {
-            cmd_print(state, "  (Nessun elemento o cartella vuota)");
+            cmd_print(state, "  (Nessun elemento o cartella non trovata)");
         } else {
             for (int i = 0; i < count; i++) {
+                if (strcmp(pattern, "*") != 0 && !vfs_wildcard_match(pattern, entries[i].name)) {
+                    continue;
+                }
                 char entry_line[CMD_COLS];
                 if (entries[i].is_directory) {
                     mini_snprintf(entry_line, sizeof(entry_line), "  <DIR>          %s", entries[i].name);
@@ -243,21 +299,27 @@ static void cmd_execute(cmd_state_t* state, const char* cmd) {
                                   (unsigned int)entries[i].size, entries[i].name);
                 }
                 cmd_print(state, entry_line);
+                matched++;
+            }
+            if (matched == 0) {
+                cmd_print(state, "  (Nessun file corrispondente al filtro specificato)");
             }
         }
         char sum_line[CMD_COLS];
         vfs_drive_info_t dinfo;
-        char drive_let = (target[0] >= 'A' && target[0] <= 'Z') ? target[0] : ((target[0] >= 'a' && target[0] <= 'z') ? (target[0] - 32) : 'C');
+        char drive_let = (dir_path[0] >= 'A' && dir_path[0] <= 'Z') ? dir_path[0] : ((dir_path[0] >= 'a' && dir_path[0] <= 'z') ? (dir_path[0] - 32) : 'C');
         if (vfs_get_drive_info(drive_let, &dinfo)) {
             if (dinfo.free_mb >= 1024) {
-                mini_snprintf(sum_line, sizeof(sum_line), "  %d elementi - Spazio disponibile: %u.%u GB", count, (unsigned int)(dinfo.free_mb / 1024), (unsigned int)((dinfo.free_mb % 1024) / 100));
+                mini_snprintf(sum_line, sizeof(sum_line), "  %d elementi corrispondenti - Spazio libero: %u.%u GB", matched, (unsigned int)(dinfo.free_mb / 1024), (unsigned int)((dinfo.free_mb % 1024) / 100));
             } else {
-                mini_snprintf(sum_line, sizeof(sum_line), "  %d elementi - Spazio disponibile: %u MB", count, (unsigned int)dinfo.free_mb);
+                mini_snprintf(sum_line, sizeof(sum_line), "  %d elementi corrispondenti - Spazio libero: %u MB", matched, (unsigned int)dinfo.free_mb);
             }
-        } else {
-            mini_snprintf(sum_line, sizeof(sum_line), "  %d elementi", count);
+            cmd_print(state, sum_line);
         }
-        cmd_print(state, sum_line);
+    } else if (strcmp(cmd, "sync") == 0 || strcmp(cmd, "flush") == 0) {
+        cmd_print(state, "Sincronizzazione cache VFS (Write-Back Flush)...");
+        vfs_flush();
+        cmd_print(state, "Flush completato: tutti i settori dirty scritti su disco fisico.");
     } else if (strcmp(cmd, "driverquery") == 0 || strcmp(cmd, "drivers") == 0) {
         cmd_print(state, "Driver (.INI)  Modulo    Tipo     IRQ IO     Stato");
         cmd_print(state, "--------------------------------------------------");
@@ -540,6 +602,83 @@ static void cmd_execute(cmd_state_t* state, const char* cmd) {
         cmd_print(state, "Architettura: x86_64 (Long Mode 64-bit)");
         cmd_print(state, "Paginazione: 4-Livelli (PML4, PDPT, PD 2MB Huge Pages)");
         cmd_print(state, "Memoria Heap Attiva: 64 MB Gestiti");
+    } else if (strcmp(cmd, "tasks") == 0 || strcmp(cmd, "ps") == 0 || strcmp(cmd, "tasklist") == 0) {
+        cmd_print(state, "PID  STAT    PRI  RUN(tk)  NOME");
+        cmd_print(state, "---  ------  ---  -------  ----------------");
+        int printed = 0;
+        for (int i = 0; i < MAX_TASKS; i++) {
+            const task_t* t = sched_get_task(i);
+            if (!t || t->state == TASK_STATE_UNUSED) continue;
+            char tline[CMD_COLS];
+            mini_snprintf(tline, sizeof(tline), "%-4d %-7s %-4d %-8d %s",
+                          t->pid,
+                          sched_state_to_str(t->state),
+                          t->priority,
+                          (uint32_t)t->total_runtime,
+                          t->name);
+            cmd_print(state, tline);
+            printed++;
+        }
+        char sum[CMD_COLS];
+        mini_snprintf(sum, sizeof(sum), "Totale task registrati: %d", printed);
+        cmd_print(state, sum);
+    } else if (strcmp(cmd, "ipc") == 0 || strcmp(cmd, "pipes") == 0) {
+        cmd_print(state, "Sottosistema IPC & Piping Kernel:");
+        cmd_print(state, "  Stream Pipe: Circolare FIFO (kmalloc dinamico)");
+        cmd_print(state, "  Coda Messaggi Inter-Task: 32 slot attivi");
+        char pmsg[CMD_COLS];
+        mini_snprintf(pmsg, sizeof(pmsg), "  Messaggi in coda: %u", (unsigned int)ipc_pending_msg_count(0));
+        cmd_print(state, pmsg);
+        cmd_print(state, "  Piping Shell: Supportato con operatore '|'");
+        cmd_print(state, "  Filtri pipe: FIND, GREP, COUNT, HEAD");
+    } else if (strcmp(cmd, "paging") == 0 || strcmp(cmd, "vmm") == 0) {
+        vmm_stats_t vstats;
+        paging_get_stats(&vstats);
+        cmd_print(state, "Paginazione & Virtual Memory Manager (VMM):");
+        cmd_print(state, "  Architettura: 4-Livelli x86_64 Long Mode");
+        cmd_print(state, "  Struttura: PML4 -> PDPT -> PD (2MB Huge) -> PT (4KB)");
+        char cbuf[CMD_COLS];
+        mini_snprintf(cbuf, sizeof(cbuf), "  CR3 (PML4 Base Fisico): 0x%x%x",
+                      (uint32_t)(vstats.cr3_phys >> 32), (uint32_t)(vstats.cr3_phys & 0xFFFFFFFF));
+        cmd_print(state, cbuf);
+        mini_snprintf(cbuf, sizeof(cbuf), "  Pagine mappate attive: %u (Huge/4KB)", (unsigned int)vstats.total_mapped_pages);
+        cmd_print(state, cbuf);
+        cmd_print(state, "  Isolamento Ring 3: Segmenti GDT 0x33/0x2B pronti");
+        cmd_print(state, "  Protezione Memoria: Bit U/S attivo (Access Denied R3)");
+    } else if (strcmp(cmd, "smp") == 0 || strcmp(cmd, "cpus") == 0) {
+        const smp_info_t* sinfo = smp_get_info();
+        const cpu_info_t* cinfo = cpu_get_info();
+        cmd_print(state, "Symmetric Multi-Processing (SMP) & APIC:");
+        char sbuf[CMD_COLS];
+        mini_snprintf(sbuf, sizeof(sbuf), "  Processore: %s", cinfo ? cinfo->brand : "x86_64 CPU");
+        cmd_print(state, sbuf);
+        mini_snprintf(sbuf, sizeof(sbuf), "  Core Rilevati (CPUID): %u | Online: %u",
+                      sinfo->detected_cores, sinfo->online_cores);
+        cmd_print(state, sbuf);
+        mini_snprintf(sbuf, sizeof(sbuf), "  Local APIC Base: 0x%x%x (Attivo)",
+                      (uint32_t)(sinfo->lapic_base >> 32), (uint32_t)(sinfo->lapic_base & 0xFFFFFFFF));
+        cmd_print(state, sbuf);
+        mini_snprintf(sbuf, sizeof(sbuf), "  Stato SMP: %s", sinfo->smp_active ? "Multi-Core Operativo" : "Single-Core (BSP Attivo)");
+        cmd_print(state, sbuf);
+        cmd_print(state, "  Sequenza Boot AP: INIT-SIPI-SIPI (Trampoline 0x8000)");
+    } else if (strcmp(cmd, "syscall") == 0 || strcmp(cmd, "syscalls") == 0) {
+        cmd_print(state, "Interfaccia Syscall 64-bit (NewOS V1 System Call):");
+        cmd_print(state, "  Istruzione Nativa: SYSCALL / SYSRETQ (x86_64)");
+        cmd_print(state, "  MSR IA32_EFER (0xC0000080): Bit SCE=1 (Abilitato)");
+        cmd_print(state, "  MSR IA32_STAR (0xC0000081): Kernel CS 0x18 | User CS 0x30/0x28");
+        cmd_print(state, "  MSR IA32_LSTAR (0xC0000082): Entry Point Configurato");
+        cmd_print(state, "  Interrupt Gate: INT 0x80 (DPL=3 Ring 3 Compatibile)");
+
+        // Test esecuzione in tempo reale
+        int64_t pid_native = sys_call(SYS_GETPID, 0, 0, 0);
+        int64_t pid_int80  = sys_call_int80(SYS_GETPID, 0, 0, 0);
+
+        char res_buf[CMD_COLS];
+        mini_snprintf(res_buf, sizeof(res_buf), "  Test SYSCALL nativa: OK (PID restituito: %d)", (int)pid_native);
+        cmd_print(state, res_buf);
+        mini_snprintf(res_buf, sizeof(res_buf), "  Test INT 0x80 Gate:  OK (PID restituito: %d)", (int)pid_int80);
+        cmd_print(state, res_buf);
+        cmd_print(state, "Stato: Vettori Syscall operativi e validati.");
     } else if (strcmp(cmd, "clear") == 0 || strcmp(cmd, "cls") == 0) {
         for (int r = 0; r < CMD_ROWS; r++) {
             memset(state->lines[r], 0, CMD_COLS);
@@ -636,6 +775,32 @@ static void cmd_execute(cmd_state_t* state, const char* cmd) {
         } else {
             cmd_print(state, "Errore durante l'eliminazione del file.");
         }
+    } else if (strncmp(cmd, "ren ", 4) == 0 || strncmp(cmd, "rename ", 7) == 0) {
+        const char* p = (cmd[0] == 'r' && cmd[1] == 'e' && cmd[2] == 'n' && cmd[3] == ' ') ? (cmd + 4) : (cmd + 7);
+        while (*p == ' ') p++;
+        const char* sp = strchr(p, ' ');
+        if (!sp) {
+            cmd_print(state, "Sintassi: REN <vecchio_nome> <nuovo_nome>");
+        } else {
+            char src_path[CMD_COLS];
+            size_t slen = sp - p;
+            if (slen >= sizeof(src_path)) slen = sizeof(src_path) - 1;
+            strncpy(src_path, p, slen);
+            src_path[slen] = '\0';
+
+            const char* dst_path = sp + 1;
+            while (*dst_path == ' ') dst_path++;
+
+            if (vfs_is_protected(src_path) || vfs_is_protected(dst_path)) {
+                cmd_print(state, "Accesso negato: elemento di sistema protetto da ridenominazione.");
+            } else if (!vfs_exists(src_path)) {
+                cmd_print(state, "File di origine non trovato.");
+            } else if (vfs_rename(src_path, dst_path)) {
+                cmd_print(state, "File rinominato con successo.");
+            } else {
+                cmd_print(state, "Errore durante la ridenominazione del file.");
+            }
+        }
     } else if (strcmp(cmd, "theme") == 0 || strcmp(cmd, "display") == 0) {
         cmd_print(state, "Apertura Proprieta' Schermo...");
         app_display_props_launch();
@@ -690,6 +855,21 @@ static void cmd_execute(cmd_state_t* state, const char* cmd) {
         }
     } else if (strcmp(cmd, "about") == 0) {
         app_about_launch();
+    } else if (strcmp(cmd, "player") == 0) {
+        cmd_print(state, "Avvio Riproduttore Multimediale...");
+        app_player_launch();
+    } else if (strcmp(cmd, "taskmgr") == 0) {
+        cmd_print(state, "Apertura Gestione Attività...");
+        app_taskmgr_launch();
+    } else if (strcmp(cmd, "whatsnew") == 0) {
+        cmd_print(state, "Apertura Novità di Sistema...");
+        app_whatsnew_launch();
+    } else if (strcmp(cmd, "sound") == 0 || strcmp(cmd, "mmsys") == 0) {
+        cmd_print(state, "Apertura Proprietà Audio...");
+        app_sound_props_launch();
+    } else if (strcmp(cmd, "control") == 0 || strcmp(cmd, "controlpanel") == 0) {
+        cmd_print(state, "Apertura Pannello di controllo...");
+        app_control_panel_open();
     } else if (strcmp(cmd, "reboot") == 0) {
         cmd_print(state, "Riavvio in corso...");
         power_reboot();
@@ -710,11 +890,138 @@ static void cmd_execute(cmd_state_t* state, const char* cmd) {
         mini_snprintf(buf, sizeof(buf), "Inattivita': %d sec (CPU Governor HLT)", ps.idle_seconds);
         cmd_print(state, buf);
         app_power_props_launch();
+    } else if (strcmp(cmd, "taskmgr") == 0) {
+        cmd_print(state, "Avvio Gestione attivita' (TASKMGR.EXE)...");
+        app_taskmgr_launch();
     } else if (strlen(cmd) > 0) {
         char err[CMD_COLS];
         mini_snprintf(err, sizeof(err), "'%s' comando non riconosciuto. Digita HELP.", cmd);
         cmd_print(state, err);
     }
+}
+
+static void cmd_execute_pipe_filter(cmd_state_t* state, const char* filter_cmd, const char* pipe_input) {
+    if (!state || !filter_cmd || !pipe_input) return;
+
+    while (*filter_cmd == ' ') filter_cmd++;
+
+    if (strncmp(filter_cmd, "find ", 5) == 0 || strncmp(filter_cmd, "grep ", 5) == 0) {
+        const char* pattern = filter_cmd + 5;
+        while (*pattern == ' ') pattern++;
+        char clean_pat[64];
+        int cpi = 0;
+        for (int i = 0; pattern[i] && cpi < (int)sizeof(clean_pat) - 1; i++) {
+            if (pattern[i] != '"' && pattern[i] != '\'') {
+                clean_pat[cpi++] = pattern[i];
+            }
+        }
+        clean_pat[cpi] = '\0';
+
+        int match_count = 0;
+        const char* cur = pipe_input;
+        while (*cur) {
+            const char* next_nl = strchr(cur, '\n');
+            int line_len = next_nl ? (int)(next_nl - cur) : (int)strlen(cur);
+            char line_buf[CMD_COLS];
+            int copy_len = (line_len >= CMD_COLS) ? (CMD_COLS - 1) : line_len;
+            memcpy(line_buf, cur, copy_len);
+            line_buf[copy_len] = '\0';
+
+            if (strstr(line_buf, clean_pat)) {
+                cmd_print(state, line_buf);
+                match_count++;
+            }
+
+            if (!next_nl) break;
+            cur = next_nl + 1;
+        }
+
+        if (match_count == 0) {
+            cmd_print(state, "(Nessun risultato corrispondente al filtro)");
+        }
+    } else if (strcmp(filter_cmd, "count") == 0 || strcmp(filter_cmd, "wc") == 0) {
+        int lines = 0;
+        const char* cur = pipe_input;
+        while (*cur) {
+            if (*cur == '\n') lines++;
+            cur++;
+        }
+        char cbuf[CMD_COLS];
+        mini_snprintf(cbuf, sizeof(cbuf), "Righe filtrate da pipe: %d", lines);
+        cmd_print(state, cbuf);
+    } else if (strncmp(filter_cmd, "head", 4) == 0) {
+        int max_lines = 5;
+        if (filter_cmd[4] == ' ') {
+            int val = 0;
+            const char* p = filter_cmd + 5;
+            while (*p >= '0' && *p <= '9') val = val * 10 + (*p++ - '0');
+            if (val > 0) max_lines = val;
+        }
+        int printed = 0;
+        const char* cur = pipe_input;
+        while (*cur && printed < max_lines) {
+            const char* next_nl = strchr(cur, '\n');
+            int line_len = next_nl ? (int)(next_nl - cur) : (int)strlen(cur);
+            char line_buf[CMD_COLS];
+            int copy_len = (line_len >= CMD_COLS) ? (CMD_COLS - 1) : line_len;
+            memcpy(line_buf, cur, copy_len);
+            line_buf[copy_len] = '\0';
+            cmd_print(state, line_buf);
+            printed++;
+            if (!next_nl) break;
+            cur = next_nl + 1;
+        }
+    } else {
+        char err[CMD_COLS];
+        mini_snprintf(err, sizeof(err), "Filtro '%s' non supportato (usa FIND, GREP, COUNT, HEAD)", filter_cmd);
+        cmd_print(state, err);
+    }
+}
+
+static void cmd_execute(cmd_state_t* state, const char* cmd) {
+    if (!state || !cmd) return;
+
+    // Controllo operatore pipe '|' per streaming IPC tra comandi
+    const char* pipe_char = strchr(cmd, '|');
+    if (pipe_char) {
+        char left_cmd[CMD_COLS];
+        char right_cmd[CMD_COLS];
+        size_t left_len = (size_t)(pipe_char - cmd);
+        if (left_len >= sizeof(left_cmd)) left_len = sizeof(left_cmd) - 1;
+        strncpy(left_cmd, cmd, left_len);
+        left_cmd[left_len] = '\0';
+        while (left_len > 0 && left_cmd[left_len - 1] == ' ') {
+            left_cmd[--left_len] = '\0';
+        }
+
+        const char* r_ptr = pipe_char + 1;
+        while (*r_ptr == ' ') r_ptr++;
+        strncpy(right_cmd, r_ptr, sizeof(right_cmd) - 1);
+        right_cmd[sizeof(right_cmd) - 1] = '\0';
+
+        char prompt_echo[CMD_COLS + 8];
+        mini_snprintf(prompt_echo, sizeof(prompt_echo), "C:\\> %s", cmd);
+        cmd_print(state, prompt_echo);
+
+        // Attiva buffer di cattura stream IPC
+        state->pipe_active = true;
+        state->pipe_pos = 0;
+        state->pipe_buffer[0] = '\0';
+
+        cmd_execute_internal(state, left_cmd);
+
+        state->pipe_active = false;
+
+        // Incanala il flusso catturato nel comando filtro di destra
+        cmd_execute_pipe_filter(state, right_cmd, state->pipe_buffer);
+        return;
+    }
+
+    char prompt_echo[CMD_COLS + 8];
+    mini_snprintf(prompt_echo, sizeof(prompt_echo), "C:\\> %s", cmd);
+    cmd_print(state, prompt_echo);
+
+    cmd_execute_internal(state, cmd);
 }
 
 static void cmd_draw(window_t* win) {

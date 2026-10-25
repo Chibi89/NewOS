@@ -1,12 +1,10 @@
-#ifndef APPS_POWER_PROPS_H
-#define APPS_POWER_PROPS_H
+#ifndef KERNEL_APPS_POWER_PROPS_H
+#define KERNEL_APPS_POWER_PROPS_H
 
-#include <types.h>
+/**
+ * kernel/apps/power_props.h
+ * Bridge di retrocompatibilita' verso l'applet Power Props del Pannello di Controllo.
+ */
+#include <control_panel.h>
 
-// Lancia l'applet del Pannello di controllo "Opzioni risparmio energia"
-void app_power_props_launch(void);
-
-// Lancia la finestra di dialogo "Chiudi sessione / Arresta il sistema..."
-void app_shutdown_dialog_launch(void);
-
-#endif // APPS_POWER_PROPS_H
+#endif // KERNEL_APPS_POWER_PROPS_H

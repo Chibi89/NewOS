@@ -6,6 +6,7 @@
 #include <apps/power_props.h>
 #include <apps/installer.h>
 #include <apps/player.h>
+#include <apps/taskmgr.h>
 #include <user.h>
 #include <fs/vfs.h>
 #include <drivers/power.h>
@@ -58,27 +59,93 @@ static int32_t icon_click_start_x = 0;
 static int32_t icon_click_start_y = 0;
 static bool icon_was_dragged = false;
 
+// Parametri Griglia Desktop ordinata stile Windows 2000
+#define DESKTOP_GRID_COL_W    116   // Larghezza colonna (distanza orizzontale)
+#define DESKTOP_GRID_ROW_H    88    // Altezza cella riga (distanza verticale)
+#define DESKTOP_GRID_START_X  18    // Margine orizzontale sinistro
+#define DESKTOP_GRID_START_Y  16    // Margine verticale superiore
+
+static int wm_get_desktop_max_rows(void) {
+    uint32_t sh = gfx_get_height();
+    int32_t taskbar_y = (int32_t)sh - 28;
+    int32_t usable_h = taskbar_y - DESKTOP_GRID_START_Y - 8;
+    int max_rows = usable_h / DESKTOP_GRID_ROW_H;
+    if (max_rows < 3) max_rows = 3;
+    return max_rows;
+}
+
+static void wm_get_icon_slot_pos(int slot, int32_t* out_x, int32_t* out_y) {
+    int max_rows = wm_get_desktop_max_rows();
+    int col = slot / max_rows;
+    int row = slot % max_rows;
+
+    *out_x = DESKTOP_GRID_START_X + col * DESKTOP_GRID_COL_W + (DESKTOP_GRID_COL_W - 32) / 2;
+    *out_y = DESKTOP_GRID_START_Y + row * DESKTOP_GRID_ROW_H + 4;
+}
+
+void wm_rearrange_desktop_icons(void) {
+    for (int i = 0; i < num_desktop_icons; i++) {
+        wm_get_icon_slot_pos(i, &desktop_icons[i].x, &desktop_icons[i].y);
+    }
+}
+
+static void wm_split_icon_label(const char* label, char line1[16], char line2[16]) {
+    line1[0] = '\0';
+    line2[0] = '\0';
+    if (!label) return;
+
+    int len = (int)strlen(label);
+    if (len <= 12) {
+        strncpy(line1, label, 15);
+        line1[15] = '\0';
+        return;
+    }
+
+    // Cerca l'ultimo spazio utile entro i primi 12 caratteri
+    int split_idx = -1;
+    for (int i = 0; i <= 12 && i < len; i++) {
+        if (label[i] == ' ') split_idx = i;
+    }
+    // Se assente, cerca trattino, underscore o punto
+    if (split_idx <= 0) {
+        for (int i = 0; i <= 12 && i < len; i++) {
+            if (label[i] == '-' || label[i] == '_' || label[i] == '.') {
+                split_idx = i;
+            }
+        }
+    }
+    // Altrimenti spezza forzatamente a 11 caratteri
+    if (split_idx <= 0) {
+        split_idx = 11;
+    }
+
+    int cp1 = split_idx;
+    if (cp1 > 14) cp1 = 14;
+    strncpy(line1, label, cp1);
+    line1[cp1] = '\0';
+
+    const char* rem = label + split_idx;
+    if (*rem == ' ') rem++;
+    strncpy(line2, rem, 14);
+    line2[14] = '\0';
+}
+
 static bool icon_hit_test(int idx, int32_t mx, int32_t my, int32_t sw) {
+    (void)sw;
     if (idx < 0 || idx >= num_desktop_icons) return false;
     int32_t ix = desktop_icons[idx].x;
     int32_t iy = desktop_icons[idx].y;
-    int32_t lw = (int32_t)strlen(desktop_icons[idx].label) * 8;
-    int32_t lx = ix + 16 - (lw / 2);
-    if (lx < 2) lx = 2;
-    if (lx + lw > sw - 2) lx = sw - 2 - lw;
 
-    int32_t min_x = (ix < lx) ? ix - 4 : lx - 4;
-    int32_t max_x = ((ix + 32) > (lx + lw)) ? (ix + 32 + 4) : (lx + lw + 4);
-    int32_t min_y = iy;
-    int32_t max_y = iy + 54;
+    int32_t min_x = ix + 16 - 52;
+    int32_t max_x = ix + 16 + 52;
+    int32_t min_y = iy - 2;
+    int32_t max_y = iy + 68;
     return (mx >= min_x && mx <= max_x && my >= min_y && my <= max_y);
 }
-
 
 void wm_set_background_type(int bg_type) {
     if (bg_type >= 0 && bg_type < NUM_BACKGROUNDS) {
         current_bg_type = bg_type;
-        // Ricalcola il blur quando cambia lo sfondo e il tema Glass e' attivo
         if (current_theme == THEME_LIQUID_GLASS) {
             gfx_precompute_blur();
         }
@@ -103,12 +170,8 @@ int wm_get_theme(void) {
 void wm_add_desktop_file(const char* name, bool is_folder) {
     if (num_desktop_icons >= MAX_DESKTOP_ICONS) return;
 
-    int idx = num_desktop_icons;
-    int row = idx % 7;
-    int col = idx / 7;
-
-    desktop_icons[idx].x = 20 + col * 105;
-    desktop_icons[idx].y = 20 + row * 75;
+    int idx = num_desktop_icons++;
+    wm_get_icon_slot_pos(idx, &desktop_icons[idx].x, &desktop_icons[idx].y);
 
     if (is_folder) {
         desktop_icons[idx].type = 5;
@@ -127,8 +190,6 @@ void wm_add_desktop_file(const char* name, bool is_folder) {
         }
         strcpy(desktop_icons[idx].content, "File creato dal desktop di NewOS V1.");
     }
-
-    num_desktop_icons++;
 }
 
 void wm_init(void) {
@@ -163,19 +224,17 @@ void wm_init(void) {
     int base_types[] = { 0, 9, 7, 1, 2, 3, 4 };
 
     for (int i = 0; i < 7; i++) {
-        desktop_icons[i].x = 20;
-        desktop_icons[i].y = 20 + i * 75;
-        strncpy(desktop_icons[i].label, base_labels[i], sizeof(desktop_icons[i].label) - 1);
-        desktop_icons[i].type = base_types[i];
-        desktop_icons[i].content[0] = '\0';
-        num_desktop_icons++;
+        int idx = num_desktop_icons++;
+        wm_get_icon_slot_pos(idx, &desktop_icons[idx].x, &desktop_icons[idx].y);
+        strncpy(desktop_icons[idx].label, base_labels[i], sizeof(desktop_icons[idx].label) - 1);
+        desktop_icons[idx].type = base_types[i];
+        desktop_icons[idx].content[0] = '\0';
     }
 
     // Se in modalità Live USB, mostra l'icona per installare NewOS V1 fisicamente
     if (user_is_live_mode()) {
         int idx = num_desktop_icons++;
-        desktop_icons[idx].x = 20;
-        desktop_icons[idx].y = 20 + 6 * 75;
+        wm_get_icon_slot_pos(idx, &desktop_icons[idx].x, &desktop_icons[idx].y);
         strcpy(desktop_icons[idx].label, "Installa NewOS V1");
         desktop_icons[idx].type = 8; // 8: Installer
         desktop_icons[idx].content[0] = '\0';
@@ -481,15 +540,16 @@ static void draw_context_menu(int32_t mx, int32_t my) {
     if (!ctx_menu_open) return;
 
     int32_t mw = 160;
-    int32_t mh = 78;
+    int32_t mh = 98;
 
     // Sfondo menu contestuale con rilievo 3D
     gfx_fill_rect(ctx_x, ctx_y, mw, mh, COLOR_BTNFACE);
     gfx_draw_bevel_rect(ctx_x, ctx_y, mw, mh, false);
 
     bool hov_nuovo = (mx >= ctx_x && mx <= ctx_x + mw && my >= ctx_y + 3 && my < ctx_y + 25) || ctx_submenu_open;
-    bool hov_personalizza = (!hov_nuovo && mx >= ctx_x && mx <= ctx_x + mw && my >= ctx_y + 29 && my < ctx_y + 51);
-    bool hov_prop = (!hov_nuovo && mx >= ctx_x && mx <= ctx_x + mw && my >= ctx_y + 51 && my <= ctx_y + 75);
+    bool hov_disponi = (!hov_nuovo && mx >= ctx_x && mx <= ctx_x + mw && my >= ctx_y + 28 && my < ctx_y + 49);
+    bool hov_personalizza = (!hov_nuovo && mx >= ctx_x && mx <= ctx_x + mw && my >= ctx_y + 49 && my < ctx_y + 71);
+    bool hov_prop = (!hov_nuovo && mx >= ctx_x && mx <= ctx_x + mw && my >= ctx_y + 71 && my <= ctx_y + 95);
 
     // Voce 0: Nuovo ▶
     if (hov_nuovo) {
@@ -502,26 +562,34 @@ static void draw_context_menu(int32_t mx, int32_t my) {
     }
 
     // Separatore scavato
-    gfx_draw_bevel_rect(ctx_x + 4, ctx_y + 27, mw - 8, 2, true);
+    gfx_draw_bevel_rect(ctx_x + 4, ctx_y + 26, mw - 8, 2, true);
 
-    // Voce 1: Personalizza...
-    if (hov_personalizza) {
-        gfx_fill_rect(ctx_x + 3, ctx_y + 30, mw - 6, 21, 0x0A246A);
-        gfx_draw_icon_16(ctx_x + 8, ctx_y + 32, ICON_DESKTOP);
-        gfx_draw_string(ctx_x + 30, ctx_y + 33, "Personalizza...", 0xFFFFFF, 0, true);
+    // Voce 1: Disponi icone
+    if (hov_disponi) {
+        gfx_fill_rect(ctx_x + 3, ctx_y + 28, mw - 6, 20, 0x0A246A);
+        gfx_draw_string(ctx_x + 12, ctx_y + 30, "Disponi icone", 0xFFFFFF, 0, true);
     } else {
-        gfx_draw_icon_16(ctx_x + 8, ctx_y + 32, ICON_DESKTOP);
-        gfx_draw_string(ctx_x + 30, ctx_y + 33, "Personalizza...", COLOR_WINDOWTEXT, 0, true);
+        gfx_draw_string(ctx_x + 12, ctx_y + 30, "Disponi icone", COLOR_WINDOWTEXT, 0, true);
     }
 
-    // Voce 2: Proprietà
-    if (hov_prop) {
-        gfx_fill_rect(ctx_x + 3, ctx_y + 52, mw - 6, 22, 0x0A246A);
-        gfx_draw_icon_16(ctx_x + 8, ctx_y + 54, ICON_INFO);
-        gfx_draw_string(ctx_x + 30, ctx_y + 55, "Proprieta", 0xFFFFFF, 0, true);
+    // Voce 2: Personalizza...
+    if (hov_personalizza) {
+        gfx_fill_rect(ctx_x + 3, ctx_y + 49, mw - 6, 21, 0x0A246A);
+        gfx_draw_icon_16(ctx_x + 8, ctx_y + 51, ICON_DESKTOP);
+        gfx_draw_string(ctx_x + 30, ctx_y + 52, "Personalizza...", 0xFFFFFF, 0, true);
     } else {
-        gfx_draw_icon_16(ctx_x + 8, ctx_y + 54, ICON_INFO);
-        gfx_draw_string(ctx_x + 30, ctx_y + 55, "Proprieta", COLOR_WINDOWTEXT, 0, true);
+        gfx_draw_icon_16(ctx_x + 8, ctx_y + 51, ICON_DESKTOP);
+        gfx_draw_string(ctx_x + 30, ctx_y + 52, "Personalizza...", COLOR_WINDOWTEXT, 0, true);
+    }
+
+    // Voce 3: Proprietà
+    if (hov_prop) {
+        gfx_fill_rect(ctx_x + 3, ctx_y + 71, mw - 6, 22, 0x0A246A);
+        gfx_draw_icon_16(ctx_x + 8, ctx_y + 73, ICON_INFO);
+        gfx_draw_string(ctx_x + 30, ctx_y + 74, "Proprieta", 0xFFFFFF, 0, true);
+    } else {
+        gfx_draw_icon_16(ctx_x + 8, ctx_y + 73, ICON_INFO);
+        gfx_draw_string(ctx_x + 30, ctx_y + 74, "Proprieta", COLOR_WINDOWTEXT, 0, true);
     }
 
     // Sottomenu "Nuovo" se aperto
@@ -571,7 +639,7 @@ void wm_render(void) {
     // 1. Sfondo del Desktop personalizzabile
     gfx_draw_background(current_bg_type);
 
-    // 2. Icone del Desktop (dinamiche e spostabili)
+    // 2. Icone del Desktop (disposte a griglia ordinata senza sovrapposizioni)
     for (int i = 0; i < num_desktop_icons; i++) {
         int32_t ix = desktop_icons[i].x;
         int32_t iy = desktop_icons[i].y;
@@ -594,21 +662,47 @@ void wm_render(void) {
         else if (desktop_icons[i].type == 8) gfx_draw_icon_32(ix, iy, ICON_MAINTENANCE);
         else if (desktop_icons[i].type == 9) gfx_draw_icon_32(ix, iy, ICON_NET);
 
-        // Calcola larghezza e posizione centrata dell'etichetta
-        int32_t lw = (int32_t)strlen(desktop_icons[i].label) * 8;
-        int32_t lx = ix + 16 - (lw / 2);
-        if (lx < 2) lx = 2;
-        if (lx + lw > (int32_t)sw - 2) lx = (int32_t)sw - 2 - lw;
+        // Formatta etichetta su 1 o 2 righe centrate all'interno della colonna
+        char l1[16], l2[16];
+        wm_split_icon_label(desktop_icons[i].label, l1, l2);
+
+        int32_t cx = ix + 16;
+        int32_t lw1 = (int32_t)strlen(l1) * 8;
+        int32_t lx1 = cx - (lw1 / 2);
+        if (lx1 < 2) lx1 = 2;
+        if (lx1 + lw1 > (int32_t)sw - 2) lx1 = (int32_t)sw - 2 - lw1;
+
+        bool has_line2 = (l2[0] != '\0');
+        int32_t lw2 = has_line2 ? ((int32_t)strlen(l2) * 8) : 0;
+        int32_t lx2 = has_line2 ? (cx - (lw2 / 2)) : 0;
+        if (lx2 < 2) lx2 = 2;
+        if (has_line2 && lx2 + lw2 > (int32_t)sw - 2) lx2 = (int32_t)sw - 2 - lw2;
 
         bool is_selected = (i == selected_icon_idx || i == dragging_icon_idx);
-        if (is_selected) {
-            // Riquadro di selezione blu Windows 2000 con testo bianco
-            gfx_fill_rect(lx - 4, iy + 35, lw + 8, 17, 0x0A246A);
-            gfx_draw_string(lx, iy + 36, desktop_icons[i].label, 0xFFFFFF, 0, true);
+
+        if (!has_line2) {
+            int32_t text_y = iy + 36;
+            if (is_selected) {
+                gfx_fill_rect(lx1 - 3, text_y - 1, lw1 + 6, 16, 0x0A246A);
+                gfx_draw_string(lx1, text_y, l1, 0xFFFFFF, 0, true);
+            } else {
+                gfx_draw_string(lx1 + 1, text_y + 1, l1, 0x000000, 0, true);
+                gfx_draw_string(lx1, text_y, l1, 0xFFFFFF, 0, true);
+            }
         } else {
-            // Testo bianco con ombra nera per leggibilità perfetta su ogni sfondo
-            gfx_draw_string(lx + 1, iy + 37, desktop_icons[i].label, 0x000000, 0, true);
-            gfx_draw_string(lx, iy + 36, desktop_icons[i].label, 0xFFFFFF, 0, true);
+            int32_t y1 = iy + 35;
+            int32_t y2 = iy + 49;
+            if (is_selected) {
+                gfx_fill_rect(lx1 - 3, y1 - 1, lw1 + 6, 14, 0x0A246A);
+                gfx_draw_string(lx1, y1, l1, 0xFFFFFF, 0, true);
+                gfx_fill_rect(lx2 - 3, y2 - 1, lw2 + 6, 14, 0x0A246A);
+                gfx_draw_string(lx2, y2, l2, 0xFFFFFF, 0, true);
+            } else {
+                gfx_draw_string(lx1 + 1, y1 + 1, l1, 0x000000, 0, true);
+                gfx_draw_string(lx1, y1, l1, 0xFFFFFF, 0, true);
+                gfx_draw_string(lx2 + 1, y2 + 1, l2, 0x000000, 0, true);
+                gfx_draw_string(lx2, y2, l2, 0xFFFFFF, 0, true);
+            }
         }
     }
 
@@ -855,10 +949,16 @@ void wm_update(mouse_state_t* mouse, char key) {
             ctx_x = mouse->x;
             ctx_y = mouse->y;
             if (ctx_x + 160 > (int32_t)sw) ctx_x = sw - 165;
-            if (ctx_y + 80 > ty) ctx_y = ty - 85;
+            if (ctx_y + 102 > ty) ctx_y = ty - 105;
             ctx_submenu_open = false;
             start_menu_open = false;
 
+            prev_mouse_left = mouse->left_button;
+            prev_mouse_right = mouse->right_button;
+            return;
+        } else if (!on_win && mouse->y >= ty) {
+            // Clic destro sulla barra delle applicazioni -> Avvia Gestione attivita' (Task Manager)
+            app_taskmgr_launch();
             prev_mouse_left = mouse->left_button;
             prev_mouse_right = mouse->right_button;
             return;
@@ -907,22 +1007,29 @@ void wm_update(mouse_state_t* mouse, char key) {
                 return;
             }
 
-            // Click su voce del menu contestuale principale
+            // Click su voce del menu contestuale principale (altezza 98px)
             if (mouse->x >= ctx_x && mouse->x <= ctx_x + 160 &&
-                mouse->y >= ctx_y && mouse->y <= ctx_y + 78) {
+                mouse->y >= ctx_y && mouse->y <= ctx_y + 98) {
                 if (mouse->y >= ctx_y + 3 && mouse->y < ctx_y + 25) {
                     ctx_submenu_open = !ctx_submenu_open;
                     prev_mouse_left = mouse->left_button;
                     prev_mouse_right = mouse->right_button;
                     return;
-                } else if (mouse->y >= ctx_y + 29 && mouse->y < ctx_y + 51) {
+                } else if (mouse->y >= ctx_y + 28 && mouse->y < ctx_y + 49) {
+                    wm_rearrange_desktop_icons();
+                    ctx_menu_open = false;
+                    ctx_submenu_open = false;
+                    prev_mouse_left = mouse->left_button;
+                    prev_mouse_right = mouse->right_button;
+                    return;
+                } else if (mouse->y >= ctx_y + 49 && mouse->y < ctx_y + 71) {
                     app_display_props_launch();
                     ctx_menu_open = false;
                     ctx_submenu_open = false;
                     prev_mouse_left = mouse->left_button;
                     prev_mouse_right = mouse->right_button;
                     return;
-                } else if (mouse->y >= ctx_y + 51 && mouse->y <= ctx_y + 75) {
+                } else if (mouse->y >= ctx_y + 71 && mouse->y <= ctx_y + 96) {
                     app_about_launch();
                     ctx_menu_open = false;
                     ctx_submenu_open = false;
@@ -1105,6 +1212,9 @@ void wm_on_resolution_changed(uint32_t old_w, uint32_t old_h, uint32_t new_w, ui
     start_menu_open = false;
     ctx_menu_open = false;
     ctx_submenu_open = false;
+
+    // Riorganizza e adatta automaticamente le icone del desktop alla nuova risoluzione
+    wm_rearrange_desktop_icons();
 
     // Ricalibra posizione e dimensioni delle finestre
     for (int i = 0; i < MAX_WINDOWS; i++) {

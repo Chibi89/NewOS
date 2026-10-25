@@ -1,0 +1,20 @@
+================================================================================
+                    NEWOS V1 - MEDIA PLAYER (PLAYER.EXE)
+================================================================================
+
+Descrizione:
+Riproduttore Multimediale nativo a 64-bit per NewOS V1. Scorporato dal kernel core
+per garantire modularita', isolamento del codice multimediale e alleggerimento
+del budget binario di kernel.bin.
+
+Caratteristiche:
+- Riproduzione Audio (formati .WAV, .MP3, .FLAC) tramite codec nativi e AC97
+- Riproduzione Video (formati .AV1, .AVI, .MP4) con rendering a 32-bit
+- Visualizzatore dello spettro sonoro a 14 barre animate in tempo reale
+- Gestione playlist dinamica fino a 8 tracce contemporanee
+- Controlli di trasporto: Play, Pausa, Stop, Traccia Precedente, Traccia Successiva
+- Slider interattivo di avanzamento temporale e minutaggio traccia
+- File di configurazione: C:\NewOS\SystemProgram\PLAYER.INI
+
+(C) Newspoint Software - NewSoft Media Subsystem - NewOS V1 (64-bit)
+================================================================================

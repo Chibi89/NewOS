@@ -491,6 +491,10 @@ gdt_start:
     dq 0x00209A0000000000
     ; 0x20: 64-bit Data Segment (Read/Write)
     dq 0x0000920000000000
+    ; 0x28: 64-bit User Data Segment (DPL=3, Present=1, Writable=1)
+    dq 0x0000F20000000000
+    ; 0x30: 64-bit User Code Segment (DPL=3, Present=1, Exec/Read, L=1, D=0)
+    dq 0x0020FA0000000000
 gdt_end:
 
 gdt_descriptor:

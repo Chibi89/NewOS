@@ -30,5 +30,6 @@ typedef void (*isr_handler_t)(interrupt_frame_t* frame);
 void idt_init(void);
 void idt_set_gate(uint8_t num, uint64_t base, uint16_t sel, uint8_t flags);
 void register_interrupt_handler(uint8_t n, isr_handler_t handler);
+uint64_t isr_handler_main(interrupt_frame_t* frame);
 
 #endif // ARCH_IDT_H

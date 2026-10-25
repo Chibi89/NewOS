@@ -51,6 +51,32 @@ function syncSources() {
     // 2b. Modulo WebBrowser
     copyFolderRecursiveSync(path.join(ROOT, 'WebBrowser'), path.join(SOURCES_DIR, 'WebBrowser'));
 
+    // 2c. Modulo Esplora Risorse (explorer)
+    copyFolderRecursiveSync(path.join(ROOT, 'explorer'), path.join(SOURCES_DIR, 'explorer'));
+    const oldSourcesExp = path.join(SOURCES_DIR, 'kernel', 'apps', 'explorer.c');
+    if (fs.existsSync(oldSourcesExp)) { try { fs.unlinkSync(oldSourcesExp); } catch (e) {} }
+
+    // 2d. Modulo OOBE (Out-of-Box Experience)
+    copyFolderRecursiveSync(path.join(ROOT, 'oobe'), path.join(SOURCES_DIR, 'oobe'));
+    const oldSourcesOobe = path.join(SOURCES_DIR, 'kernel', 'apps', 'oobe.c');
+    if (fs.existsSync(oldSourcesOobe)) { try { fs.unlinkSync(oldSourcesOobe); } catch (e) {} }
+
+    // 2e. Sottosistemi scorporati dal Kernel Core (Applicazioni e Applet)
+    const unbundledModules = ['notepad', 'calculator', 'player', 'rules_viewer', 'whatsnew', 'autoplay', 'taskmgr', 'control_panel'];
+    for (const mod of unbundledModules) {
+        copyFolderRecursiveSync(path.join(ROOT, mod), path.join(SOURCES_DIR, mod));
+    }
+    // Rimozione vecchi sorgenti C da sources/kernel/apps
+    const oldAppsToRemove = [
+        'notepad.c', 'calculator.c', 'about.c', 'display.c', 'sound_props.c',
+        'power_props.c', 'devmgmt.c', 'taskmgr.c', 'autoplay.c', 'player.c',
+        'rules_viewer.c', 'whatsnew.c'
+    ];
+    for (const oldApp of oldAppsToRemove) {
+        const oldP = path.join(SOURCES_DIR, 'kernel', 'apps', oldApp);
+        if (fs.existsSync(oldP)) { try { fs.unlinkSync(oldP); } catch (e) {} }
+    }
+
     // 3. Risorse grafiche e audio
     copyFolderRecursiveSync(path.join(ROOT, 'resources'), path.join(SOURCES_DIR, 'resources'));
 

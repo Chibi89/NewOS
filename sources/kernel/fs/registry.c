@@ -67,18 +67,38 @@ static void build_default_tree(void) {
     g_keys_count = 0;
     g_root_count = 0;
 
-    // 1. HKEY_CLASSES_ROOT
+    // 1. HKEY_CLASSES_ROOT (Associazioni estensioni file e azioni di sistema)
     reg_key_t* hkcr = alloc_key("HKEY_CLASSES_ROOT", "HKEY_CLASSES_ROOT", REG_RISK_MEDIUM, NULL);
     hkcr->is_root = true;
     g_root_keys[g_root_count++] = hkcr;
-    add_value_sz(hkcr, ".TXT", "txtfile (NOTEPAD.EXE)");
-    add_value_sz(hkcr, ".BMP", "bmpfile (VIEWER.EXE)");
-    add_value_sz(hkcr, ".JPG", "jpegfile (VIEWER.EXE)");
-    add_value_sz(hkcr, ".WAV", "wavfile (SNDPLAYER.EXE)");
-    add_value_sz(hkcr, ".EXE", "exefile (Applicazione)");
-    add_value_sz(hkcr, ".INI", "inifile (Configurazione)");
-    add_value_sz(hkcr, ".SYS", "sysfile (Driver di Sistema)");
-    add_value_sz(hkcr, ".DAT", "datfile (Database Registro)");
+    // Audio
+    add_value_sz(hkcr, ".WAV", "Audio Wave (WAV)|Riproduci audio|PLAYER.EXE");
+    add_value_sz(hkcr, ".MP3", "Audio MP3|Riproduci audio|PLAYER.EXE");
+    add_value_sz(hkcr, ".FLAC", "Audio FLAC|Riproduci audio|PLAYER.EXE");
+    add_value_sz(hkcr, ".ALAC", "Audio ALAC|Riproduci audio|PLAYER.EXE");
+    add_value_sz(hkcr, ".MID", "Musica MIDI|Riproduci audio|PLAYER.EXE");
+    // Video
+    add_value_sz(hkcr, ".AVI", "Video AVI|Riproduci video|PLAYER.EXE");
+    add_value_sz(hkcr, ".MP4", "Video MP4|Riproduci video|PLAYER.EXE");
+    add_value_sz(hkcr, ".AV1", "Video AV1|Riproduci video|PLAYER.EXE");
+    add_value_sz(hkcr, ".WEBM", "Filmato WebM|Riproduci video|PLAYER.EXE");
+    // Immagini
+    add_value_sz(hkcr, ".BMP", "Bitmap Windows|Imposta come sfondo|WALLPAPER");
+    add_value_sz(hkcr, ".JPG", "Immagine JPEG|Imposta come sfondo|WALLPAPER");
+    add_value_sz(hkcr, ".PNG", "Immagine PNG|Imposta come sfondo|WALLPAPER");
+    add_value_sz(hkcr, ".ICO", "Icona sistema|Imposta come sfondo|WALLPAPER");
+    // Configurazione
+    add_value_sz(hkcr, ".INI", "File impostazioni|Modifica configurazione|NOTEPAD.EXE");
+    add_value_sz(hkcr, ".INF", "File installazione|Modifica configurazione|NOTEPAD.EXE");
+    add_value_sz(hkcr, ".CFG", "Configurazione|Modifica configurazione|NOTEPAD.EXE");
+    // Documenti ed Eseguibili
+    add_value_sz(hkcr, ".TXT", "Documento di testo|Apri|NOTEPAD.EXE");
+    add_value_sz(hkcr, ".NOR", "Regola Ufficiale NewOS|Apri regola|RULES.EXE");
+    add_value_sz(hkcr, ".HTM", "Documento HTML|Apri nel browser|WEBBROWSER.EXE");
+    add_value_sz(hkcr, ".EXE", "Applicazione|Esegui applicazione|EXEC");
+    add_value_sz(hkcr, ".CPL", "Applet Pannello Controllo|Apri applet|CPL");
+    add_value_sz(hkcr, ".SYS", "Driver di periferica|Gestione periferiche|DEVMGMT.EXE");
+    add_value_sz(hkcr, ".DAT", "Database Registro|Editor del Registro|REGEDIT.EXE");
 
     // 2. HKEY_CURRENT_USER
     reg_key_t* hkcu = alloc_key("HKEY_CURRENT_USER", "HKEY_CURRENT_USER", REG_RISK_LOW, NULL);

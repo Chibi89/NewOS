@@ -1,0 +1,17 @@
+================================================================================
+                  NEWOS V1 - CALCULATOR (CALCOLATRICE)
+================================================================================
+
+Descrizione:
+Calcolatrice aritmetica standard a 64-bit per NewOS V1. Scorporata dal kernel core
+per garantire modularita', isolamento del codice applicativo e conformita'
+al limite di budget di kernel.bin.
+
+Caratteristiche:
+- Operazioni di base (+, -, *, /) con numeri interi a 64-bit (int64_t)
+- Display LCD stile classico con cifre ben visibili
+- Griglia pulsanti 4x4 con bevel tridimensionale Win2000
+- File di configurazione: C:\NewOS\SystemProgram\CALCULATOR.INI
+
+(C) Newspoint Software - NewSoft - NewOS V1 (64-bit)
+================================================================================

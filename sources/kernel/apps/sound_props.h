@@ -1,6 +1,10 @@
-#ifndef APPS_SOUND_PROPS_H
-#define APPS_SOUND_PROPS_H
+#ifndef KERNEL_APPS_SOUND_PROPS_H
+#define KERNEL_APPS_SOUND_PROPS_H
 
-void app_sound_props_launch(void);
+/**
+ * kernel/apps/sound_props.h
+ * Bridge di retrocompatibilita' verso l'applet Sound Props del Pannello di Controllo.
+ */
+#include <control_panel.h>
 
-#endif // APPS_SOUND_PROPS_H
+#endif // KERNEL_APPS_SOUND_PROPS_H

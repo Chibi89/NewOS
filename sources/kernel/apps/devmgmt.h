@@ -1,9 +1,10 @@
-#ifndef APPS_DEVMGMT_H
-#define APPS_DEVMGMT_H
+#ifndef KERNEL_APPS_DEVMGMT_H
+#define KERNEL_APPS_DEVMGMT_H
 
-#include <types.h>
+/**
+ * kernel/apps/devmgmt.h
+ * Bridge di retrocompatibilita' verso l'applet DevMgmt del Pannello di Controllo.
+ */
+#include <control_panel.h>
 
-// Lancia l'applet grafica Gestione Periferiche (DEVMGMT.CPL)
-void app_devmgmt_launch(void);
-
-#endif // APPS_DEVMGMT_H
+#endif // KERNEL_APPS_DEVMGMT_H

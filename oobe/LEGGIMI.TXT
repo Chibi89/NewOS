@@ -1,0 +1,34 @@
+================================================================================
+NEWOS V1 (64-BIT) - OUT-OF-BOX EXPERIENCE / OOBE (C:\oobe\)
+(C) Copyright Newspoint Software - NewSoft - NewOS V1
+================================================================================
+
+DESCRIZIONE:
+Questo modulo implementa la Procedura Guidata di Primo Avvio (OOBE.EXE / SETUP.EXE),
+il wizard interattivo eseguito a livello di Logon pre-desktop per l'inizializzazione
+e la calibrazione hardware del sistema operativo NewOS V1.
+Scorporato dal kernel monolitico per ottimizzare il budget di memoria di kernel.bin
+e preservare la massima modularità del sistema.
+
+FILE DEL COMPONENTE:
+- oobe.c           : Sorgente C con implementazione modale (pre-desktop) e finestra
+                     Window Manager, 6 passi guidati, diagnostica audio e rete
+- oobe.h           : Header pubblico con prototipi di esecuzione e verifica completamento
+- oobe.ini         : File di configurazione per stato avanzamento e impostazioni
+- LEGGIMI.TXT      : Questo file di documentazione architetturale
+
+PASSI DELLA PROCEDURA GUIDATA:
+- Passo 0: Schermata di Benvenuto e riepilogo verifiche hardware
+- Passo 1: Impostazione Display, Risoluzione Video (1024x768 @ 32bpp) e Pattern RGB
+- Passo 2: Verifica Codec Audio AC97 a 44.1 kHz con VU-meter dinamico e STARTUP.WAV
+- Passo 3: Controllo Connettività di Rete con priorità al server italiano 95.141.32.1
+- Passo 4: Creazione Account Utente, Password, Nome Computer e Selezione Tema
+- Passo 5: Riepilogo finale e transizione verso il Desktop attivo
+
+COLLEGAMENTI PRESERVATI:
+1. Boot & Logon (kernel.c)       -> oobe_run_modal(), oobe_is_completed()
+2. Post-Installazione BootSetup -> Esecuzione automatica al termine di SYSTEM.PAK
+3. Menu Contestuale Tasto DX    -> Voce "Esegui applicazione" per OOBE.EXE / SETUP.EXE
+4. Esplora Risorse (explorer)   -> Lancio app_oobe_launch() da griglia file
+5. File System (C:\NewOS\OOBE\) -> OOBE.INI con memorizzazione persistente Completed=1
+================================================================================

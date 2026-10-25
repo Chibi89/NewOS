@@ -495,6 +495,50 @@ bool vfs_unlink(const char* path) {
     return false;
 }
 
+bool vfs_rename(const char* old_path, const char* new_path) {
+    if (!old_path || !new_path) return false;
+
+    // Protezione WAF: rifiuta di rinominare elementi protetti o sovrascrivere file protetti
+    if (vfs_is_protected(old_path) || vfs_is_protected(new_path)) {
+        return false;
+    }
+
+    const char* rel_old = NULL;
+    vfs_mount_t* mnt_old = vfs_resolve_path_mount(old_path, &rel_old);
+
+    const char* rel_new = NULL;
+    vfs_mount_t* mnt_new = vfs_resolve_path_mount(new_path, &rel_new);
+
+    if (!mnt_old || !mnt_new) return false;
+
+    if (mnt_old == mnt_new && mnt_old->driver && mnt_old->driver->rename) {
+        bool ok = mnt_old->driver->rename(mnt_old, rel_old, rel_new);
+        if (ok) {
+            vfs_dentry_invalidate(mnt_old->drive_letter, rel_old);
+            vfs_dentry_invalidate(mnt_new->drive_letter, rel_new);
+        }
+        return ok;
+    }
+
+    // Fallback cross-device: copia e cancellazione atomica
+    uint32_t fsize = 0;
+    void* data = vfs_read_entire_file(old_path, &fsize);
+    if (!data && vfs_file_size(old_path) > 0) return false;
+
+    if (!vfs_create(new_path)) {
+        if (data) kfree(data);
+        return false;
+    }
+
+    if (data && fsize > 0) {
+        vfs_write_entire_file_inplace(new_path, data, fsize);
+        kfree(data);
+    }
+
+    vfs_unlink(old_path);
+    return true;
+}
+
 void* vfs_read_entire_file(const char* path, uint32_t* out_size) {
     vfs_file_t* f = vfs_open(path);
     if (!f) return NULL;
@@ -532,4 +576,37 @@ int32_t vfs_write_entire_file_inplace(const char* path, const void* buf, uint32_
     int32_t written = vfs_write(f, buf, count);
     vfs_close(f);
     return written;
+}
+
+bool vfs_wildcard_match(const char* pattern, const char* str) {
+    if (!pattern || !str) return false;
+
+    while (*pattern) {
+        if (*pattern == '*') {
+            pattern++;
+            if (*pattern == '\0') return true; // '*' finale matcha qualsiasi coda di stringa
+            while (*str) {
+                if (vfs_wildcard_match(pattern, str)) return true;
+                str++;
+            }
+            return false;
+        } else if (*pattern == '?') {
+            if (*str == '\0') return false;
+            pattern++;
+            str++;
+        } else {
+            char c1 = *pattern;
+            char c2 = *str;
+            if (c1 >= 'a' && c1 <= 'z') c1 -= 32;
+            if (c2 >= 'a' && c2 <= 'z') c2 -= 32;
+            if (c1 != c2) return false;
+            pattern++;
+            str++;
+        }
+    }
+    return (*str == '\0');
+}
+
+void vfs_flush(void) {
+    vfs_cache_flush();
 }

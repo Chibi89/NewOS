@@ -1,0 +1,22 @@
+================================================================================
+              NEWOS V1 - RULES VIEWER (VISUALIZZATORE REGOLE)
+================================================================================
+
+Descrizione:
+Visualizzatore Ufficiale delle Regole di Sistema NewOS (.NOR) a 64-bit.
+Scorporato dal kernel core in un sottosistema autonomo, garantisce la consultazione
+trasparente delle policy architetturali e di sicurezza dell'OS.
+
+Caratteristiche:
+- Decodifica dei file cifrati .NOR con validazione CRC32 e header NOSR
+- Visualizzazione gerarchica delle 5 regole fondamentali di sistema:
+  1. Gerarchia File System (C:\NewOS vs C:\ProgramFile)
+  2. Sicurezza del Registro (AES-256 e sola lettura pre-desktop)
+  3. Policy Installatori App (.EXE e .MSI su C:\ProgramFile)
+  4. Privilegi e Sessione Utente
+  5. Rete e Diagnostica Dispositivi
+- Protezione di accesso: visualizzazione vincolata alla sessione autenticata
+- File di configurazione: C:\NewOS\SystemProgram\RULES_VIEWER.INI
+
+(C) Newspoint Software - NewSoft Security Subsystem - NewOS V1 (64-bit)
+================================================================================

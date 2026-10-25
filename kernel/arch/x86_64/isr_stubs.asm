@@ -81,6 +81,9 @@ IRQ 13, 45
 IRQ 14, 46
 IRQ 15, 47
 
+; Syscall legacy / compatibilita' Linux/Unix: Interrupt 0x80 (128)
+ISR_NOERRCODE 128
+
 isr_common_stub:
     ; Salva tutti i registri general-purpose a 64 bit
     push rax
@@ -103,6 +106,7 @@ isr_common_stub:
     mov rdi, rsp
     cld
     call isr_handler_main
+    mov rsp, rax        ; Cambio stack pointer al frame del task selezionato dallo scheduler
 
     ; Ripristina i registri
     pop r15

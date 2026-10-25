@@ -1,0 +1,29 @@
+================================================================================
+NEWOS V1 (64-BIT) - ESPLORA RISORSE / FILE EXPLORER (C:\explorer\)
+(C) Copyright Newspoint Software - NewSoft - NewOS V1
+================================================================================
+
+DESCRIZIONE:
+Questo modulo implementa Esplora Risorse (EXPLORER.EXE), il gestore file,
+cartelle, dischi e ambiente di navigazione nativo di NewOS V1.
+Scorporato dal kernel core monolitico per snellire kernel.bin e garantire
+massima modularità e manutenibilità architetturale.
+
+FILE DEL COMPONENTE:
+- explorer.c       : Sorgente C con rendering Classic Win2000, navigazione VFS,
+                     menu a tendina, sidebar dinamica e gestione eventi
+- explorer.h       : Header con strutture dati, modalità e prototipi di apertura
+- explorer.ini     : Configurazione predefinita di visualizzazione e parametri
+- LEGGIMI.TXT      : Questo file di documentazione architetturale
+
+COLLEGAMENTI E INTEGRAZIONI PRESERVATI:
+1. Icona Desktop "Questo PC" -> app_explorer_open_this_pc()
+2. Icona Desktop "Cestino"   -> app_explorer_open_recycle_bin()
+3. Cartelle Utente e Desktop -> app_explorer_open_folder(nome_cartella)
+4. Menu Start "Risorse PC"   -> app_explorer_open_this_pc()
+5. Menu Start "Pannello Ctr" -> app_control_panel_open()
+6. Prompt Comandi (CMD.EXE)  -> explorer, explorer C:, explorer D:, ecc.
+7. AutoPlay & Dischi Ottici  -> Navigazione automatica su unita U: e D:
+8. Menu Contestuale Tasto DX -> Apertura integrata ed esecuzione EXPLORER.EXE
+9. Applicazioni collegate    -> WhatsNew, Media Player, Proprieta Schermo
+================================================================================

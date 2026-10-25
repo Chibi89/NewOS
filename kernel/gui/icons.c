@@ -3,6 +3,9 @@
 #include <drivers/ata.h>
 #include <mm/heap.h>
 
+#include <fs/vfs.h>
+#include <string.h>
+
 #define ICONS_DISK_LBA      1024
 #define ICONS_SECTOR_COUNT  294
 #define ICONS_TOTAL_BYTES   (ICONS_SECTOR_COUNT * 512)
@@ -10,21 +13,30 @@
 static uint8_t* icon_pkg_buf = NULL;
 static bool     icons_loaded = false;
 
-extern const uint8_t  embedded_icons_bin[];
-extern const uint32_t embedded_icons_size;
-
 void icons_init(void) {
     if (icons_loaded) return;
 
-    // 1. Priorità massima: se le icone native sono incorporate nel kernel (.rodata), usale subito
-    if (embedded_icons_bin[0] == 'M' && embedded_icons_bin[1] == 'I' &&
-        embedded_icons_bin[2] == 'C' && embedded_icons_bin[3] == 'O') {
-        icon_pkg_buf = (uint8_t*)embedded_icons_bin;
-        icons_loaded = true;
-        return;
+    // 1. Caricamento dinamico da VFS File System (C:\NewOS\Resources\Icons\ICONS.BIN)
+    uint32_t file_sz = 0;
+    void* vfs_data = vfs_read_entire_file("C:\\NewOS\\Resources\\Icons\\ICONS.BIN", &file_sz);
+    if (!vfs_data) {
+        vfs_data = vfs_read_entire_file("/NewOS/Resources/Icons/ICONS.BIN", &file_sz);
+    }
+    if (!vfs_data) {
+        vfs_data = vfs_read_entire_file("C:\\SYSTEM\\ICONS.BIN", &file_sz);
+    }
+    if (vfs_data && file_sz >= 2048) {
+        const uint8_t* p = (const uint8_t*)vfs_data;
+        if (p[0] == 'M' && p[1] == 'I' && p[2] == 'C' && p[3] == 'O') {
+            icon_pkg_buf = (uint8_t*)vfs_data;
+            icons_loaded = true;
+            return;
+        } else {
+            kfree(vfs_data);
+        }
     }
 
-    // 2. Fallback su lettura da disco ATA se non incorporate
+    // 2. Fallback su lettura a blocchi diretti dal disco ATA/AHCI (LBA 1024)
     if (!icon_pkg_buf) {
         icon_pkg_buf = (uint8_t*)kmalloc(ICONS_TOTAL_BYTES);
     }
@@ -35,6 +47,7 @@ void icons_init(void) {
             if (icon_pkg_buf[0] == 'M' && icon_pkg_buf[1] == 'I' &&
                 icon_pkg_buf[2] == 'C' && icon_pkg_buf[3] == 'O') {
                 icons_loaded = true;
+                return;
             }
         }
     }

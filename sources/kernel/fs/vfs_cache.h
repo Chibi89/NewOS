@@ -26,6 +26,8 @@ typedef struct {
     uint32_t age;
 } vfs_dentry_cache_entry_t;
 
+#define VFS_PREFETCH_BURST     8
+
 // Inizializza il sottosistema di cache VFS
 void vfs_cache_init(void);
 
@@ -33,6 +35,11 @@ void vfs_cache_init(void);
 bool vfs_cache_read_sector(uint32_t dev_id, uint64_t lba, void* buffer);
 bool vfs_cache_write_sector(uint32_t dev_id, uint64_t lba, const void* buffer);
 void vfs_cache_flush(void);
+void vfs_cache_set_write_back(bool enable);
+bool vfs_cache_is_write_back(void);
+
+// Prefetching burst predittivo di blocchi di settori consecutivi in DMA
+void vfs_cache_prefetch(uint32_t dev_id, uint64_t lba, uint32_t count);
 
 // Ricerca e inserimento nella Dentry Path Cache
 bool vfs_dentry_lookup(char drive_letter, const char* clean_path, uint32_t* out_cluster, uint32_t* out_size, uint16_t* out_attr, bool* out_is_dir);

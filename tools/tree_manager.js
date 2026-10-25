@@ -316,10 +316,16 @@ function organizeBuildBin(rootDir, binDir) {
         }
     }
 
-    // Icone
+    // Icone di sistema (ICONS.BIN)
     const iconSrc = path.join(rootDir, 'resources', 'icons.bin');
     if (fs.existsSync(iconSrc)) {
-        fs.copyFileSync(iconSrc, path.join(binDir, 'NewOS', 'Resources', 'Icons', 'ICONS.BIN'));
+        const dstIcons = path.join(binDir, 'NewOS', 'Resources', 'Icons');
+        if (!fs.existsSync(dstIcons)) fs.mkdirSync(dstIcons, { recursive: true });
+        fs.copyFileSync(iconSrc, path.join(dstIcons, 'ICONS.BIN'));
+
+        const dstSys = path.join(binDir, 'SYSTEM');
+        if (!fs.existsSync(dstSys)) fs.mkdirSync(dstSys, { recursive: true });
+        fs.copyFileSync(iconSrc, path.join(dstSys, 'ICONS.BIN'));
     }
 
     // Risorse Web per il Web Browser (C:\NewOS\Resources\Web\)
@@ -433,9 +439,25 @@ WindowText=0xE2E8F0
 
     // 8. Popola SystemProgram (C:\NewOS\SystemProgram\)
     const sysProgDir = path.join(binDir, 'NewOS', 'SystemProgram');
-    for (const prog of ['PLAYER.EXE', 'REGEDIT.EXE', 'TASKMGR.EXE', 'EXPLORER.EXE', 'CMD.EXE', 'CALC.EXE', 'NOTEPAD.EXE', 'RULES.EXE', 'WEBBROWSER.EXE', 'DISKMGMT.EXE', 'CHKDSK.EXE', 'EVENTVWR.EXE',
+    for (const prog of ['PLAYER.EXE', 'REGEDIT.EXE', 'TASKMGR.EXE', 'EXPLORER.EXE', 'CMD.EXE', 'CALC.EXE', 'NOTEPAD.EXE', 'RULES.EXE', 'WEBBROWSER.EXE', 'OOBE.EXE', 'SETUP.EXE', 'DISKMGMT.EXE', 'CHKDSK.EXE', 'EVENTVWR.EXE',
                        'DISPLAY.CPL', 'POWER.CPL', 'NETWORK.CPL', 'DEVMGMT.CPL', 'SOUND.CPL', 'DATEANDTIME.CPL', 'PROGRAMS.CPL', 'ACCESSIBILITY.CPL', 'REGEDIT.CPL']) {
         fs.writeFileSync(path.join(sysProgDir, prog), peStub);
+    }
+    const appInis = [
+        { src: path.join(rootDir, 'explorer', 'explorer.ini'), dst: 'EXPLORER.INI' },
+        { src: path.join(rootDir, 'notepad', 'notepad.ini'), dst: 'NOTEPAD.INI' },
+        { src: path.join(rootDir, 'calculator', 'calculator.ini'), dst: 'CALCULATOR.INI' },
+        { src: path.join(rootDir, 'player', 'player.ini'), dst: 'PLAYER.INI' },
+        { src: path.join(rootDir, 'rules_viewer', 'rules_viewer.ini'), dst: 'RULES_VIEWER.INI' },
+        { src: path.join(rootDir, 'whatsnew', 'whatsnew.ini'), dst: 'WHATSNEW.INI' },
+        { src: path.join(rootDir, 'autoplay', 'autoplay.ini'), dst: 'AUTOPLAY.INI' },
+        { src: path.join(rootDir, 'taskmgr', 'taskmgr.ini'), dst: 'TASKMGR.INI' },
+        { src: path.join(rootDir, 'control_panel', 'control_panel.ini'), dst: 'CONTROL_PANEL.INI' }
+    ];
+    for (const ini of appInis) {
+        if (fs.existsSync(ini.src)) {
+            fs.copyFileSync(ini.src, path.join(sysProgDir, ini.dst));
+        }
     }
     // Copia i moduli protetti compilati (.MOD e .INI)
     const newosBootDir = path.join(binDir, 'NewOS', 'Boot');
@@ -462,9 +484,16 @@ WindowText=0xE2E8F0
 
     // 9. Popola OOBE (C:\NewOS\OOBE\)
     const oobeDir = path.join(binDir, 'NewOS', 'OOBE');
-    const oobeIniInit = "[OOBE]\nCompleted=0\nSetupStage=Welcome\nLanguage=IT_IT\nDefaultUser=Morgan\nAllowSkip=1\n";
-    fs.writeFileSync(path.join(oobeDir, 'OOBE.INI'), oobeIniInit.padEnd(256, ' ') + "\n");
+    if (!fs.existsSync(oobeDir)) fs.mkdirSync(oobeDir, { recursive: true });
+    const oobeIniSrc = path.join(rootDir, 'oobe', 'oobe.ini');
+    if (fs.existsSync(oobeIniSrc)) {
+        fs.copyFileSync(oobeIniSrc, path.join(oobeDir, 'OOBE.INI'));
+    } else {
+        const oobeIniInit = "[OOBE]\nCompleted=0\nSetupStage=Welcome\nLanguage=IT_IT\nDefaultUser=Morgan\nAllowSkip=1\n";
+        fs.writeFileSync(path.join(oobeDir, 'OOBE.INI'), oobeIniInit.padEnd(256, ' ') + "\n");
+    }
     fs.writeFileSync(path.join(oobeDir, 'SETUP.EXE'), peStub);
+    fs.writeFileSync(path.join(oobeDir, 'OOBE.EXE'), peStub);
     fs.writeFileSync(path.join(oobeDir, 'WELCOME.TXT'), "Esperienza iniziale di benvenuto NewOS V1 (OOBE)\n");
 
     // 9b. Database del Registro di Sistema (C:\NewOS\Registry\REGISTRY.DAT e REGISTRY.LOG)
@@ -571,18 +600,31 @@ HomePage=REG_SZ:about:home
 
 [HKEY_CLASSES_ROOT]
 (Predefinito)=REG_SZ:(valore non impostato)
-.TXT=REG_SZ:txtfile (NOTEPAD.EXE)
-.BMP=REG_SZ:bmpfile (VIEWER.EXE)
-.JPG=REG_SZ:jpegfile (VIEWER.EXE)
-.WAV=REG_SZ:wavfile (SNDPLAYER.EXE)
-.EXE=REG_SZ:exefile (Applicazione)
-.NOR=REG_SZ:norfile (RULES.EXE)
-.INI=REG_SZ:inifile (Configurazione)
-.SYS=REG_SZ:sysfile (Driver di Sistema)
-.DAT=REG_SZ:datfile (Database Registro)
-.HTM=REG_SZ:htmlfile (WEBBROWSER.EXE)
-.HTML=REG_SZ:htmlfile (WEBBROWSER.EXE)
-.URL=REG_SZ:inetsave (WEBBROWSER.EXE)
+.WAV=REG_SZ:Audio Wave (WAV)|Riproduci audio|PLAYER.EXE
+.MP3=REG_SZ:Audio MP3|Riproduci audio|PLAYER.EXE
+.FLAC=REG_SZ:Audio FLAC|Riproduci audio|PLAYER.EXE
+.ALAC=REG_SZ:Audio ALAC|Riproduci audio|PLAYER.EXE
+.MID=REG_SZ:Musica MIDI|Riproduci audio|PLAYER.EXE
+.AVI=REG_SZ:Video AVI|Riproduci video|PLAYER.EXE
+.MP4=REG_SZ:Video MP4|Riproduci video|PLAYER.EXE
+.AV1=REG_SZ:Video AV1|Riproduci video|PLAYER.EXE
+.WEBM=REG_SZ:Filmato WebM|Riproduci video|PLAYER.EXE
+.BMP=REG_SZ:Bitmap Windows|Imposta come sfondo|WALLPAPER
+.JPG=REG_SZ:Immagine JPEG|Imposta come sfondo|WALLPAPER
+.PNG=REG_SZ:Immagine PNG|Imposta come sfondo|WALLPAPER
+.ICO=REG_SZ:Icona sistema|Imposta come sfondo|WALLPAPER
+.INI=REG_SZ:File impostazioni|Modifica configurazione|NOTEPAD.EXE
+.INF=REG_SZ:File installazione|Modifica configurazione|NOTEPAD.EXE
+.CFG=REG_SZ:Configurazione|Modifica configurazione|NOTEPAD.EXE
+.TXT=REG_SZ:Documento di testo|Apri|NOTEPAD.EXE
+.NOR=REG_SZ:Regola Ufficiale NewOS|Apri regola|RULES.EXE
+.HTM=REG_SZ:Documento HTML|Apri nel browser|WEBBROWSER.EXE
+.HTML=REG_SZ:Documento HTML|Apri nel browser|WEBBROWSER.EXE
+.URL=REG_SZ:Collegamento Internet|Apri nel browser|WEBBROWSER.EXE
+.EXE=REG_SZ:Applicazione|Esegui applicazione|EXEC
+.CPL=REG_SZ:Applet Pannello Controllo|Apri applet|CPL
+.SYS=REG_SZ:Driver di periferica|Gestione periferiche|DEVMGMT.EXE
+.DAT=REG_SZ:Database Registro|Editor del Registro|REGEDIT.EXE
 `;
 
     const encryptedRegistryDat = encryptRegistryEnvelope(registryDatContent);

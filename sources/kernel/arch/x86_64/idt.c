@@ -1,6 +1,7 @@
 #include <arch/x86_64/idt.h>
 #include <arch/x86_64/pic.h>
 #include <arch/x86_64/io.h>
+#include <arch/x86_64/sched.h>
 #include <string.h>
 
 static idt_entry_t idt_entries[256];
@@ -72,7 +73,7 @@ void register_interrupt_handler(uint8_t n, isr_handler_t handler) {
     interrupt_handlers[n] = handler;
 }
 
-void isr_handler_main(interrupt_frame_t* frame) {
+uint64_t isr_handler_main(interrupt_frame_t* frame) {
     if (interrupt_handlers[frame->int_no] != NULL) {
         interrupt_handlers[frame->int_no](frame);
     }
@@ -81,6 +82,15 @@ void isr_handler_main(interrupt_frame_t* frame) {
     if (frame->int_no >= 32 && frame->int_no < 48) {
         pic_send_eoi((uint8_t)(frame->int_no - 32));
     }
+
+    // Preemptive Multitasking: se l'interrupt è il Timer (IRQ 0 = int 32)
+    // e lo scheduler è attivo, effettua il cambio di contesto
+    if (frame->int_no == 32 && sched_is_active()) {
+        interrupt_frame_t* next_frame = sched_schedule(frame);
+        return (uint64_t)next_frame;
+    }
+
+    return (uint64_t)frame;
 }
 
 void idt_init(void) {

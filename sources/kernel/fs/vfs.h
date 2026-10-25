@@ -75,6 +75,9 @@ bool vfs_mkdir(const char* path);
 // Rimuove un file o cartella
 bool vfs_unlink(const char* path);
 
+// Rinomina o sposta un file o cartella
+bool vfs_rename(const char* old_path, const char* new_path);
+
 // Utility: alloca memoria nell'heap e carica l'intero contenuto del file
 void* vfs_read_entire_file(const char* path, uint32_t* out_size);
 
@@ -84,5 +87,11 @@ int32_t vfs_write_entire_file_inplace(const char* path, const void* buf, uint32_
 // Controllo di protezione gerarchica del filesystem (WAF / Access Control)
 bool vfs_is_protected(const char* path);
 bool vfs_is_program_file_path(const char* path);
+
+// Corrispondenza pattern con caratteri jolly (* e ?)
+bool vfs_wildcard_match(const char* pattern, const char* str);
+
+// Sincronizza tutti i buffer sporchi della cache del filesystem su supporto fisico
+void vfs_flush(void);
 
 #endif // FS_VFS_H

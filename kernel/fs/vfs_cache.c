@@ -4,6 +4,7 @@
 
 static vfs_sector_cache_entry_t g_sector_cache[VFS_CACHE_SECTORS_MAX];
 static uint32_t                 g_sector_clock = 1;
+static bool                     g_write_back_mode = true;
 
 static vfs_dentry_cache_entry_t g_dentry_cache[VFS_DENTRY_CACHE_MAX];
 static uint32_t                 g_dentry_clock = 1;
@@ -11,26 +12,106 @@ static uint32_t                 g_dentry_clock = 1;
 void vfs_cache_init(void) {
     memset(g_sector_cache, 0, sizeof(g_sector_cache));
     g_sector_clock = 1;
+    g_write_back_mode = true;
 
     memset(g_dentry_cache, 0, sizeof(g_dentry_cache));
     g_dentry_clock = 1;
 }
 
+void vfs_cache_set_write_back(bool enable) {
+    if (!enable && g_write_back_mode) {
+        vfs_cache_flush();
+    }
+    g_write_back_mode = enable;
+}
+
+bool vfs_cache_is_write_back(void) {
+    return g_write_back_mode;
+}
+
+static uint64_t g_last_read_lba = 0;
+static uint32_t g_sequential_reads = 0;
+
+static int vfs_cache_find_slot_lru(void) {
+    int lru_idx = 0;
+    uint32_t oldest_age = 0xFFFFFFFF;
+    for (int i = 0; i < VFS_CACHE_SECTORS_MAX; i++) {
+        if (!g_sector_cache[i].valid) return i;
+        if (g_sector_cache[i].age < oldest_age) {
+            oldest_age = g_sector_cache[i].age;
+            lru_idx = i;
+        }
+    }
+    return lru_idx;
+}
+
+static void vfs_cache_insert_entry(uint32_t dev_id, uint64_t lba, const void* data) {
+    for (int i = 0; i < VFS_CACHE_SECTORS_MAX; i++) {
+        if (g_sector_cache[i].valid && g_sector_cache[i].dev_id == dev_id && g_sector_cache[i].lba == lba) {
+            g_sector_cache[i].age = ++g_sector_clock;
+            memcpy(g_sector_cache[i].data, data, 512);
+            return;
+        }
+    }
+    int slot = vfs_cache_find_slot_lru();
+
+    // Se lo slot da sovrascrivere contiene dati dirty, scarichiamolo fisicamente
+    if (g_sector_cache[slot].valid && g_sector_cache[slot].dirty) {
+        const ata_device_t* dev = (g_sector_cache[slot].dev_id == 0) ? ata_get_primary_master() : ata_get_device((int)g_sector_cache[slot].dev_id);
+        if (dev) {
+            ata_write_sectors(g_sector_cache[slot].lba, 1, g_sector_cache[slot].data);
+        }
+        g_sector_cache[slot].dirty = false;
+    }
+
+    g_sector_cache[slot].dev_id = dev_id;
+    g_sector_cache[slot].lba = lba;
+    g_sector_cache[slot].valid = true;
+    g_sector_cache[slot].dirty = false;
+    g_sector_cache[slot].age = ++g_sector_clock;
+    memcpy(g_sector_cache[slot].data, data, 512);
+}
+
+void vfs_cache_prefetch(uint32_t dev_id, uint64_t lba, uint32_t count) {
+    if (count == 0 || count > VFS_PREFETCH_BURST) count = VFS_PREFETCH_BURST;
+    const ata_device_t* dev = (dev_id == 0) ? ata_get_primary_master() : ata_get_device((int)dev_id);
+    if (!dev) return;
+
+    static uint8_t burst_buf[VFS_PREFETCH_BURST * 512] __attribute__((aligned(16)));
+    if (ata_read_device_sectors(dev, lba, count, burst_buf)) {
+        for (uint32_t s = 0; s < count; s++) {
+            vfs_cache_insert_entry(dev_id, lba + s, burst_buf + s * 512);
+        }
+    }
+}
+
 bool vfs_cache_read_sector(uint32_t dev_id, uint64_t lba, void* buffer) {
     if (!buffer) return false;
 
-    // 1. Cerca nella cache
+    // 1. Cerca nella cache LRU
     for (int i = 0; i < VFS_CACHE_SECTORS_MAX; i++) {
         if (g_sector_cache[i].valid &&
             g_sector_cache[i].dev_id == dev_id &&
             g_sector_cache[i].lba == lba) {
             g_sector_cache[i].age = ++g_sector_clock;
             memcpy(buffer, g_sector_cache[i].data, 512);
+
+            // Rilevamento stream sequenziale su cache hit
+            if (lba == g_last_read_lba + 1) {
+                g_sequential_reads++;
+                if (g_sequential_reads >= 2) {
+                    vfs_cache_prefetch(dev_id, lba + 1, VFS_PREFETCH_BURST);
+                    g_sequential_reads = 0;
+                }
+            } else {
+                g_sequential_reads = 0;
+            }
+            g_last_read_lba = lba;
             return true;
         }
     }
 
-    // 2. Cache miss: leggi fisicamente tramite driver ATA
+    // 2. Cache miss: leggi fisicamente tramite driver ATA/AHCI
     const ata_device_t* dev = (dev_id == 0) ? ata_get_primary_master() : ata_get_device((int)dev_id);
     if (!dev) return false;
 
@@ -40,29 +121,19 @@ bool vfs_cache_read_sector(uint32_t dev_id, uint64_t lba, void* buffer) {
     }
 
     memcpy(buffer, temp, 512);
+    vfs_cache_insert_entry(dev_id, lba, temp);
 
-    // 3. Trova slot LRU per inserimento
-    int lru_idx = 0;
-    uint32_t oldest_age = 0xFFFFFFFF;
-
-    for (int i = 0; i < VFS_CACHE_SECTORS_MAX; i++) {
-        if (!g_sector_cache[i].valid) {
-            lru_idx = i;
-            break;
+    // Rilevamento stream sequenziale su cache miss: avvia prefetch burst
+    if (lba == g_last_read_lba + 1) {
+        g_sequential_reads++;
+        if (g_sequential_reads >= 2) {
+            vfs_cache_prefetch(dev_id, lba + 1, VFS_PREFETCH_BURST);
+            g_sequential_reads = 0;
         }
-        if (g_sector_cache[i].age < oldest_age) {
-            oldest_age = g_sector_cache[i].age;
-            lru_idx = i;
-        }
+    } else {
+        g_sequential_reads = 0;
     }
-
-    // Se il blocco sostituito era sporco, andrebbe fatto il flush (in questo caso facciamo write-through)
-    g_sector_cache[lru_idx].dev_id = dev_id;
-    g_sector_cache[lru_idx].lba = lba;
-    g_sector_cache[lru_idx].valid = true;
-    g_sector_cache[lru_idx].dirty = false;
-    g_sector_cache[lru_idx].age = ++g_sector_clock;
-    memcpy(g_sector_cache[lru_idx].data, temp, 512);
+    g_last_read_lba = lba;
 
     return true;
 }
@@ -70,49 +141,60 @@ bool vfs_cache_read_sector(uint32_t dev_id, uint64_t lba, void* buffer) {
 bool vfs_cache_write_sector(uint32_t dev_id, uint64_t lba, const void* buffer) {
     if (!buffer) return false;
 
-    // Write-through: aggiorna fisicamente sul disco ATA
-    const ata_device_t* dev = (dev_id == 0) ? ata_get_primary_master() : ata_get_device((int)dev_id);
-    if (!dev) return false;
-
-    if (!ata_write_sectors(lba, 1, buffer)) {
-        return false;
-    }
-
-    // Aggiorna o inserisci in cache
-    int target_idx = -1;
-    uint32_t oldest_age = 0xFFFFFFFF;
-
+    // 1. Cerca se il settore e' gia' presente in cache
     for (int i = 0; i < VFS_CACHE_SECTORS_MAX; i++) {
         if (g_sector_cache[i].valid && g_sector_cache[i].dev_id == dev_id && g_sector_cache[i].lba == lba) {
-            target_idx = i;
-            break;
-        }
-        if (!g_sector_cache[i].valid) {
-            target_idx = i;
-            break;
-        }
-        if (g_sector_cache[i].age < oldest_age) {
-            oldest_age = g_sector_cache[i].age;
-            target_idx = i;
+            memcpy(g_sector_cache[i].data, buffer, 512);
+            g_sector_cache[i].age = ++g_sector_clock;
+
+            if (g_write_back_mode) {
+                // Modalita' Write-Back differita: marca come dirty ed esci all'istante
+                g_sector_cache[i].dirty = true;
+                return true;
+            } else {
+                // Modalita' Write-Through sincrona
+                const ata_device_t* dev = (dev_id == 0) ? ata_get_primary_master() : ata_get_device((int)dev_id);
+                if (dev && !ata_write_sectors(lba, 1, buffer)) return false;
+                g_sector_cache[i].dirty = false;
+                return true;
+            }
         }
     }
 
-    if (target_idx >= 0) {
-        g_sector_cache[target_idx].dev_id = dev_id;
-        g_sector_cache[target_idx].lba = lba;
-        g_sector_cache[target_idx].valid = true;
-        g_sector_cache[target_idx].dirty = false;
-        g_sector_cache[target_idx].age = ++g_sector_clock;
-        memcpy(g_sector_cache[target_idx].data, buffer, 512);
+    // 2. Settore non presente: alloca slot LRU
+    int slot = vfs_cache_find_slot_lru();
+    if (g_sector_cache[slot].valid && g_sector_cache[slot].dirty) {
+        const ata_device_t* dev = (g_sector_cache[slot].dev_id == 0) ? ata_get_primary_master() : ata_get_device((int)g_sector_cache[slot].dev_id);
+        if (dev) {
+            ata_write_sectors(g_sector_cache[slot].lba, 1, g_sector_cache[slot].data);
+        }
+        g_sector_cache[slot].dirty = false;
     }
 
-    return true;
+    g_sector_cache[slot].dev_id = dev_id;
+    g_sector_cache[slot].lba = lba;
+    g_sector_cache[slot].valid = true;
+    g_sector_cache[slot].age = ++g_sector_clock;
+    memcpy(g_sector_cache[slot].data, buffer, 512);
+
+    if (g_write_back_mode) {
+        g_sector_cache[slot].dirty = true;
+        return true;
+    } else {
+        const ata_device_t* dev = (dev_id == 0) ? ata_get_primary_master() : ata_get_device((int)dev_id);
+        if (dev && !ata_write_sectors(lba, 1, buffer)) return false;
+        g_sector_cache[slot].dirty = false;
+        return true;
+    }
 }
 
 void vfs_cache_flush(void) {
     for (int i = 0; i < VFS_CACHE_SECTORS_MAX; i++) {
         if (g_sector_cache[i].valid && g_sector_cache[i].dirty) {
-            ata_write_sectors(g_sector_cache[i].lba, 1, g_sector_cache[i].data);
+            const ata_device_t* dev = (g_sector_cache[i].dev_id == 0) ? ata_get_primary_master() : ata_get_device((int)g_sector_cache[i].dev_id);
+            if (dev) {
+                ata_write_sectors(g_sector_cache[i].lba, 1, g_sector_cache[i].data);
+            }
             g_sector_cache[i].dirty = false;
         }
     }

@@ -369,6 +369,92 @@ bool exfat_ops_delete_entry(uint32_t dir_cluster, const char* name) {
     return deleted;
 }
 
+bool exfat_ops_rename_entry(uint32_t dir_cluster, const char* old_name, const char* new_name) {
+    if (!old_name || !*old_name || !new_name || !*new_name || dir_cluster < 2) return false;
+
+    const exfat_vbr_t* vbr = exfat_get_vbr();
+    if (!vbr) return false;
+
+    uint32_t spc = 1 << vbr->sectors_per_cluster_shift;
+    uint32_t cl_size = spc * 512;
+    uint8_t* cl_buf = (uint8_t*)kmalloc(cl_size);
+    if (!cl_buf) return false;
+
+    uint32_t cur_dir_cl = dir_cluster;
+    bool renamed = false;
+
+    while (cur_dir_cl >= 2 && cur_dir_cl < 0xFFFFFFF8 && !renamed) {
+        uint32_t lba = exfat_cluster_to_lba(cur_dir_cl);
+
+        for (uint32_t s = 0; s < spc; s++) {
+            vfs_cache_read_sector(0, lba + s, cl_buf + s * 512);
+        }
+
+        uint32_t entries_count = cl_size / 32;
+
+        for (uint32_t i = 0; i < entries_count; i++) {
+            uint8_t* entry = cl_buf + i * 32;
+            if (entry[0] == EXFAT_ENTRY_EOD) break;
+
+            if (entry[0] == EXFAT_ENTRY_FILE) {
+                uint8_t sec_cnt = entry[1];
+                if (sec_cnt >= 2 && i + sec_cnt < entries_count) {
+                    char cur_name[128];
+                    int npos = 0;
+                    cur_name[0] = '\0';
+
+                    for (uint8_t s = 2; s <= sec_cnt && (i + s < entries_count); s++) {
+                        uint8_t* nentry = cl_buf + (i + s) * 32;
+                        if (nentry[0] == EXFAT_ENTRY_NAME) {
+                            for (int c = 0; c < 15 && npos < 127; c++) {
+                                uint16_t ch = *(uint16_t*)(nentry + 2 + c * 2);
+                                if (ch == 0) break;
+                                cur_name[npos++] = (ch < 128) ? (char)ch : '_';
+                            }
+                        }
+                    }
+                    cur_name[npos] = '\0';
+
+                    if (strcasecmp(cur_name, old_name) == 0) {
+                        uint8_t* stream = cl_buf + (i + 1) * 32;
+                        if (stream[0] == EXFAT_ENTRY_STREAM) {
+                            uint8_t nlen = (uint8_t)strlen(new_name);
+                            if (nlen > 15) nlen = 15;
+                            stream[3] = nlen;
+                            *(uint16_t*)(stream + 4) = exfat_calc_name_hash(new_name);
+
+                            uint8_t* name_ent = cl_buf + (i + 2) * 32;
+                            if (name_ent[0] == EXFAT_ENTRY_NAME) {
+                                memset(name_ent + 2, 0, 30);
+                                for (int c = 0; c < nlen; c++) {
+                                    *(uint16_t*)(name_ent + 2 + c * 2) = (uint8_t)new_name[c];
+                                }
+                            }
+
+                            uint16_t chk = exfat_entry_set_checksum(entry, 1 + sec_cnt);
+                            *(uint16_t*)(entry + 2) = chk;
+
+                            for (uint32_t s = 0; s < spc; s++) {
+                                vfs_cache_write_sector(0, lba + s, cl_buf + s * 512);
+                            }
+                            renamed = true;
+                            break;
+                        }
+                    }
+                }
+                i += sec_cnt;
+            }
+        }
+
+        if (!renamed) {
+            cur_dir_cl = exfat_get_next_cluster(cur_dir_cl, false);
+        }
+    }
+
+    kfree(cl_buf);
+    return renamed;
+}
+
 // -------------------------------------------------------------
 // Driver VFS Dinamico per exFAT
 // -------------------------------------------------------------
@@ -766,6 +852,44 @@ static bool exfat_vfs_unlink(vfs_mount_t* mnt, const char* rel_path) {
     return exfat_ops_delete_entry(dir_cl, fname);
 }
 
+static bool exfat_vfs_rename(vfs_mount_t* mnt, const char* old_path, const char* new_path) {
+    if (!old_path || !*old_path || !new_path || !*new_path) return false;
+
+    char old_norm[VFS_MAX_PATH];
+    strncpy(old_norm, old_path, sizeof(old_norm) - 1);
+    old_norm[sizeof(old_norm) - 1] = '\0';
+    for (int k = 0; old_norm[k] != '\0'; k++) {
+        if (old_norm[k] == '\\') old_norm[k] = '/';
+    }
+
+    char new_norm[VFS_MAX_PATH];
+    strncpy(new_norm, new_path, sizeof(new_norm) - 1);
+    new_norm[sizeof(new_norm) - 1] = '\0';
+    for (int k = 0; new_norm[k] != '\0'; k++) {
+        if (new_norm[k] == '\\') new_norm[k] = '/';
+    }
+
+    const char* old_slash = strrchr(old_norm, '/');
+    uint32_t dir_cl = exfat_get_root_cluster();
+    const char* old_fname = old_norm;
+
+    if (old_slash) {
+        char dir_part[VFS_MAX_PATH];
+        size_t dlen = old_slash - old_norm;
+        strncpy(dir_part, old_norm, dlen);
+        dir_part[dlen] = '\0';
+        vfs_file_t df;
+        if (!exfat_vfs_open(mnt, dir_part, &df)) return false;
+        dir_cl = df.first_cluster;
+        old_fname = old_slash + 1;
+    }
+
+    const char* new_slash = strrchr(new_norm, '/');
+    const char* new_fname = new_slash ? (new_slash + 1) : new_norm;
+
+    return exfat_ops_rename_entry(dir_cl, old_fname, new_fname);
+}
+
 static bool exfat_vfs_stat(vfs_mount_t* mnt, const char* rel_path, vfs_dirent_t* out_stat) {
     if (!rel_path || !out_stat) return false;
     vfs_file_t f;
@@ -792,6 +916,7 @@ static vfs_driver_t g_exfat_driver = {
     .create = exfat_vfs_create,
     .mkdir = exfat_vfs_mkdir,
     .unlink = exfat_vfs_unlink,
+    .rename = exfat_vfs_rename,
     .stat = exfat_vfs_stat
 };
 

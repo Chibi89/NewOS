@@ -6,7 +6,7 @@
 #define REG_MAX_NAME_LEN    64
 #define REG_MAX_VAL_LEN     128
 #define REG_MAX_PATH_LEN    256
-#define REG_MAX_VALUES      24
+#define REG_MAX_VALUES      32
 #define REG_MAX_SUBKEYS     12
 
 typedef enum {

@@ -1,0 +1,16 @@
+================================================================================
+               NEWOS V1 - TASK MANAGER (GESTIONE ATTIVITÀ)
+================================================================================
+
+Descrizione:
+Monitor di sistema e gestione processi/prestazioni (TASKMGR.EXE) a 64-bit.
+Scorporato dal kernel core in un sottosistema autonomo.
+
+Caratteristiche:
+- Scheda 1 (Processi): Elenco delle attività in esecuzione con PID, priorità e stato
+- Scheda 2 (Prestazioni): Grafico dinamico dell'utilizzo CPU in tempo reale e memoria
+- Scheda 3 (SMP / Core): Monitoraggio multi-core SMP per architetture x86_64
+- File di configurazione: C:\NewOS\SystemProgram\TASKMGR.INI
+
+(C) Newspoint Software - NewSoft - NewOS V1 (64-bit)
+================================================================================

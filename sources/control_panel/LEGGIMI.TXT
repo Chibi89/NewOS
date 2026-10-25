@@ -1,0 +1,33 @@
+================================================================================
+              NEWOS V1 - CONTROL PANEL (PANNELLO DI CONTROLLO)
+================================================================================
+
+Descrizione:
+Sottosistema unificato del Pannello di Controllo e degli applet di sistema (.CPL)
+per NewOS V1 (64-bit). Scorporato dal kernel core per garantire modularita'
+e isolamento del codice di configurazione utente.
+
+Applet Inclusi:
+1. DISPLAY.CPL (display.c):
+   - Configurazione sfondi desktop (7 preset integrati)
+   - Selezione temi visivi (Win2000 Classico, Modern Dark, Retro 95)
+   - Cambio dinamico risoluzione video (640x480, 800x600, 1024x768, 1280x720, 1920x1080)
+
+2. MMSYS.CPL (sound_props.c):
+   - Regolazione volume generale
+   - Selezione schemi acustici ed eventi sonori
+
+3. POWERCFG.CPL (power_props.c):
+   - Profili di risparmio energetico e gestione standby monitor
+   - Dialog di arresto del sistema / chiusura sessione utente
+
+4. DEVMGMT.MSC (devmgmt.c):
+   - Esplorazione albero periferiche hardware e driver di sistema (PCI, ACPI, USB, Storage)
+
+5. SYSDM.CPL (about.c):
+   - Informazioni dettagliate sulla versione di NewOS V1, utente registrato, CPU, memoria e dischi
+
+File di configurazione: C:\NewOS\SystemProgram\CONTROL_PANEL.INI
+
+(C) Newspoint Software - NewSoft - NewOS V1 (64-bit)
+================================================================================

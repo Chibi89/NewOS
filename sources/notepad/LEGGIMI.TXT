@@ -1,0 +1,18 @@
+================================================================================
+                    NEWOS V1 - NOTEPAD (BLOCCO NOTE)
+================================================================================
+
+Descrizione:
+Editor di testo leggero nativo a 64-bit per NewOS V1. Scorporato dal kernel core
+per garantire modularita', isolamento del codice utente e alleggerimento del
+budget binario di kernel.bin.
+
+Caratteristiche:
+- Apertura, visualizzazione e modifica file di testo (.TXT, .INI, .LOG, .BAT)
+- Cursore interattivo con navigazione tramite tastiera
+- Gestione buffer di testo dinamico in memoria utente
+- Integrazione completa con Esplora Risorse, Context Menu e shell CMD
+- File di configurazione: C:\NewOS\SystemProgram\NOTEPAD.INI
+
+(C) Newspoint Software - NewSoft - NewOS V1 (64-bit)
+================================================================================
