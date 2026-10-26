@@ -4,14 +4,36 @@
 Name=Liquid Glass Modern
 Author=Morgan
 Version=1.0
-StyleEngine=LiquidGlass
-Description=Stile frosted glass scuro ispirato ad Apple con capsule glass e curvature morbide
+StyleEngine=FluentGlass
+Description=Stile frosted glass scuro con capsule glass, speculare rim e curvature morbide
 
 [Metrics]
 CornerRadius=12
 TitleHeight=22
 BorderWidth=1
 DropShadow=1
+ShadowSpread=8
+SpecularRim=0
+ModernControls=1
+ControlRadius=6
+ControlBorder=1
+ButtonRadius=6
+TabRadius=6
+InputRadius=6
+PanelRadius=10
+StartBtnRadius=10
+TaskbarBtnRadius=6
+TrayRadius=6
+BorderFollowsCorner=1
+BorderRadius=12
+ControlBorderFollowsRadius=1
+ButtonBorderRadius=6
+TabBorderRadius=6
+InputBorderRadius=6
+PanelBorderRadius=10
+StartBtnBorderRadius=10
+TaskbarBorderRadius=6
+TrayBorderRadius=6
 
 [Colors]
 DesktopColor=0x0B192C
@@ -25,8 +47,12 @@ WindowBg=0x1E222B
 WindowText=0xFFFFFF
 BtnFace=0x000000
 BtnText=0xFFFFFF
+BtnHover=0x303040
 BorderColor=0x507090
+BorderInactive=0x304050
+ControlBorderColor=0x6080A0
 AccentColor=0x4080FF
+AccentText=0xFFFFFF
 SelectionColor=0x4080FF
 SelectionText=0xFFFFFF
 CloseHoverBg=0xFF3030
@@ -34,7 +60,12 @@ CloseHoverBg=0xFF3030
 [Taskbar]
 TaskbarColor=0x101018
 TaskbarAlpha=170
+TaskbarHeight=28
+TaskbarBorder=0x304050
+StartBtnColor=0x3060CC
+StartBtnText=0xFFFFFF
 ActiveTabIndicator=0x4080FF
+TrayPillColor=0x101020
 
 [Wallpaper]
 File=C:\NewOS\Resource\wallpapers\HERO.BMP
@@ -43,3 +74,12 @@ Style=Stretch
 [Sounds]
 Startup=C:\NewOS\Resource\sounds\STARTUP.WAV
 Click=C:\NewOS\Resource\sounds\CLICK.WAV
+
+[RenderScripts]
+; Script di rendering avanzato eseguiti interamente fuori dal kernel da THEMEMGR.DLL
+TitlebarScript=SPECULAR_ARC(35,#FFFFFF);HIGHLIGHT_EDGE(top,1,#FFFFFF,50)
+ButtonScript=VERTICAL_GLOSS(50,18,0);INNER_HIGHLIGHT(1,#FFFFFF,30)
+PanelScript=ETCHED_LINE(right,#FFFFFF,#000000,25)
+ProgressScript=CYLINDER_SHADING(#0078D4,#60A5FA)
+SelectionScript=AURA_BORDER(2,#38BDF8,45)
+TaskbarScript=HIGHLIGHT_EDGE(top,1,#FFFFFF,40)

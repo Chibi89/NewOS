@@ -121,6 +121,20 @@ bool atapi_read_cd_sector(const ata_device_t* dev, uint32_t cd_lba, void* buf204
     return true;
 }
 
+bool atapi_read_cd_sectors(const ata_device_t* dev, uint32_t cd_lba, uint32_t count, void* buffer) {
+    if (!dev || !buffer || count == 0) return false;
+    if (dev->is_ahci) {
+        return ahci_read_cd_sectors(dev->ahci_port, cd_lba, count, buffer);
+    }
+    uint8_t* dst = (uint8_t*)buffer;
+    for (uint32_t i = 0; i < count; i++) {
+        if (!atapi_read_cd_sector(dev, cd_lba + i, dst + i * 2048)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool atapi_read_capacity(const ata_device_t* dev, uint32_t* total_sectors, uint32_t* sector_size) {
     if (!dev || !dev->is_atapi) return false;
     uint16_t io = dev->io_base;
@@ -549,18 +563,14 @@ bool ata_read_sectors(uint64_t lba, uint32_t count, void* buffer) {
     return ata_read_device_sectors(&def, lba, count, buffer);
 }
 
-bool ata_write_sectors(uint64_t lba, uint32_t count, const void* buffer) {
-    const ata_device_t* dev = ata_get_primary_master();
-    if (dev && dev->is_atapi) return false;
-    if (dev && dev->is_ahci) {
+bool ata_write_device_sectors(const ata_device_t* dev, uint64_t lba, uint32_t count, const void* buffer) {
+    if (!dev || dev->is_atapi || !buffer || count == 0) return false;
+    if (dev->is_ahci) {
         return ahci_write_sectors(dev->ahci_port, lba, count, buffer);
     }
-    if (ahci_is_active()) {
-        return ahci_write_primary_sectors(lba, count, buffer);
-    }
 
-    uint16_t io = dev ? dev->io_base : ATA_PRIMARY_IO;
-    uint8_t drive_sel = (dev && dev->drive == 1) ? 0xF0 : 0xE0;
+    uint16_t io = dev->io_base ? dev->io_base : ATA_PRIMARY_IO;
+    uint8_t drive_sel = (dev->drive == 1) ? 0xF0 : 0xE0;
     const uint16_t* ptr = (const uint16_t*)buffer;
 
     while (count > 0) {
@@ -601,4 +611,20 @@ bool ata_write_sectors(uint64_t lba, uint32_t count, const void* buffer) {
         count -= batch;
     }
     return true;
+}
+
+bool ata_write_sectors(uint64_t lba, uint32_t count, const void* buffer) {
+    const ata_device_t* dev = ata_get_primary_master();
+    if (dev) {
+        return ata_write_device_sectors(dev, lba, count, buffer);
+    }
+    if (ahci_is_active()) {
+        return ahci_write_primary_sectors(lba, count, buffer);
+    }
+
+    ata_device_t def;
+    memset(&def, 0, sizeof(def));
+    def.io_base = ATA_PRIMARY_IO;
+    def.drive = 0;
+    return ata_write_device_sectors(&def, lba, count, buffer);
 }

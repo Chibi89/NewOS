@@ -16,6 +16,11 @@
 #define MAX_OPEN_FILES 16
 static vfs_file_t g_file_pool[MAX_OPEN_FILES];
 
+static void vfs_serial(const char* s) {
+    if (!s) return;
+    while (*s) outb(0x3F8, *s++);
+}
+
 // Normalizza il percorso: rimuove "C:", "c:", converte '\' in '/' e rimuove slash iniziali
 static const char* normalize_path(const char* path, char* clean_buf, size_t buf_size) {
     if (!path || !clean_buf || buf_size < 2) return "";
@@ -109,11 +114,7 @@ bool vfs_init(void) {
     ramfs_init();
 
     // 2. Annoda dinamicamente i punti di montaggio ufficiali:
-    // C: -> Partizione primaria exFAT a LBA 2048 (SISTEMA IN ESECUZIONE - SEMPRE PRIORITARIO)
-    const ata_device_t* pm = ata_get_primary_master();
-    bool c_ok = vfs_mount_drive('C', "exFAT", "Disco locale (C:)", 0, EXFAT_PARTITION_LBA, false, (void*)pm);
-
-    // D: -> Lettore Ottico CD-ROM / DVD / Blu-Ray (con rilevamento automatico UDF / ISO 9660 / Joliet / Bridge)
+    // 2. Rileva l'unità ottica CD-ROM ATAPI (per Live CD e archivio di installazione)
     char opt_fs[16] = "ISO9660";
     char opt_lbl[32] = "Unita ottica (D:)";
     const ata_device_t* atapi_dev = NULL;
@@ -130,6 +131,22 @@ bool vfs_init(void) {
     if (atapi_dev) {
         fs_probe_optical_device(atapi_dev, opt_fs, sizeof(opt_fs), opt_lbl, sizeof(opt_lbl));
     }
+
+    // C: -> Partizione primaria exFAT a LBA 2048 (SISTEMA IN ESECUZIONE - SEMPRE PRIORITARIO)
+    const ata_device_t* pm = ata_get_primary_master();
+    vfs_serial("[VFS] Montaggio C: da Primary Master...\n");
+    bool c_ok = vfs_mount_drive('C', "exFAT", "Disco locale (C:)", 0, EXFAT_PARTITION_LBA, false, (void*)pm);
+    if (!c_ok && atapi_dev) {
+        vfs_serial("[VFS] Fallback: Montaggio C: da unita' ottica ATAPI...\n");
+        c_ok = vfs_mount_drive('C', "exFAT", "Disco locale (C:)", atapi_dev_id, EXFAT_PARTITION_LBA, true, (void*)atapi_dev);
+        if (c_ok) {
+            vfs_serial("[VFS] Montaggio C: da unita' ottica RIUSCITO!\n");
+        } else {
+            vfs_serial("[VFS] Montaggio C: da unita' ottica FALLITO!\n");
+        }
+    }
+
+    // D: -> Lettore Ottico CD-ROM / DVD / Blu-Ray (con rilevamento automatico UDF / ISO 9660 / Joliet / Bridge)
     vfs_mount_drive('D', opt_fs, opt_lbl, atapi_dev_id, 0, true, (void*)atapi_dev);
 
     // R: -> Disco RAM in memoria ad altissima velocità

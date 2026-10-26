@@ -15,6 +15,7 @@
 #include <mm/paging.h>
 #include <gui/graphics.h>
 #include <gui/wm.h>
+#include <gui/theme_mgr.h>
 #include <gui/context_menu.h>
 #include <drivers/sound.h>
 #include <drivers/sound_wav.h>
@@ -202,13 +203,10 @@ void kernel_main(BootInfo* binfo) {
     wm_init();
     context_menu_init();
     outb(0x3F8, 'D');
-    if (vfs_exists("C:\\NewOS\\Resources\\Wallpapers\\FLOW.BMP") ||
-        vfs_exists("C:\\NewOS\\Resource\\wallpapers\\FLOW.BMP") ||
-        vfs_exists("/SYSTEM/WALLPAPERS/FLOW.BMP")) {
-        wm_set_background_type(BG_PHOTO_FLOW);
-    } else {
-        wm_set_background_type(BG_TEAL_2000);
-    }
+    theme_mgr_init("C:/NewOS/Resource/Themes");
+    int g_idx = theme_mgr_find_by_filename("LIQUID_GLASS.THEMES");
+    if (g_idx >= 0) theme_mgr_apply(g_idx);
+    else theme_mgr_apply(1);
     // Riproduce il suono di avvio reale .WAV da disco exFAT
     if (!sound_play_wav_file("C:\\NewOS\\Resources\\Sounds\\STARTUP.WAV") &&
         !sound_play_wav_file("/SYSTEM/SOUNDS/STARTUP.WAV")) {

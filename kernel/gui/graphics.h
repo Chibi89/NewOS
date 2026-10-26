@@ -35,6 +35,8 @@
 // ─── Sistema di temi visivi ───────────────────────────────────────────────
 #define THEME_CLASSIC              0  // Windows 2000 Classic
 #define THEME_LIQUID_GLASS         1  // Apple Liquid Glass
+#define THEME_MICA_LIGHT           2  // Windows 11 Mica Light
+#define THEME_MICA_DARK            3  // Windows 11 Mica Dark
 
 // ─── Palette Liquid Glass ────────────────────────────────────────────────
 // Vetro bianco neutro (corpo finestra)
@@ -105,6 +107,10 @@ void gfx_fill_alpha(int32_t x, int32_t y, int32_t w, int32_t h,
 
 // Rettangolo con angoli arrotondati (solid fill)
 void gfx_fill_rounded_rect(int32_t x, int32_t y, int32_t w, int32_t h,
+                            int32_t radius, uint32_t color);
+
+// Bordo perimetrale con angoli arrotondati che segue la curvatura
+void gfx_draw_rounded_rect(int32_t x, int32_t y, int32_t w, int32_t h,
                             int32_t radius, uint32_t color);
 
 // Pannello vetro: campiona blurred_buf + alpha-blend tint + rounded corners

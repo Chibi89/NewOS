@@ -169,6 +169,7 @@ bool ahci_write_sectors(uint32_t port_num, uint64_t lba, uint32_t count, const v
 bool ahci_read_primary_sectors(uint64_t lba, uint32_t count, void* buffer);
 bool ahci_write_primary_sectors(uint64_t lba, uint32_t count, const void* buffer);
 bool ahci_read_cd_sector(uint32_t port_num, uint32_t cd_lba, void* buf2048);
+bool ahci_read_cd_sectors(uint32_t port_num, uint32_t cd_lba, uint32_t count, void* buffer);
 
 // Gestione Asincrona I/O tramite Interrupt
 void ahci_enable_interrupts(void);

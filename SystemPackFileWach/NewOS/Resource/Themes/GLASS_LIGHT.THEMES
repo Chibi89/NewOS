@@ -4,37 +4,68 @@
 Name=Windows 11 Fluent Glass Light
 Author=Morgan
 Version=1.0
-StyleEngine=FluentGlassLight
-Description=Vetro satinato frosted glass ad alta trasparenza (65%) con rifrazione del wallpaper e testi ad alto contrasto
+StyleEngine=FluentGlass
+Description=Vetro satinato frosted glass ad alta trasparenza (60%) con rifrazione del wallpaper Flow e testi ad alto contrasto
 
 [Metrics]
-CornerRadius=8
-TitleHeight=22
+CornerRadius=10
+TitleHeight=24
 BorderWidth=1
 DropShadow=1
+ShadowSpread=8
+SpecularRim=0
+ModernControls=1
+ControlRadius=5
+ControlBorder=1
+ButtonRadius=5
+TabRadius=5
+InputRadius=5
+PanelRadius=8
+StartBtnRadius=8
+TaskbarBtnRadius=6
+TrayRadius=6
+BorderFollowsCorner=1
+BorderRadius=10
+ControlBorderFollowsRadius=1
+ButtonBorderRadius=5
+TabBorderRadius=5
+InputBorderRadius=5
+PanelBorderRadius=8
+StartBtnBorderRadius=8
+TaskbarBorderRadius=6
+TrayBorderRadius=6
 
 [Colors]
 DesktopColor=0x1E2A38
 SurfaceBase=0xFFFFFF
-SurfaceAlpha=165
+SurfaceAlpha=155
 ActiveTitle=0xFFFFFF
 ActiveTitleText=0x1A1A1A
 InactiveTitle=0xEFEFEF
-InactiveTitleText=0x666666
+InactiveTitleText=0x707070
 WindowBg=0xFFFFFF
 WindowText=0x1A1A1A
-BtnFace=0xF5F7FA
+BtnFace=0xFFFFFF
 BtnText=0x1A1A1A
-BorderColor=0xE8E8E8
+BtnHover=0xE2E8F0
+BorderColor=0xFFFFFF
+BorderInactive=0xD0D0D0
+ControlBorderColor=0xC8D4E2
 AccentColor=0x0078D4
-SelectionColor=0xB8DDFF
+AccentText=0xFFFFFF
+SelectionColor=0xC8E0F8
 SelectionText=0x003366
 CloseHoverBg=0xE81123
 
 [Taskbar]
-TaskbarColor=0xFFFFFF
-TaskbarAlpha=160
+TaskbarColor=0xEDEFF5
+TaskbarAlpha=175
+TaskbarHeight=28
+TaskbarBorder=0xFFFFFF
+StartBtnColor=0xFFFFFF
+StartBtnText=0x1E1E1E
 ActiveTabIndicator=0x0078D4
+TrayPillColor=0xE4E8F0
 
 [Wallpaper]
 File=C:\NewOS\Resource\wallpapers\FLOW.BMP

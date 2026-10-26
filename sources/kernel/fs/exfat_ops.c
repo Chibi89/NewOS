@@ -461,13 +461,6 @@ bool exfat_ops_rename_entry(uint32_t dir_cluster, const char* old_name, const ch
 
 static bool exfat_vfs_mount(vfs_mount_t* mnt) {
     if (!mnt) return false;
-    if (mnt->drive_letter == 'C') {
-        if (!exfat_is_mounted()) {
-            exfat_mount(mnt->partition_lba);
-        }
-    } else if (mnt->partition_lba > 0) {
-        exfat_mount(mnt->partition_lba);
-    }
 
     // Risoluzione periferica fisica reale dal chip (ATA / AHCI)
     const ata_device_t* dev = (const ata_device_t*)mnt->priv_data;
@@ -479,6 +472,13 @@ static bool exfat_vfs_mount(vfs_mount_t* mnt) {
             dev = ata_get_device((int)mnt->device_id);
             mnt->priv_data = (void*)dev;
         }
+    }
+
+    if (!exfat_mount_device(dev, mnt->partition_lba)) {
+        return false;
+    }
+    if (!exfat_is_mounted()) {
+        return false;
     }
 
     const exfat_vbr_t* vbr = exfat_get_vbr();

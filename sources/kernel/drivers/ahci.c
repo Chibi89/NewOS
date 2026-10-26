@@ -7,6 +7,13 @@
 #include <drivers/timer.h>
 #include <string.h>
 
+static void serial_puts(const char* s) {
+    if (!s) return;
+    while (*s) {
+        outb(0x3F8, *s++);
+    }
+}
+
 static bool ahci_probe_sector_reader(void* ctx, uint64_t lba, uint32_t count, void* buf) {
     uint32_t port = (uint32_t)(uintptr_t)ctx;
     return ahci_read_sectors(port, lba, count, buf);
@@ -172,40 +179,45 @@ static void ahci_irq_handler(interrupt_frame_t* frame) {
     uint32_t is = g_hba->is;
     if (!is) return;
 
-    for (int i = 0; i < g_ahci_device_count; i++) {
-        int port_num = g_ahci_devices[i].port_num;
-        if (is & (1U << port_num)) {
-            ahci_port_regs_t* port = &g_hba->ports[port_num];
-            // Disabilita temporaneamente gli interrupt della porta per de-asserire la linea PCI (One-Shot)
+    // Disabilita e pulisce PxIS e PxSERR su tutte le porte attive che hanno generato evento
+    for (int p = 0; p < 32; p++) {
+        if (is & (1U << p)) {
+            ahci_port_regs_t* port = &g_hba->ports[p];
             port->ie = 0;
             port->is = port->is; // Write-1-to-clear del registro IS della porta
+            port->serr = port->serr; // Pulisce errori SERR
         }
     }
+
+    // Write-1-to-clear del registro globale IS dell'HBA (fondamentale per de-asserire la linea PCI)
+    g_hba->is = is;
 }
 
 void ahci_enable_interrupts(void) {
     if (!g_ahci_active || !g_hba) return;
     if (g_ahci_irq == 0 || g_ahci_irq >= 16) return;
 
-    // 1. Registra l'ISR sulla tabella IDT (IRQ 0..15 -> INT 32..47)
+    // 1. Pulisce preventivamente registri IS e SERR di tutte le 32 porte e disabilita PxIE
+    for (int p = 0; p < 32; p++) {
+        ahci_port_regs_t* port = &g_hba->ports[p];
+        port->ie = 0;
+        port->is = 0xFFFFFFFF;
+        port->serr = 0xFFFFFFFF;
+    }
+    // 2. Pulisce registro globale IS dell'HBA prima di attivare GHC.IE
+    g_hba->is = 0xFFFFFFFF;
+
+    // 3. Registra l'ISR sulla tabella IDT (IRQ 0..15 -> INT 32..47)
     register_interrupt_handler(32 + g_ahci_irq, ahci_irq_handler);
 
-    // 2. Smaschera l'IRQ nel Controller PIC
+    // 4. Smaschera l'IRQ nel Controller PIC
     pic_clear_mask(g_ahci_irq);
     if (g_ahci_irq >= 8) {
         pic_clear_mask(2); // Cascade slave PIC
     }
 
-    // 3. Abilita gli interrupt globali nell'HBA (GHC.IE = bit 1)
+    // 5. Abilita gli interrupt globali nell'HBA (GHC.IE = bit 1)
     g_hba->ghc |= (1U << 1);
-
-    // 4. Inizializza porte con interrupt disabilitati finche' non ci sono comandi in volo
-    for (int i = 0; i < g_ahci_device_count; i++) {
-        int pnum = g_ahci_devices[i].port_num;
-        ahci_port_regs_t* port = &g_hba->ports[pnum];
-        port->is = 0xFFFFFFFF;
-        port->ie = 0;
-    }
 
     g_ahci_irq_enabled = true;
 }
@@ -216,6 +228,7 @@ bool ahci_is_interrupt_active(void) {
 
 static bool ahci_exec_cmd(ahci_port_regs_t* port, int slot) {
     port->is = 0xFFFFFFFF; // Pulisce interrupt pendenti della porta
+    if (g_hba) g_hba->is = 0xFFFFFFFF;
 
     if (g_ahci_irq_enabled) {
         port->ie = 0x3C000015; // Abilita interrupt per questo comando in volo
@@ -230,10 +243,15 @@ static bool ahci_exec_cmd(ahci_port_regs_t* port, int slot) {
     while (rdtsc() - start < 200000ULL) {
         if ((port->ci & (1U << slot)) == 0) {
             port->ie = 0; // Disabilita interrupt a comando concluso
+            port->is = port->is;
+            if (g_hba) g_hba->is = 0xFFFFFFFF;
             return (port->tfd & 0x01) == 0;
         }
         if (port->is & (1U << 30)) { // Fatal Task File Error (TFES)
             port->ie = 0;
+            port->is = port->is;
+            if (g_hba) g_hba->is = 0xFFFFFFFF;
+            serial_puts("[AHCI_ERR] Quick TFES bit 30 fatal error!\n");
             return false;
         }
         io_wait();
@@ -270,16 +288,23 @@ static bool ahci_exec_cmd(ahci_port_regs_t* port, int slot) {
     }
 
     port->ie = 0;
+    port->is = port->is;
+    if (g_hba) g_hba->is = 0xFFFFFFFF;
 
     if ((port->ci & (1U << slot)) != 0) {
+        serial_puts("[AHCI_ERR] Timeout CI not cleared!\n");
         return false; // Timeout scaduto
     }
-    return (port->tfd & 0x01) == 0;
+    if (port->tfd & 0x01) {
+        serial_puts("[AHCI_ERR] Task File Error (TFD.ERR=1)!\n");
+        return false;
+    }
+    return true;
 }
 
-static bool ahci_identify_device(ahci_port_regs_t* port, int port_index, ahci_device_t* dev) {
-    dev->present = false;
-    dev->port_num = (uint8_t)port_index;
+static bool ahci_identify_device(ahci_port_regs_t* port, uint8_t hw_port, int dev_idx, ahci_device_t* dev) {
+    dev->present = true;
+    dev->port_num = hw_port;
 
     uint32_t sig = port->sig;
     dev->is_atapi = (sig == AHCI_DEV_SATAPI);
@@ -288,15 +313,18 @@ static bool ahci_identify_device(ahci_port_regs_t* port, int port_index, ahci_de
     memset(identify_buf, 0, sizeof(identify_buf));
 
     int slot = ahci_alloc_slot(port);
-    if (slot < 0) return false;
+    if (slot < 0) {
+        dev->present = false;
+        return false;
+    }
 
-    ahci_cmd_header_t* cmd_hdr = &g_cmd_list[port_index][slot];
+    ahci_cmd_header_t* cmd_hdr = &g_cmd_list[dev_idx][slot];
     cmd_hdr->cfl = sizeof(fis_reg_h2d_t) / 4;
     cmd_hdr->w = 0; // Read
     cmd_hdr->a = 0;
     cmd_hdr->prdtl = 1;
 
-    ahci_cmd_table_t* tbl = &g_cmd_table[port_index][slot];
+    ahci_cmd_table_t* tbl = &g_cmd_table[dev_idx][slot];
     memset(tbl, 0, sizeof(ahci_cmd_table_t));
 
     uint64_t buf_addr = (uint64_t)identify_buf;
@@ -312,7 +340,16 @@ static bool ahci_identify_device(ahci_port_regs_t* port, int port_index, ahci_de
     fis->device = 0;
 
     if (!ahci_exec_cmd(port, slot)) {
-        return false;
+        // Fallback incrociato: se sig non era ancora pervenuto o la modalità era errata
+        dev->is_atapi = !dev->is_atapi;
+        fis->command = dev->is_atapi ? ATA_CMD_IDENTIFY_PACKET : ATA_CMD_IDENTIFY;
+        if (!ahci_exec_cmd(port, slot)) {
+            dev->present = false;
+            serial_puts("[AHCI] IDENTIFY fallito su porta ");
+            outb(0x3F8, '0' + hw_port);
+            serial_puts("\n");
+            return false;
+        }
     }
 
     ahci_clean_string(dev->serial, &identify_buf[10], 10);
@@ -324,7 +361,7 @@ static bool ahci_identify_device(ahci_port_regs_t* port, int port_index, ahci_de
         dev->size_bytes = dev->total_sectors * 2048;
         dev->size_mb = (uint32_t)(dev->size_bytes / (1024 * 1024));
         dev->size_gb = dev->size_mb / 1024;
-        dev->boot_lba = 32;
+        dev->boot_lba = 31111;
         strcpy(dev->part_fs, "ISO9660");
     } else {
         uint32_t lba28_sectors = (uint32_t)identify_buf[60] | ((uint32_t)identify_buf[61] << 16);
@@ -339,7 +376,7 @@ static bool ahci_identify_device(ahci_port_regs_t* port, int port_index, ahci_de
         dev->size_gb = dev->size_mb / 1024;
 
         static uint8_t mbr_buf[512] __attribute__((aligned(16)));
-        if (ahci_read_sectors(port_index, 0, 1, mbr_buf)) {
+        if (ahci_read_sectors(hw_port, 0, 1, mbr_buf)) {
             if (mbr_buf[510] == 0x55 && mbr_buf[511] == 0xAA) {
                 dev->has_mbr = true;
                 const uint8_t* p = &mbr_buf[446];
@@ -353,7 +390,7 @@ static bool ahci_identify_device(ahci_port_regs_t* port, int port_index, ahci_de
                     // Partizione GPT Protettiva (UEFI / Dischi > 2TB)
                     uint64_t gpt_lba = 0, gpt_sec = 0;
                     char gpt_fs[16] = "exFAT";
-                    if (gpt_probe_table(ahci_probe_sector_reader, (void*)(uintptr_t)port_index, &gpt_lba, &gpt_sec, gpt_fs, sizeof(gpt_fs))) {
+                    if (gpt_probe_table(ahci_probe_sector_reader, (void*)(uintptr_t)hw_port, &gpt_lba, &gpt_sec, gpt_fs, sizeof(gpt_fs))) {
                         dev->has_gpt = true;
                         dev->part_lba = gpt_lba;
                         dev->part_sectors = gpt_sec;
@@ -425,6 +462,7 @@ bool ahci_init(void) {
 
     // 3. Abilita AHCI nel Global Host Control (GHC.AE = bit 31)
     g_hba->ghc |= (1U << 31);
+    g_ahci_active = true;
 
     uint32_t pi = g_hba->pi;
     g_ahci_device_count = 0;
@@ -449,25 +487,59 @@ bool ahci_init(void) {
         }
 
         if (det == 3) {
-            uint32_t sig = port->sig;
-            if (sig == AHCI_DEV_SATA || sig == AHCI_DEV_SATAPI) {
-                ahci_rebase_port(port, g_ahci_device_count);
+            int dev_idx = g_ahci_device_count;
 
-                if (ahci_identify_device(port, i, &g_ahci_devices[g_ahci_device_count])) {
-                    if (!g_ahci_devices[g_ahci_device_count].is_atapi && g_primary_port == 0) {
-                        g_primary_port = (uint8_t)i;
-                    }
-                    g_ahci_device_count++;
+            // Rebase e avvia la porta (FRE=1, ST=1) per ricevere il D2H FIS con la firma
+            ahci_rebase_port(port, dev_idx);
+
+            // Attende ricezione del D2H Register FIS iniziale (fino a 25 ms)
+            uint64_t sig_start = rdtsc();
+            while ((port->sig == 0xFFFFFFFF || port->sig == 0) && (rdtsc() - sig_start < 100000000ULL)) {
+                io_wait();
+            }
+
+            uint32_t sig = port->sig;
+            serial_puts("[AHCI] Port ");
+            outb(0x3F8, '0' + i);
+            serial_puts(" det=3 sig=0x");
+            for (int sh = 28; sh >= 0; sh -= 4) {
+                uint8_t hx = (sig >> sh) & 0x0F;
+                outb(0x3F8, hx < 10 ? ('0' + hx) : ('A' + hx - 10));
+            }
+            serial_puts("\n");
+
+            if (ahci_identify_device(port, (uint8_t)i, dev_idx, &g_ahci_devices[dev_idx])) {
+                serial_puts("[AHCI] Dispositivo identificato: ");
+                serial_puts(g_ahci_devices[dev_idx].model);
+                serial_puts(g_ahci_devices[dev_idx].is_atapi ? " (ATAPI CD-ROM)\n" : " (Hard Disk SATA)\n");
+
+                if (!g_ahci_devices[dev_idx].is_atapi && g_primary_port == 0) {
+                    g_primary_port = (uint8_t)i;
                 }
+                g_ahci_device_count++;
+            } else {
+                ahci_stop_port(port);
             }
         }
     }
 
     if (g_ahci_device_count > 0) {
-        g_ahci_active = true;
+        // Rileva El Torito boot_lba dal Catalogo El Torito (settore 20) per le unità ottiche ATAPI
+        for (int i = 0; i < g_ahci_device_count; i++) {
+            if (g_ahci_devices[i].is_atapi) {
+                static uint8_t cat_sec[2048] __attribute__((aligned(16)));
+                if (ahci_read_cd_sector(g_ahci_devices[i].port_num, 20, cat_sec)) {
+                    uint32_t cand = *(uint32_t*)&cat_sec[40];
+                    if (cand > 0 && cand < 500000) {
+                        g_ahci_devices[i].boot_lba = cand;
+                    }
+                }
+            }
+        }
         return true;
     }
 
+    g_ahci_active = false;
     return false;
 }
 
@@ -674,8 +746,8 @@ bool ahci_write_primary_sectors(uint64_t lba, uint32_t count, const void* buffer
     return ahci_write_sectors(dev->port_num, lba, count, buffer);
 }
 
-bool ahci_read_cd_sector(uint32_t port_num, uint32_t cd_lba, void* buf2048) {
-    if (!g_ahci_active || !g_hba || !buf2048 || port_num >= 32) return false;
+bool ahci_read_cd_sectors(uint32_t port_num, uint32_t cd_lba, uint32_t count, void* buffer) {
+    if (!g_ahci_active || !g_hba || !buffer || port_num >= 32 || count == 0) return false;
 
     int port_idx = -1;
     for (int i = 0; i < g_ahci_device_count; i++) {
@@ -686,56 +758,74 @@ bool ahci_read_cd_sector(uint32_t port_num, uint32_t cd_lba, void* buf2048) {
     }
     if (port_idx < 0) port_idx = 0;
 
-    ahci_lock_port(port_idx);
     ahci_port_regs_t* port = &g_hba->ports[port_num];
+    uint8_t* dst = (uint8_t*)buffer;
 
-    int slot = ahci_alloc_slot(port);
-    if (slot < 0) {
+    while (count > 0) {
+        uint32_t batch = (count > 16) ? 16 : count;
+        uint32_t byte_count = batch * 2048;
+
+        ahci_lock_port(port_idx);
+
+        int slot = ahci_alloc_slot(port);
+        if (slot < 0) {
+            ahci_unlock_port(port_idx);
+            return false;
+        }
+
+        bool zero_copy = is_dma_safe_aligned(dst);
+        uint64_t target_addr = zero_copy ? (uint64_t)(uintptr_t)dst : (uint64_t)g_ahci_bounce_buf;
+
+        ahci_cmd_header_t* cmd_hdr = &g_cmd_list[port_idx][slot];
+        cmd_hdr->cfl = sizeof(fis_reg_h2d_t) / 4;
+        cmd_hdr->w = 0; // Read
+        cmd_hdr->a = 1; // ATAPI Packet
+        cmd_hdr->prdtl = 1;
+
+        ahci_cmd_table_t* tbl = &g_cmd_table[port_idx][slot];
+        memset(tbl, 0, sizeof(ahci_cmd_table_t));
+
+        tbl->prdt_entry[0].dba  = (uint32_t)(target_addr & 0xFFFFFFFF);
+        tbl->prdt_entry[0].dbau = (uint32_t)(target_addr >> 32);
+        tbl->prdt_entry[0].dbc  = byte_count - 1;
+        tbl->prdt_entry[0].i    = 1;
+
+        // ATAPI Packet Command (SCSI READ (10) - Opcode 0x28)
+        tbl->acmd[0] = 0x28;
+        tbl->acmd[2] = (uint8_t)(cd_lba >> 24);
+        tbl->acmd[3] = (uint8_t)(cd_lba >> 16);
+        tbl->acmd[4] = (uint8_t)(cd_lba >> 8);
+        tbl->acmd[5] = (uint8_t)(cd_lba & 0xFF);
+        tbl->acmd[7] = (uint8_t)(batch >> 8);
+        tbl->acmd[8] = (uint8_t)(batch & 0xFF);
+
+        fis_reg_h2d_t* fis = (fis_reg_h2d_t*)(&tbl->cfis[0]);
+        fis->fis_type = FIS_TYPE_REG_H2D;
+        fis->c = 1;
+        fis->command = ATA_CMD_PACKET; // 0xA0
+        fis->featurel = 1; // DMA transfer for ATAPI
+        fis->lba1 = (uint8_t)(byte_count & 0xFF);        // Byte Count Limit Low
+        fis->lba2 = (uint8_t)((byte_count >> 8) & 0xFF); // Byte Count Limit High
+
+        if (!ahci_exec_cmd(port, slot)) {
+            ahci_unlock_port(port_idx);
+            return false;
+        }
+
+        if (!zero_copy) {
+            memcpy(dst, g_ahci_bounce_buf, byte_count);
+        }
+
         ahci_unlock_port(port_idx);
-        return false;
+
+        cd_lba += batch;
+        dst += byte_count;
+        count -= batch;
     }
 
-    bool zero_copy = is_dma_safe_aligned(buf2048);
-    uint64_t target_addr = zero_copy ? (uint64_t)(uintptr_t)buf2048 : (uint64_t)g_ahci_bounce_buf;
-
-    ahci_cmd_header_t* cmd_hdr = &g_cmd_list[port_idx][slot];
-    cmd_hdr->cfl = sizeof(fis_reg_h2d_t) / 4;
-    cmd_hdr->w = 0; // Read
-    cmd_hdr->a = 1; // ATAPI Packet
-    cmd_hdr->prdtl = 1;
-
-    ahci_cmd_table_t* tbl = &g_cmd_table[port_idx][slot];
-    memset(tbl, 0, sizeof(ahci_cmd_table_t));
-
-    tbl->prdt_entry[0].dba  = (uint32_t)(target_addr & 0xFFFFFFFF);
-    tbl->prdt_entry[0].dbau = (uint32_t)(target_addr >> 32);
-    tbl->prdt_entry[0].dbc  = 2048 - 1;
-    tbl->prdt_entry[0].i    = 1;
-
-    // ATAPI Packet Command (SCSI READ (10) - Opcode 0x28)
-    tbl->acmd[0] = 0x28;
-    tbl->acmd[2] = (uint8_t)(cd_lba >> 24);
-    tbl->acmd[3] = (uint8_t)(cd_lba >> 16);
-    tbl->acmd[4] = (uint8_t)(cd_lba >> 8);
-    tbl->acmd[5] = (uint8_t)(cd_lba & 0xFF);
-    tbl->acmd[7] = 0;
-    tbl->acmd[8] = 1; // 1 settore CD (2048 byte)
-
-    fis_reg_h2d_t* fis = (fis_reg_h2d_t*)(&tbl->cfis[0]);
-    fis->fis_type = FIS_TYPE_REG_H2D;
-    fis->c = 1;
-    fis->command = ATA_CMD_PACKET; // 0xA0
-    fis->featurel = 1; // DMA transfer for ATAPI
-
-    if (!ahci_exec_cmd(port, slot)) {
-        ahci_unlock_port(port_idx);
-        return false;
-    }
-
-    if (!zero_copy) {
-        memcpy(buf2048, g_ahci_bounce_buf, 2048);
-    }
-
-    ahci_unlock_port(port_idx);
     return true;
+}
+
+bool ahci_read_cd_sector(uint32_t port_num, uint32_t cd_lba, void* buf2048) {
+    return ahci_read_cd_sectors(port_num, cd_lba, 1, buf2048);
 }

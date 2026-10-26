@@ -51,18 +51,17 @@ static void draw_tabs(int32_t cx, int32_t cy, int32_t cw, int active_tab) {
     for (int i = 0; i < 3; i++) {
         int32_t tw = g_display_tabs[i].width;
         bool sel = (i == active_tab);
-        gfx_fill_rect(cur_x, ty, tw, th + (sel ? 2 : 0), sel ? COLOR_BTNFACE : COLOR_BTNSHADOW);
-        gfx_draw_bevel_rect(cur_x, ty, tw, th, sel);
-
-        int32_t text_len = (int32_t)strlen(g_display_tabs[i].label);
-        int32_t text_w = text_len * 8;
-        int32_t text_x = cur_x + (tw - text_w) / 2;
-        gfx_draw_string(text_x, ty + 3, g_display_tabs[i].label,
-                        sel ? COLOR_WINDOWTEXT : COLOR_BTNHIGHLIGHT, 0, true);
+        wm_draw_themed_tab(cur_x, ty, tw, th, g_display_tabs[i].label, sel);
         cur_x += tw + 4;
     }
-    gfx_fill_rect(cx + 4, ty + th, cw - 8, 2, COLOR_BTNSHADOW);
-    gfx_fill_rect(cx + 4, ty + th + 2, cw - 8, 1, COLOR_BTNHIGHLIGHT);
+    const theme_info_t* cur_th = wm_get_current_theme_props();
+    if (!cur_th || !cur_th->modern_controls) {
+        gfx_fill_rect(cx + 4, ty + th, cw - 8, 2, COLOR_BTNSHADOW);
+        gfx_fill_rect(cx + 4, ty + th + 2, cw - 8, 1, COLOR_BTNHIGHLIGHT);
+    } else {
+        uint32_t sep_col = cur_th->border_inactive ? cur_th->border_inactive : 0xD1D1D6;
+        gfx_fill_rect(cx + 4, ty + th + 1, cw - 8, 1, sep_col);
+    }
 }
 
 static void draw_bg_tab(window_t* win, display_state_t* state) {
@@ -167,9 +166,12 @@ static void draw_bg_pattern_rect(int32_t px, int32_t py, int32_t pw, int32_t ph,
 
 static int get_theme_bg_type(const theme_info_t* th, int fallback_bg) {
     if (!th) return fallback_bg;
+    if (strstr(th->wallpaper_file, "FLOW") || strstr(th->wallpaper_file, "flow")) return BG_PHOTO_FLOW;
+    if (strstr(th->wallpaper_file, "HERO") || strstr(th->wallpaper_file, "hero")) return BG_PHOTO_HERO;
+    if (strstr(th->wallpaper_file, "BLISS") || strstr(th->wallpaper_file, "bliss")) return BG_BLISS_XP;
     if (strstr(th->filename, "NAVY") || strstr(th->name, "Navy")) return BG_BLUE_NAVY;
     if (strstr(th->filename, "LIQUID") || strstr(th->name, "Liquid")) return BG_PHOTO_FLOW;
-    if (strstr(th->filename, "GLASS") || strstr(th->name, "Glass")) return BG_BLISS_XP;
+    if (strstr(th->filename, "GLASS") || strstr(th->name, "Glass")) return BG_PHOTO_FLOW;
     if (strstr(th->filename, "MICA_DARK") || strstr(th->name, "Mica Dark")) return BG_PHOTO_HERO;
     if (strstr(th->filename, "MICA") || strstr(th->name, "Mica")) return BG_PHOTO_FLOW;
     if (strstr(th->filename, "CLASSIC") || strstr(th->name, "Classic")) return BG_TEAL_2000;
@@ -500,24 +502,13 @@ static void display_draw(window_t* win) {
     int32_t btn_y = cy + ch - 34;
     if (state->active_tab == 0) {
         // [ Sfoglia... ]
-        gfx_fill_rect(cx + 14, btn_y, 76, 24, COLOR_BTNFACE);
-        gfx_draw_bevel_rect(cx + 14, btn_y, 76, 24, false);
-        gfx_draw_string(cx + 20, btn_y + 4, "Sfoglia...", 0x0A246A, 0, true);
-
+        wm_draw_themed_button(cx + 14, btn_y, 76, 24, "Sfoglia...", false);
         // [ Suoni... ]
-        gfx_fill_rect(cx + 96, btn_y, 68, 24, COLOR_BTNFACE);
-        gfx_draw_bevel_rect(cx + 96, btn_y, 68, 24, false);
-        gfx_draw_string(cx + 106, btn_y + 4, "Suoni...", COLOR_WINDOWTEXT, 0, true);
+        wm_draw_themed_button(cx + 96, btn_y, 68, 24, "Suoni...", false);
     }
-    gfx_fill_rect(cx + cw - 230, btn_y, 68, 24, COLOR_BTNFACE);
-    gfx_draw_bevel_rect(cx + cw - 230, btn_y, 68, 24, false);
-    gfx_draw_string(cx + cw - 208, btn_y + 4, "OK", COLOR_WINDOWTEXT, 0, true);
-    gfx_fill_rect(cx + cw - 154, btn_y, 68, 24, COLOR_BTNFACE);
-    gfx_draw_bevel_rect(cx + cw - 154, btn_y, 68, 24, false);
-    gfx_draw_string(cx + cw - 146, btn_y + 4, "Annulla", COLOR_WINDOWTEXT, 0, true);
-    gfx_fill_rect(cx + cw - 78, btn_y, 68, 24, COLOR_BTNFACE);
-    gfx_draw_bevel_rect(cx + cw - 78, btn_y, 68, 24, false);
-    gfx_draw_string(cx + cw - 70, btn_y + 4, "Applica", COLOR_WINDOWTEXT, 0, true);
+    wm_draw_themed_button(cx + cw - 230, btn_y, 68, 24, "OK", false);
+    wm_draw_themed_button(cx + cw - 154, btn_y, 68, 24, "Annulla", false);
+    wm_draw_themed_button(cx + cw - 78, btn_y, 68, 24, "Applica", false);
 }
 
 static void display_mouse(window_t* win, int32_t mx, int32_t my, bool clicked) {
@@ -590,6 +581,7 @@ static void display_mouse(window_t* win, int32_t mx, int32_t my, bool clicked) {
                 const theme_info_t* th = theme_mgr_get(t);
                 if (th) {
                     state->selected_theme = th->theme_id;
+                    state->selected_bg = get_theme_bg_type(th, state->selected_bg);
                 }
                 return;
             }
@@ -632,6 +624,7 @@ static void display_mouse(window_t* win, int32_t mx, int32_t my, bool clicked) {
 
         // Click sul pulsante [ Salva ] a cx + 214, cy + 96
         if (mx >= cx + 214 && mx <= cx + 300 && my >= cy + 96 && my <= cy + 120) {
+            wm_set_background_type(state->selected_bg);
             wm_set_theme(state->selected_theme);
             return;
         }
@@ -659,7 +652,11 @@ static void display_mouse(window_t* win, int32_t mx, int32_t my, bool clicked) {
     // Tasto [ OK ]
     if (mx >= cx + cw - 230 && mx <= cx + cw - 162 && my >= btn_y && my <= btn_y + 24) {
         wm_set_background_type(state->selected_bg);
-        wm_set_theme(state->selected_theme);
+        if (state->selected_theme_idx >= 0) {
+            theme_mgr_apply(state->selected_theme_idx);
+        } else {
+            wm_set_theme(state->selected_theme);
+        }
         if (state->selected_mode != state->orig_mode) {
             vga_set_mode_index(state->selected_mode);
             state->orig_mode = state->selected_mode;
@@ -680,7 +677,11 @@ static void display_mouse(window_t* win, int32_t mx, int32_t my, bool clicked) {
     // Tasto [ Applica ]
     if (mx >= cx + cw - 78 && mx <= cx + cw - 10 && my >= btn_y && my <= btn_y + 24) {
         wm_set_background_type(state->selected_bg);
-        wm_set_theme(state->selected_theme);
+        if (state->selected_theme_idx >= 0) {
+            theme_mgr_apply(state->selected_theme_idx);
+        } else {
+            wm_set_theme(state->selected_theme);
+        }
         if (state->selected_mode != state->orig_mode) {
             vga_set_mode_index(state->selected_mode);
             state->orig_mode = state->selected_mode;
@@ -697,16 +698,62 @@ static void display_key(window_t* win, char c) {
     display_state_t* state = (display_state_t*)win->app_data;
     if (!state) return;
 
+    if (c == 27) { // Escape: Annulla
+        if (state->orig_mode != vga_get_current_mode_index()) {
+            vga_set_mode_index(state->orig_mode);
+        }
+        wm_set_background_type(state->orig_bg);
+        wm_set_theme(state->orig_theme);
+        wm_destroy_window(win->id);
+        return;
+    }
+
+    if (c == '\n' || c == '\r') {
+        // Applica modifiche
+        wm_set_background_type(state->selected_bg);
+        if (state->selected_theme_idx >= 0) {
+            theme_mgr_apply(state->selected_theme_idx);
+        } else {
+            wm_set_theme(state->selected_theme);
+        }
+        if (state->selected_mode != state->orig_mode) {
+            vga_set_mode_index(state->selected_mode);
+            state->orig_mode = state->selected_mode;
+            win->x = ((int32_t)gfx_get_width() - win->width) / 2;
+            win->y = ((int32_t)gfx_get_height() - 28 - win->height) / 2;
+            if (win->y < 10) win->y = 10;
+        }
+        return;
+    }
+
     if (c == '\t') {
         state->active_tab = (state->active_tab + 1) % 3;
-    } else if (state->active_tab == 1) {
+        return;
+    }
+    if (c == '1') {
+        state->active_tab = 0;
+        return;
+    }
+    if (c == '2') {
+        state->active_tab = 1;
+        return;
+    }
+    if (c == '3' || c == 'r' || c == 'R') {
+        state->active_tab = 2; // Passa a Risoluzione
+        return;
+    }
+
+    if (state->active_tab == 1) {
         int total = theme_mgr_get_count();
         int visible_cards = 6;
         if (c == 'w' || c == 'W' || c == 'k' || c == 'K' || c == '-' || c == 'a' || c == 'A') {
             if (state->selected_theme_idx > 0) {
                 state->selected_theme_idx--;
                 const theme_info_t* th = theme_mgr_get(state->selected_theme_idx);
-                if (th) state->selected_theme = th->theme_id;
+                if (th) {
+                    state->selected_theme = th->theme_id;
+                    state->selected_bg = get_theme_bg_type(th, state->selected_bg);
+                }
                 if (state->selected_theme_idx < state->theme_scroll_offset) {
                     state->theme_scroll_offset = state->selected_theme_idx;
                 }
@@ -715,42 +762,23 @@ static void display_key(window_t* win, char c) {
             if (state->selected_theme_idx < total - 1) {
                 state->selected_theme_idx++;
                 const theme_info_t* th = theme_mgr_get(state->selected_theme_idx);
-                if (th) state->selected_theme = th->theme_id;
+                if (th) {
+                    state->selected_theme = th->theme_id;
+                    state->selected_bg = get_theme_bg_type(th, state->selected_bg);
+                }
                 if (state->selected_theme_idx >= state->theme_scroll_offset + visible_cards) {
                     state->theme_scroll_offset = state->selected_theme_idx - visible_cards + 1;
                 }
             }
         }
-    } else if (state->active_tab == 2 && c >= '0' && c <= '5') {
-        state->selected_mode = c - '0';
-    } else if (state->active_tab == 2 && (c == 'w' || c == 'W' || c == 'a' || c == 'A')) {
-        if (state->selected_mode > 0) state->selected_mode--;
-    } else if (state->active_tab == 2 && (c == 's' || c == 'S' || c == 'd' || c == 'D')) {
-        if (state->selected_mode < VGA_MODE_COUNT - 1) state->selected_mode++;
-    } else if (c == '1') {
-        state->active_tab = 0;
-    } else if (c == '2') {
-        state->active_tab = 1;
-    } else if (c == '3' || c == 'r' || c == 'R') {
-        state->active_tab = 2; // Passa a Risoluzione
-    } else if (c == '\n' || c == '\r') {
-        // Applica modifiche
-        wm_set_background_type(state->selected_bg);
-        wm_set_theme(state->selected_theme);
-        if (state->selected_mode != state->orig_mode) {
-            vga_set_mode_index(state->selected_mode);
-            state->orig_mode = state->selected_mode;
-            win->x = ((int32_t)gfx_get_width() - win->width) / 2;
-            win->y = ((int32_t)gfx_get_height() - 28 - win->height) / 2;
-            if (win->y < 10) win->y = 10;
+    } else if (state->active_tab == 2) {
+        if (c >= '0' && c <= '5') {
+            state->selected_mode = c - '0';
+        } else if (c == 'w' || c == 'W' || c == 'a' || c == 'A') {
+            if (state->selected_mode > 0) state->selected_mode--;
+        } else if (c == 's' || c == 'S' || c == 'd' || c == 'D') {
+            if (state->selected_mode < VGA_MODE_COUNT - 1) state->selected_mode++;
         }
-    } else if (c == 27) { // Escape: Annulla
-        if (state->orig_mode != vga_get_current_mode_index()) {
-            vga_set_mode_index(state->orig_mode);
-        }
-        wm_set_background_type(state->orig_bg);
-        wm_set_theme(state->orig_theme);
-        wm_destroy_window(win->id);
     }
 }
 

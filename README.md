@@ -2,10 +2,10 @@
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 [![Arch](https://img.shields.io/badge/architecture-x86__64%20(Long%20Mode)-blue.svg)]()
-[![Kernel Size](https://img.shields.io/badge/kernel%20size-317%20KB%20%2F%20480%20KB-brightgreen.svg)]()
+[![Kernel Size](https://img.shields.io/badge/kernel%20size-340%20KB%20%2F%20480%20KB-brightgreen.svg)]()
 [![Dual Boot](https://img.shields.io/badge/boot-BIOS%20MBR%20%2B%20UEFI%2064--bit-blueviolet.svg)]()
 [![Filesystem](https://img.shields.io/badge/filesystems-exFAT%20%7C%20NTFS--3G%20%7C%20ISO%209660%20%7C%20UDF%20%7C%20RamFS-purple.svg)]()
-[![UI](https://img.shields.io/badge/GUI-Classic%20Windows%202000-lightgrey.svg)]()
+[![UI](https://img.shields.io/badge/GUI-Fluent%20Glass%20%7C%20Mica%20%7C%20Classic%202000-lightgrey.svg)]()
 
 **NewOS V1** è un sistema operativo nativo a 64-bit scritto in C ed Assembly per architettura **x86_64**, con architettura ibrida a kernel protetto e sottosistemi applicativi scorporati, interfaccia grafica Classic Windows 2000, supporto completo a dischi fisici MBR/GPT ed exFAT, stack di rete completo (IPv4, TCP, UDP, DHCP, DNS) e browser web integrato.
 
@@ -22,8 +22,8 @@
   - Bootloader UEFI conforme alle specifiche UEFI 2.x x86_64.
   - Partizione EFI System Partition (ESP) FAT32 a LBA 256000 (`Type 0xEF`).
 
-### 2. Kernel Core Protetto (312 KB / 480 KB)
-- **Budget Kernel Rispettato**: Dimensione di `kernel.bin` ridotta a **319.952 byte (~312 KB)**, ampiamente inferiore al vincolo di 480 KB (491.520 byte).
+### 2. Kernel Core Protetto (340 KB / 480 KB)
+- **Budget Kernel Rispettato**: Dimensione di `kernel.bin` ridotta a **340.576 byte (~340 KB)**, ampiamente inferiore al vincolo di 480 KB (491.520 byte).
 - **Separazione Privilegi Ring 0 / Ring 3**:
   - Istruzioni native `SYSCALL` e `SYSRET` per le chiamate di sistema (`kernel/arch/x86_64/syscall.c`).
   - Protezione della memoria virtuale con Supervisor bit nelle tabelle PML4 (`kernel/mm/paging.c`).
@@ -78,10 +78,30 @@ Tutte le applicazioni accessorie e i tool di sistema sono stati estratti dal ker
 - [`control_panel/`](file:///c:/Users/morga/Desktop/MyOS/control_panel/): **Pannello di Controllo** con applet per Proprietà Schermo, Audio, Alimentazione, Gestione Dispositivi e Informazioni di Sistema.
 - [`WebBrowser/`](file:///c:/Users/morga/Desktop/MyOS/WebBrowser/): **NewSoft Web Browser** con motore di rendering HTML integrato e navigazione web.
 
-### 7. Librerie Dinamiche Out-of-Kernel (`C:\NewOS\SystemLibrary\`)
+### 7. Librerie Dinamiche Out-of-Kernel & Sottosistema Temi (`C:\NewOS\SystemLibrary\`)
 In base alla Direttiva Architetturale (Regola 9), tutti i nuovi moduli e librerie operano al di fuori del Kernel Mode:
 - **`THEMEMGR.DLL` & `THEMEMGR.INI`**: Libreria dinamica per la scansione autonoma, decodifica file `.THEMES` / `.THM`, parsing INI riga per riga e ordinamento automatico (alfabetico e per motore grafico).
 - **Client Loader Leggero**: Il kernel dialoga con la DLL tramite [`kernel/gui/theme_loader.c`](file:///c:/Users/morga/Desktop/MyOS/kernel/gui/theme_loader.c), eseguendo verifica crittografica `NOSM` e dispatching protetto con fallback di emergenza.
+
+#### Gestione Avanzata dei File Tema (`.THEMES` e `.THM`)
+Il sistema di personalizzazione visiva di NewOS è **interamente pilotato dal file del tema** (nessun vincolo o stile è cablato staticamente nel Kernel o nelle applicazioni):
+1. **Controllo Granulare di Curvature e Bordi**:
+   - Raggi indipendenti per qualsiasi componente: finestre (`CornerRadius`, `BorderRadius`), pulsanti (`ButtonRadius`, `ButtonBorderRadius`), schede (`TabRadius`, `TabBorderRadius`), campi di input (`InputRadius`, `InputBorderRadius`), pannelli laterali (`PanelRadius`, `PanelBorderRadius`), taskbar (`TaskbarBtnRadius`, `TaskbarBorderRadius`), pulsante Start (`StartBtnRadius`, `StartBtnBorderRadius`) e area di notifica (`TrayRadius`, `TrayBorderRadius`).
+   - Flag di raccordo automatico o sovrascrittura esplicita: `BorderFollowsCorner` (perimetro finestra curvo o squadrato) e `ControlBorderFollowsRadius` (bordi controlli conformi al rispettivo raggio).
+2. **Motore di Scripting di Rendering Avanzato (`[RenderScripts]`) Totalmente Scorporato**:
+   - I file `.THEMES` possono definire una micro-pipeline di script grafici dichiarativi per qualsiasi elemento dell'interfaccia (`TitlebarScript`, `ButtonScript`, `PanelScript`, `ProgressScript`, `SelectionScript`, `TaskbarScript`, `RenderScript`).
+   - **Isolamento e Sicurezza Out-of-Kernel**: L'intero motore di tokenizzazione, il parser delle macro, i calcoli geometrici e la composizione procedurale (riflessi di luce, gradienti, ombre) risiedono **esclusivamente nella libreria out-of-kernel [`THEMEMGR.DLL`](file:///c:/Users/morga/Desktop/MyOS/SystemLibrary/theme_mgr.c)** in `C:\NewOS\SystemLibrary\`. Il Kernel non contiene alcun interprete di scripting.
+   - **Linguaggio di Macro Grafiche**:
+     - `SPECULAR_ARC(alpha, color)`: Riflesso ellittico convesso di luce cristallina sfumata sulla barra del titolo.
+     - `VERTICAL_GLOSS(split_pct, top_alpha, bottom_alpha)`: Effetto lucido a pastiglia 3D stile vetro o acrilico.
+     - `HIGHLIGHT_EDGE(side, thickness, color, alpha)`: Lama di luce speculare ad alta precisione su uno dei bordi.
+     - `INNER_HIGHLIGHT(inset, color, alpha)`: Rilievo perimetrale interno riflettente conforme alla curvatura.
+     - `ETCHED_LINE(side, light_col, shadow_col, alpha)`: Incisione 3D a due toni per separatori e partizioni.
+     - `CYLINDER_SHADING(base_col, highlight_col)`: Profondità tridimensionale tubolare con centro speculare continuo (utilizzato per indicatori di capienza disco).
+     - `AURA_BORDER(radius, color, alpha)`: Bagliore neon morbido ed espanso per selezioni ed elementi attivi.
+     - `NOISE_TEXTURE(intensity)`: Grana dither procedurale ultra-veloce per simulare superfici in vetro satinato/sabbiato (*Frosted Acrylic*).
+     - `GLASS_TINT(color, alpha)` & `GRADIENT(c1, c2, direction)`: Velature e sfumature lineari direzionali.
+   - **Documentazione Completa**: Tutte le chiavi, la sintassi e gli esempi operativi sono documentati nel manuale [`THEME_SPECIFICATION.md`](file:///c:/Users/morga/Desktop/MyOS/THEME_SPECIFICATION.md).
 
 ---
 
@@ -124,7 +144,8 @@ In base alla Direttiva Architetturale (Regola 9), tutti i nuovi moduli e libreri
 ├── whatsnew/                # Sottosistema Novità del Sistema (whatsnew.c, whatsnew.ini, LEGGIMI.TXT)
 ├── AGENTS.md                # Direttive e vincoli primari del progetto
 ├── CHECKPOINT.md            # Cronologia dettagliata di tutte le sessioni di sviluppo
-└── README.md                # Presentazione e documentazione ufficiale del progetto
+├── README.md                # Presentazione e documentazione ufficiale del progetto
+└── THEME_SPECIFICATION.md   # Specifica completa dei temi .THEMES/.THM e linguaggio RenderScripts
 ```
 
 ---

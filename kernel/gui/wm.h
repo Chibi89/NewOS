@@ -3,6 +3,7 @@
 
 #include <types.h>
 #include <drivers/mouse.h>
+#include <gui/theme_mgr.h>
 
 #define MAX_WINDOWS 8
 
@@ -65,6 +66,10 @@ void wm_set_background_type(int bg_type);
 int  wm_get_background_type(void);
 void wm_set_theme(int theme);
 int  wm_get_theme(void);
+void wm_apply_theme_props(const theme_info_t* props);
+const theme_info_t* wm_get_current_theme_props(void);
+void wm_draw_themed_button(int32_t x, int32_t y, int32_t w, int32_t h, const char* label, bool pressed);
+void wm_draw_themed_tab(int32_t x, int32_t y, int32_t w, int32_t h, const char* label, bool active);
 void wm_add_desktop_file(const char* name, bool is_folder);
 void wm_rearrange_desktop_icons(void);
 

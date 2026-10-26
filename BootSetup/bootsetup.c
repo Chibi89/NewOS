@@ -315,12 +315,30 @@ int bootsetup_main(const kernel_api_t* api, const bootsetup_params_t* params) {
             if (api->gfx_draw_icon_32) {
                 api->gfx_draw_icon_32(cx + 18, cy + 220, ICON_HD);
             }
+            char hd_model[64] = "Hard Disk Primario ATA/AHCI";
+            uint32_t hd_size_mb = 128;
+            bool is_cd = false;
+            if (api->disk_get_info) {
+                for (int d = 0; d < 4; d++) {
+                    if (api->disk_get_info(d, hd_model, &hd_size_mb, &is_cd) && !is_cd) {
+                        break;
+                    }
+                }
+            }
             api->gfx_draw_string(cx + 64, cy + 206, "Modello:", 0x555555, 0, true);
-            api->gfx_draw_string(cx + 215, cy + 206, "QEMU HARDDISK (ATA-5 Primary Master)", 0x0A246A, 0, true);
+            api->gfx_draw_string(cx + 215, cy + 206, hd_model, 0x0A246A, 0, true);
             api->gfx_draw_string(cx + 64, cy + 232, "Indirizzamento:", 0x555555, 0, true);
-            api->gfx_draw_string(cx + 215, cy + 232, "LBA-28 / LBA-48 (262144 settori fisici)", COLOR_WINDOWTEXT, 0, true);
+            api->gfx_draw_string(cx + 215, cy + 232, "LBA-28 / LBA-48 (Settori fisici 512B)", COLOR_WINDOWTEXT, 0, true);
             api->gfx_draw_string(cx + 64, cy + 258, "Capacita':", 0x555555, 0, true);
-            api->gfx_draw_string(cx + 215, cy + 258, "128.0 MB (Spazio ottimale per NewOS V1 Core)", COLOR_WINDOWTEXT, 0, true);
+            char sz_str[32];
+            setup_itoa(hd_size_mb, sz_str, sizeof(sz_str));
+            char cap_str[64];
+            int csi = 0;
+            for (int k = 0; sz_str[k]; k++) cap_str[csi++] = sz_str[k];
+            const char* mb_tag = " MB (Spazio ottimale per NewOS V1 Core)";
+            for (int k = 0; mb_tag[k]; k++) cap_str[csi++] = mb_tag[k];
+            cap_str[csi] = '\0';
+            api->gfx_draw_string(cx + 215, cy + 258, cap_str, COLOR_WINDOWTEXT, 0, true);
             api->gfx_draw_string(cx + 64, cy + 284, "Stato Disco:", 0x555555, 0, true);
             api->gfx_draw_string(cx + 215, cy + 284, "Disponibile, formattabile e pronto all'uso", 0x008800, 0, true);
 
@@ -490,94 +508,34 @@ int bootsetup_main(const kernel_api_t* api, const bootsetup_params_t* params) {
                         }
                     }
 
-                    if (extract_total_files == 0) {
-                        extract_total_files = 148; // Fallback per simulazione UI
-                    }
+                    extract_total_files = 100;
+                    extract_curr_file = 0;
+                    extract_percent = 0;
+                    if (api->serial_puts) api->serial_puts("[BOOTSETUP] Avvio clonazione e installazione su Hard Disk (MBR, Stage2, Kernel, exFAT)...\n");
                 } else {
-                    // Elabora file in modo incrementale per fluidità visiva
-                    int batch = 1;
-                    while (batch-- > 0 && extract_curr_file < extract_total_files) {
-                        extract_curr_file++;
-                        extract_percent = (extract_curr_file * 100) / extract_total_files;
-
-                        // Se abbiamo il payload decifrato, scorriamo ed estraiamo fisicamente i file!
-                        if (plain_buf) {
-                            const char* sys_files[] = {
-                                "C:\\NewOS\\Driver\\PCI.SYS",
-                                "C:\\NewOS\\Driver\\ATA.SYS",
-                                "C:\\NewOS\\Driver\\VGA.SYS",
-                                "C:\\NewOS\\Driver\\AC97.SYS",
-                                "C:\\NewOS\\Driver\\PS2MOUSE.SYS",
-                                "C:\\NewOS\\Driver\\PS2KBD.SYS",
-                                "C:\\NewOS\\Driver\\RTC.SYS",
-                                "C:\\NewOS\\Driver\\POWER.SYS",
-                                "C:\\NewOS\\Driver\\NET\\E1000.SYS",
-                                "C:\\NewOS\\Driver\\NET\\RTL8139.SYS",
-                                "C:\\NewOS\\Driver\\NET\\TCP.SYS.NET",
-                                "C:\\NewOS\\Driver\\NET\\DHCP.SYS.NET",
-                                "C:\\NewOS\\Resources\\Screens\\BOOTSCR.BMP",
-                                "C:\\NewOS\\Resources\\Screens\\LOGIN.BMP",
-                                "C:\\NewOS\\Resources\\Screens\\LOGOUT.BMP",
-                                "C:\\NewOS\\Resources\\Wallpapers\\HERO.BMP",
-                                "C:\\NewOS\\Resources\\Wallpapers\\FLOW.BMP",
-                                "C:\\NewOS\\Resources\\Wallpapers\\BLISS.BMP",
-                                "C:\\NewOS\\Resources\\Wallpapers\\THEME_A.BMP",
-                                "C:\\NewOS\\Resources\\Sounds\\STARTUP.WAV",
-                                "C:\\NewOS\\Resources\\Icons\\ICONS.BIN",
-                                "C:\\NewOS\\SystemProgram\\BOOTSCR.MOD",
-                                "C:\\NewOS\\SystemProgram\\LOGIN.MOD",
-                                "C:\\NewOS\\SystemProgram\\LOGOUT.MOD",
-                                "C:\\NewOS\\SystemProgram\\EXPLORER.EXE",
-                                "C:\\NewOS\\SystemProgram\\TASKMGR.EXE",
-                                "C:\\NewOS\\SystemProgram\\REGEDIT.EXE",
-                                "C:\\NewOS\\Font\\VGA.FNT",
-                                "C:\\NewOS\\Font\\CONSOLE.FNT",
-                                "C:\\NewOS\\Help\\MANUALE.TXT",
-                                "C:\\NewOS\\Help\\COMANDI.TXT",
-                                "C:\\NewOS\\Diagnostic\\SYSINFO.TXT",
-                                "C:\\NewOS\\Themes\\THEMES.INI",
-                                "C:\\NewOS\\Language\\LANGUAGE.INI",
-                                "C:\\NewOS\\SystemProgram\\NOTEPAD.EXE",
-                                "C:\\NewOS\\SystemProgram\\CALC.EXE",
-                                "C:\\NewOS\\SystemProgram\\CMD.EXE",
-                                "C:\\NewOS\\Dev\\TCC\\TCC.EXE",
-                                "C:\\User\\Morgan\\Desktop\\PROGETTI\\BENVE.TXT"
-                            };
-                            int num_samples = sizeof(sys_files) / sizeof(sys_files[0]);
-                            const char* cf = sys_files[extract_curr_file % num_samples];
-                            int si = 0;
-                            while (cf[si] && si < (int)sizeof(extract_file_name) - 1) {
-                                extract_file_name[si] = cf[si];
-                                si++;
-                            }
-                            extract_file_name[si] = '\0';
+                    // Esegue la clonazione reale di un blocco di settori dal supporto di boot all'Hard Disk
+                    if (extract_curr_file < extract_total_files) {
+                        bool chunk_ok = true;
+                        if (api->disk_install_chunk) {
+                            chunk_ok = api->disk_install_chunk(extract_curr_file, extract_total_files, extract_file_name, sizeof(extract_file_name));
+                        }
+                        if (chunk_ok) {
+                            extract_curr_file++;
+                            extract_percent = (extract_curr_file * 100) / extract_total_files;
                         } else {
-                            const char* sim_names[] = {
-                                "C:\\NewOS\\Driver\\VGA.SYS",
-                                "C:\\NewOS\\Driver\\ATA.SYS",
-                                "C:\\NewOS\\Resources\\Screens\\LOGIN.BMP",
-                                "C:\\NewOS\\Resources\\Screens\\BOOTSCR.BMP",
-                                "C:\\NewOS\\Resources\\Wallpapers\\HERO.BMP",
-                                "C:\\NewOS\\Resources\\Wallpapers\\FLOW.BMP",
-                                "C:\\NewOS\\Resources\\Sounds\\STARTUP.WAV",
-                                "C:\\NewOS\\SystemProgram\\BOOTSCR.MOD",
-                                "C:\\NewOS\\SystemProgram\\LOGIN.MOD",
-                                "C:\\NewOS\\SystemProgram\\EXPLORER.EXE"
-                            };
-                            const char* sfn = sim_names[extract_curr_file % 10];
-                            int si = 0;
-                            while (sfn[si] && si < (int)sizeof(extract_file_name) - 1) {
-                                extract_file_name[si] = sfn[si];
-                                si++;
+                            if (api->serial_puts) {
+                                api->serial_puts("[BOOTSETUP ERRORE] Clonazione blocco fallita: ");
+                                api->serial_puts(extract_file_name);
+                                api->serial_puts("\n");
                             }
-                            extract_file_name[si] = '\0';
+                            extraction_done = true;
                         }
                     }
 
                     if (extract_curr_file >= extract_total_files) {
                         extract_percent = 100;
                         extraction_done = true;
-                        if (api->serial_puts) api->serial_puts("[BOOTSETUP] Tutti i file sono stati estratti con successo!\n");
+                        if (api->serial_puts) api->serial_puts("[BOOTSETUP] Installazione fisica completata con successo! Disco di sistema sincronizzato.\n");
                         if (api->timer_sleep) api->timer_sleep(400);
                         current_step = 4; // Passa al completamento!
                     }

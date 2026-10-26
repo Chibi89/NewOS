@@ -12,6 +12,28 @@ CornerRadius=8
 TitleHeight=22
 BorderWidth=1
 DropShadow=1
+ShadowSpread=6
+SpecularRim=0
+ModernControls=1
+ControlRadius=4
+ControlBorder=1
+ButtonRadius=4
+TabRadius=4
+InputRadius=4
+PanelRadius=6
+StartBtnRadius=6
+TaskbarBtnRadius=5
+TrayRadius=5
+BorderFollowsCorner=1
+BorderRadius=8
+ControlBorderFollowsRadius=1
+ButtonBorderRadius=4
+TabBorderRadius=4
+InputBorderRadius=4
+PanelBorderRadius=6
+StartBtnBorderRadius=6
+TaskbarBorderRadius=5
+TrayBorderRadius=5
 
 [Colors]
 DesktopColor=0x1E2A38
@@ -25,16 +47,25 @@ WindowBg=0xFFFFFF
 WindowText=0x1E1E1E
 BtnFace=0xF0F2F5
 BtnText=0x1E1E1E
+BtnHover=0xE4E6EB
 BorderColor=0xE2E2E2
+BorderInactive=0xD5D5D5
+ControlBorderColor=0xD8D8D8
 AccentColor=0x0078D4
+AccentText=0xFFFFFF
 SelectionColor=0xCCE8FF
 SelectionText=0x004578
 CloseHoverBg=0xE81123
 
 [Taskbar]
 TaskbarColor=0xF3F3F7
-TaskbarAlpha=225
+TaskbarAlpha=235
+TaskbarHeight=28
+TaskbarBorder=0x000000
+StartBtnColor=0xE8E8EE
+StartBtnText=0x1E1E1E
 ActiveTabIndicator=0x0078D4
+TrayPillColor=0xEAEAEF
 
 [Wallpaper]
 File=C:\NewOS\Resource\wallpapers\FLOW.BMP
