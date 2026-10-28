@@ -153,22 +153,31 @@ bool oobe_is_completed(void) {
     return false;
 }
 
-void oobe_mark_completed(void) {
+void oobe_mark_completed_with_user(const char* username) {
     user_profile_t* u = user_get_current();
+    const char* active_user = (username && username[0]) ? username : ((u && u->username[0]) ? u->username : "Morgan");
+
     if (u) {
         u->is_installed = true;
         user_save_config();
     }
 
-    const char* ini = 
+    char ini[256];
+    mini_snprintf(ini, sizeof(ini),
         "[OOBE]\n"
         "Completed=1\n"
         "SetupStage=Completed\n"
         "Language=IT_IT\n"
-        "DefaultUser=Morgan\n"
-        "AllowSkip=1\n";
+        "DefaultUser=%s\n"
+        "AllowSkip=1\n",
+        active_user);
     vfs_write_entire_file_inplace("C:\\NewOS\\OOBE\\OOBE.INI", ini, strlen(ini));
     vfs_write_entire_file_inplace("/NewOS/OOBE/OOBE.INI", ini, strlen(ini));
+}
+
+void oobe_mark_completed(void) {
+    user_profile_t* u = user_get_current();
+    oobe_mark_completed_with_user((u && u->username[0]) ? u->username : "Morgan");
 }
 
 static void oobe_init_state(oobe_state_t* state, uint32_t sw, uint32_t sh) {
@@ -306,7 +315,7 @@ static void oobe_render_content(int32_t cx, int32_t cy, int32_t cw, int32_t ch, 
     gfx_draw_string(cx + 38, cy + 16, "NewOS V1", 0xFFFFFF, 0, true);
     gfx_draw_string(cx + 16, cy + 38, "Setup Guidato OOBE", 0xA6CAF0, 0, true);
 
-    const char* steps[] = {
+    const char steps[6][24] = {
         "1. Benvenuto",
         "2. Display & Video",
         "3. Test Audio",
@@ -761,10 +770,13 @@ static void oobe_save_step_to_registry(oobe_state_t* state, int step) {
             registry_audit_log("OOBE_FASE", "HKEY_LOCAL_MACHINE\\NETWORK", "PingTarget", "-", "95.141.32.1", REG_RISK_MEDIUM);
             break;
 
-        case 4: // Account Utente & Stile/Tema
-            if (state->username[0]) {
-                registry_set_value_sz("HKEY_CURRENT_USER\\NEWOS\\PREFERENCES", "Username", state->username);
-            }
+        case 4: { // Account Utente & Stile/Tema
+            const char* uname = state->username[0] ? state->username : "Morgan";
+            char desk_path[96];
+            mini_snprintf(desk_path, sizeof(desk_path), "C:\\User\\%s\\Desktop", uname);
+            registry_set_value_sz("HKEY_LOCAL_MACHINE\\NEWOS\\SYSTEM", "DefaultUser", uname);
+            registry_set_value_sz("HKEY_CURRENT_USER\\NEWOS\\PREFERENCES", "Username", uname);
+            registry_set_value_sz("HKEY_CURRENT_USER\\DESKTOP", "UserDesktopPath", desk_path);
             if (state->computer_name[0]) {
                 registry_set_value_sz("HKEY_LOCAL_MACHINE\\SYSTEM", "ComputerName", state->computer_name);
             }
@@ -777,13 +789,21 @@ static void oobe_save_step_to_registry(oobe_state_t* state, int step) {
             registry_set_value_sz("HKEY_LOCAL_MACHINE\\NEWOS\\SYSTEM", "SetupStage", "AccountCreated");
             registry_audit_log("OOBE_FASE", "HKEY_CURRENT_USER\\DESKTOP", "Theme", "-", state->selected_theme == 1 ? "LiquidGlass" : "Classic", REG_RISK_LOW);
             break;
+        }
 
-        case 5: // Fine & Completamento OOBE
+        case 5: { // Fine & Completamento OOBE
+            const char* uname = state->username[0] ? state->username : "Morgan";
+            char desk_path[96];
+            mini_snprintf(desk_path, sizeof(desk_path), "C:\\User\\%s\\Desktop", uname);
+            registry_set_value_sz("HKEY_LOCAL_MACHINE\\NEWOS\\SYSTEM", "DefaultUser", uname);
+            registry_set_value_sz("HKEY_CURRENT_USER\\NEWOS\\PREFERENCES", "Username", uname);
+            registry_set_value_sz("HKEY_CURRENT_USER\\DESKTOP", "UserDesktopPath", desk_path);
             registry_set_value_dword("HKEY_LOCAL_MACHINE\\NEWOS\\SYSTEM", "OOBECompleted", 1);
             registry_set_value_sz("HKEY_LOCAL_MACHINE\\NEWOS\\SYSTEM", "SetupStage", "Completed");
             registry_audit_log("OOBE_FASE", "HKEY_LOCAL_MACHINE\\NEWOS\\SYSTEM", "OOBECompleted", "-", "1", REG_RISK_LOW);
             registry_save_to_disk();
             break;
+        }
     }
 }
 
@@ -1007,10 +1027,11 @@ int oobe_run_modal(void) {
     outb(0x3F8, 'X');
 
     // Al termine dell'OOBE a livello di login:
-    oobe_mark_completed();
-    outb(0x3F8, 'M');
     user_set_profile(state.username, state.password, state.computer_name, state.selected_theme, 0, true);
     user_save_config();
+    outb(0x3F8, 'M');
+    oobe_mark_completed_with_user(state.username);
+    oobe_save_step_to_registry(&state, 5);
     outb(0x3F8, 'C');
 
     if (bg_img) {

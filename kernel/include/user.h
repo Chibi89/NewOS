@@ -22,6 +22,9 @@ user_profile_t* user_get_current(void);
 // Configura i parametri utente (richiamato dall'Installer o dal Pannello di Controllo)
 void user_set_profile(const char* username, const char* password, const char* comp_name, int theme, int power, bool installed);
 
+// Crea o migra la directory fisica del profilo utente in C:\User\<new_username>
+bool user_create_or_migrate(const char* old_username, const char* new_username);
+
 // Salva la configurazione utente corrente
 bool user_save_config(void);
 

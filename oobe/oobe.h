@@ -19,7 +19,8 @@ void app_oobe_launch(void);
 // Verifica se l'OOBE e' gia' stato completato su questa installazione
 bool oobe_is_completed(void);
 
-// Imposta l'OOBE come completato in modo permanente
+// Imposta l'OOBE come completato in modo permanente (con utente specifico o attivo)
 void oobe_mark_completed(void);
+void oobe_mark_completed_with_user(const char* username);
 
 #endif // OOBE_H

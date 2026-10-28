@@ -179,6 +179,7 @@ bool exfat_ops_create_entry(uint32_t dir_cluster, const char* name, uint32_t fir
     for (uint32_t s = 0; s < spc; s++) {
         vfs_cache_write_sector(0, lba + s, cl_buf + s * 512);
     }
+    vfs_cache_flush();
 
     kfree(cl_buf);
     return true;
@@ -248,6 +249,7 @@ bool exfat_ops_update_file_entry(uint32_t dir_cluster, const char* name, uint32_
                             for (uint32_t s = 0; s < spc; s++) {
                                 vfs_cache_write_sector(0, lba + s, cl_buf + s * 512);
                             }
+                            vfs_cache_flush();
                             updated = true;
                             break;
                         }
@@ -352,6 +354,7 @@ bool exfat_ops_delete_entry(uint32_t dir_cluster, const char* name) {
                         for (uint32_t s = 0; s < spc; s++) {
                             vfs_cache_write_sector(0, lba + s, cl_buf + s * 512);
                         }
+                        vfs_cache_flush();
                         deleted = true;
                         break;
                     }
@@ -437,6 +440,7 @@ bool exfat_ops_rename_entry(uint32_t dir_cluster, const char* old_name, const ch
                             for (uint32_t s = 0; s < spc; s++) {
                                 vfs_cache_write_sector(0, lba + s, cl_buf + s * 512);
                             }
+                            vfs_cache_flush();
                             renamed = true;
                             break;
                         }

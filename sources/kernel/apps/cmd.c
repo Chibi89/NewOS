@@ -811,6 +811,11 @@ static void cmd_execute_internal(cmd_state_t* state, const char* cmd) {
     } else if (strcmp(cmd, "explorer") == 0) {
         cmd_print(state, "Apertura Risorse del computer...");
         app_explorer_open_this_pc();
+    } else if (strncmp(cmd, "explorer ", 9) == 0) {
+        const char* f = cmd + 9;
+        while (*f == ' ') f++;
+        cmd_print(state, "Apertura cartella in Esplora Risorse...");
+        app_explorer_open_folder(f);
     } else if (strcmp(cmd, "oobe") == 0) {
         cmd_print(state, "Apertura Configurazione Guidata OOBE...");
         app_oobe_launch();

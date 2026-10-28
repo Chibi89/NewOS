@@ -2,24 +2,23 @@
 #include <drivers/ata.h>
 #include <drivers/keyboard.h>
 #include <drivers/mouse.h>
+#include <drivers/net/net_nic.h>
 #include <drivers/power.h>
 #include <drivers/sound.h>
 #include <drivers/sound_wav.h>
 #include <drivers/timer.h>
-#include <fs/vfs.h>
 #include <fs/registry.h>
-#include <drivers/net/net_nic.h>
-#include <net/icmp.h>
-#include <net/dhcp.h>
+#include <fs/vfs.h>
 #include <gui/graphics.h>
 #include <gui/icons.h>
 #include <gui/image.h>
-#include <gui/wm.h>
 #include <gui/screen_mgr.h>
+#include <gui/wm.h>
 #include <mm/heap.h>
+#include <net/dhcp.h>
+#include <net/icmp.h>
 #include <string.h>
 #include <user.h>
-
 
 static kernel_api_t g_kernel_api;
 static bool g_api_initialized = false;
@@ -329,7 +328,8 @@ void screen_mgr_init(void) {
   g_kernel_api.net_parse_ip = net_parse_ip;
   g_kernel_api.dhcp_discover = dhcp_discover;
   g_kernel_api.net_nic_poll = net_nic_poll;
-  g_kernel_api.icmp_ping_ip = (bool (*)(uint32_t, uint32_t, void*, void*))icmp_ping_ip;
+  g_kernel_api.icmp_ping_ip =
+      (bool (*)(uint32_t, uint32_t, void *, void *))icmp_ping_ip;
 
   g_api_initialized = true;
   serial_log("[SCREEN_MGR] Tabella API Kernel collegata con successo (43 "
@@ -501,7 +501,12 @@ loginscreen_result_t screen_mgr_run_loginscreen(void) {
       loginscreen_entry_fn entry =
           (loginscreen_entry_fn)(mod_buf + h->entry_offset);
 
-      loginscreen_params_t p = {.default_user = "Morgan", .allow_guest = true};
+      user_profile_t *u = user_get_current();
+      const char *def_u = (u && u->username[0]) ? u->username : "Morgan";
+      loginscreen_params_t p;
+      memset(&p, 0, sizeof(p));
+      strncpy(p.default_user, def_u, sizeof(p.default_user) - 1);
+      p.allow_guest = true;
       loginscreen_result_t res = (loginscreen_result_t)entry(&g_kernel_api, &p);
 
       kfree(mod_buf);
@@ -537,7 +542,9 @@ logoutscreen_result_t screen_mgr_run_logoutscreen(void) {
       logoutscreen_entry_fn entry =
           (logoutscreen_entry_fn)(mod_buf + h->entry_offset);
 
-      logoutscreen_params_t p = {.current_user = "Morgan"};
+      user_profile_t *u = user_get_current();
+      logoutscreen_params_t p = {
+          .current_user = (u && u->username[0]) ? u->username : "Morgan"};
       logoutscreen_result_t res =
           (logoutscreen_result_t)entry(&g_kernel_api, &p);
 
@@ -760,7 +767,8 @@ update_result_t screen_mgr_run_update(void) {
 }
 
 static oobe_result_t oobe_fallback(void) {
-  serial_log("[OOBE] Fallback: modulo protetto assente o corrotto, procedura segnata completata.\n");
+  serial_log("[OOBE] Fallback: modulo protetto assente o corrotto, procedura "
+             "segnata completata.\n");
   oobe_mark_completed();
   return OOBE_SUCCESS;
 }
@@ -768,15 +776,13 @@ static oobe_result_t oobe_fallback(void) {
 oobe_result_t screen_mgr_run_oobe(void) {
   screen_mgr_init();
 
-  const char *paths[] = {
-      "C:\\NewOS\\Boot\\OOBE.MOD",
-      "C:\\NewOS\\SystemProgram\\OOBE.MOD",
-      "C:\\NewOS\\OOBE\\OOBE.MOD",
-      "/NewOS/Boot/OOBE.MOD",
-      "/NewOS/SystemProgram/OOBE.MOD",
-      "/NewOS/OOBE/OOBE.MOD",
-      "OOBE.MOD"
-  };
+  const char *paths[] = {"C:\\NewOS\\Boot\\OOBE.MOD",
+                         "C:\\NewOS\\SystemProgram\\OOBE.MOD",
+                         "C:\\NewOS\\OOBE\\OOBE.MOD",
+                         "/NewOS/Boot/OOBE.MOD",
+                         "/NewOS/SystemProgram/OOBE.MOD",
+                         "/NewOS/OOBE/OOBE.MOD",
+                         "OOBE.MOD"};
 
   uint8_t *mod_buf = NULL;
   uint32_t mod_size = 0;
@@ -788,7 +794,8 @@ oobe_result_t screen_mgr_run_oobe(void) {
   }
 
   if (mod_buf && mod_size >= sizeof(module_header_t)) {
-    if (screen_mgr_verify_module(mod_buf, mod_size, MODULE_TYPE_OOBE, "OOBE.MOD")) {
+    if (screen_mgr_verify_module(mod_buf, mod_size, MODULE_TYPE_OOBE,
+                                 "OOBE.MOD")) {
       // Buffer protetto con cuscinetto BSS azzerato (64 KB)
       uint8_t *exec_buf = (uint8_t *)kmalloc(mod_size + 65536);
       if (exec_buf) {
@@ -801,7 +808,7 @@ oobe_result_t screen_mgr_run_oobe(void) {
       const module_header_t *h = (const module_header_t *)mod_buf;
       oobe_entry_fn entry = (oobe_entry_fn)(mod_buf + h->entry_offset);
 
-      oobe_params_t p = { .allow_skip = true };
+      oobe_params_t p = {.allow_skip = true};
       oobe_result_t res = (oobe_result_t)entry(&g_kernel_api, &p);
 
       kfree(mod_buf);
@@ -829,9 +836,16 @@ bool oobe_is_completed(void) {
 }
 
 void oobe_mark_completed(void) {
+  user_profile_t *u = user_get_current();
+  const char *uname = (u && u->username[0]) ? u->username : "Morgan";
   vfs_create("C:\\NewOS\\OOBE\\OOBE.INI");
-  const char *txt = "[OOBE]\nCompleted=1\nSetupStage=Done\nLanguage=IT_IT\nDefaultUser=Morgan\nAllowSkip=1\n";
-  vfs_write_entire_file_inplace("C:\\NewOS\\OOBE\\OOBE.INI", txt, (uint32_t)strlen(txt));
+  char txt[256];
+  mini_snprintf(txt, sizeof(txt),
+                "[OOBE]\nCompleted=1\nSetupStage=Completed\nLanguage=IT_"
+                "IT\nDefaultUser=%s\nAllowSkip=1\n",
+                uname);
+  vfs_write_entire_file_inplace("C:\\NewOS\\OOBE\\OOBE.INI", txt,
+                                (uint32_t)strlen(txt));
 }
 
 void app_oobe_launch(void) {
@@ -841,10 +855,9 @@ void app_oobe_launch(void) {
 }
 
 void app_installer_launch(void) {
-  serial_log("[APP_INSTALLER] Lancio procedura BootSetup esterna protetta...\n");
+  serial_log(
+      "[APP_INSTALLER] Lancio procedura BootSetup esterna protetta...\n");
   screen_mgr_run_bootsetup();
   wm_render();
   gfx_flip();
 }
-
-
