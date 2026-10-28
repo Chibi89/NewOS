@@ -12,6 +12,7 @@
 #include <gui/wm.h>
 #include <gui/icons.h>
 #include <gui/context_menu.h>
+#include <settings.h>
 
 #define MAX_EXPLORER_ITEMS 64
 #define MAX_PATH_HISTORY   16
@@ -24,7 +25,8 @@ typedef enum {
     EXPLORER_MODE_DRIVE_U,        // Navigazione Unità Rimovibile USB U:
     EXPLORER_MODE_FOLDER,         // Cartella specifica del filesystem
     EXPLORER_MODE_RECYCLE_BIN,    // Cestino (elementi pronti da eliminare)
-    EXPLORER_MODE_CONTROL_PANEL   // Pannello di controllo
+    EXPLORER_MODE_CONTROL_PANEL,  // Pannello di controllo (Classico, primario)
+    EXPLORER_MODE_SETTINGS        // Nuova modalità Impostazioni (Moderna, scorporata)
 } explorer_mode_t;
 
 typedef enum {
@@ -100,6 +102,13 @@ typedef struct {
     // Coordinate pulsante sidebar dinamico (Web View)
     int32_t sidebar_btn_y;
     int32_t sidebar_btn_h;
+
+    // Coordinate link commutazione modalità (Web View)
+    int32_t sidebar_mode_link_y;
+    int32_t sidebar_mode_link_h;
+
+    // Stato della modalità moderna Impostazioni (scorporata in SETTINGS.DLL)
+    settings_state_t settings_state;
 } explorer_state_t;
 
 // Funzioni pubbliche di apertura
@@ -111,5 +120,6 @@ void app_explorer_open_drive_u(void);
 void app_explorer_open_folder(const char* folder_name);
 void app_explorer_open_recycle_bin(void);
 void app_control_panel_open(void);
+void app_settings_open(void);
 
 #endif // EXPLORER_H

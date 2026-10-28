@@ -196,6 +196,7 @@ const cFiles = [
     'kernel/gui/wm.c',
     'kernel/gui/context_menu.c',
     'kernel/gui/theme_loader.c',
+    'kernel/gui/settings_loader.c',
     'kernel/apps/cmd.c',
     'notepad/notepad.c',
     'calculator/calculator.c',
@@ -203,13 +204,13 @@ const cFiles = [
     'control_panel/display.c',
     'control_panel/sound_props.c',
     'control_panel/power_props.c',
+    'control_panel/mouse_props.c',
     'explorer/explorer.c',
     'taskmgr/taskmgr.c',
     'autoplay/autoplay.c',
     'player/player.c',
     'kernel/drivers/power.c',
     'kernel/apps/boot_menu.c',
-    'kernel/apps/installer.c',
     'kernel/lib/user.c',
     'kernel/fs/exfat.c',
     'kernel/fs/exfat_ops.c',
@@ -250,10 +251,10 @@ const cFiles = [
     'kernel/net/socket.c',
     'kernel/fs/registry.c',
     'kernel/apps/regedit.c',
-    'oobe/oobe.c',
     'rules_viewer/rules_viewer.c',
     'whatsnew/whatsnew.c',
     'WebBrowser/webbrowser.c',
+    'kernel/gui/cursor_loader.c',
     'kernel/gui/screen_mgr.c',
     'kernel/kernel.c'
 ];
@@ -284,6 +285,7 @@ const cFlags = [
     `-I"${path.join(ROOT, 'autoplay')}"`,
     `-I"${path.join(ROOT, 'taskmgr')}"`,
     `-I"${path.join(ROOT, 'control_panel')}"`,
+    `-I"${path.join(ROOT, 'SystemLibrary')}"`,
     '-Os',
     '-Wall',
     '-Wno-unused-function'
@@ -317,7 +319,7 @@ const kernelStat = fs.statSync(kernelBin);
 console.log(`[OK] Kernel 64-bit generato con successo: ${kernelStat.size} byte`);
 
 // 6b. Compilazione e Firma Moduli Esterni Protetti (.MOD)
-console.log('\n--> Compilazione e Firma Moduli Esterni Protetti (C:\\SYSTEM\\SCREENS\\)...');
+console.log('\n--> Compilazione e Firma Moduli Esterni Protetti (C:\\NewOS\\Boot\\)...');
 
 function crc32Buffer(buf) {
     let crc = 0xFFFFFFFF;
@@ -335,10 +337,18 @@ const screenModules = [
     { src: 'loginscreen/loginscreen.c', ini: 'loginscreen/loginscreen.ini', out: 'LOGIN.MOD', iniOut: 'LOGIN.INI' },
     { src: 'logoutscreen/logoutscreen.c', ini: 'logoutscreen/logoutscreen.ini', out: 'LOGOUT.MOD', iniOut: 'LOGOUT.INI' },
     { src: 'BootSetup/bootsetup.c', extraSrcs: ['BootSetup/aes256.c'], ini: 'BootSetup/bootsetup.ini', out: 'BOOTSETUP.MOD', iniOut: 'BOOTSETUP.INI' },
-    { src: 'Update/update.c', extraSrcs: ['BootSetup/aes256.c'], ini: 'Update/update.ini', out: 'UPDATE.MOD', iniOut: 'UPDATE.INI' }
+    { src: 'Update/update.c', extraSrcs: ['BootSetup/aes256.c'], ini: 'Update/update.ini', out: 'UPDATE.MOD', iniOut: 'UPDATE.INI' },
+    { src: 'oobe/oobe.c', extraSrcs: ['kernel/lib/string.c'], ini: 'oobe/oobe.ini', out: 'OOBE.MOD', iniOut: 'OOBE.INI' }
 ];
 
 const modLdScript = path.join(ROOT, 'tools', 'module.ld');
+
+const bootModDir = path.join(BIN_DIR, 'NewOS', 'Boot');
+const sysProgModDir = path.join(BIN_DIR, 'NewOS', 'SystemProgram');
+const bootSetupModDir = path.join(BIN_DIR, 'BootSetup');
+if (!fs.existsSync(bootModDir)) fs.mkdirSync(bootModDir, { recursive: true });
+if (!fs.existsSync(sysProgModDir)) fs.mkdirSync(sysProgModDir, { recursive: true });
+if (!fs.existsSync(bootSetupModDir)) fs.mkdirSync(bootSetupModDir, { recursive: true });
 
 for (const sm of screenModules) {
     const allSrcs = [sm.src, ...(sm.extraSrcs || [])];
@@ -351,9 +361,9 @@ for (const sm of screenModules) {
         execSync(compileCmd, { stdio: 'inherit' });
     }
 
-    const binPath = path.join(BIN_DIR, sm.out);
+    const binPath = path.join(bootModDir, sm.out);
 
-    // Linka modulo in binario protetto piatto con module.ld
+    // Linka modulo in binario protetto piatto con module.ld direttamente in C:\NewOS\Boot\
     const linkModCmd = `${llvm.lld} -m elf_x86_64 -T "${modLdScript}" --oformat binary ${allObjs.join(' ')} -o "${binPath}"`;
     execSync(linkModCmd, { stdio: 'inherit' });
 
@@ -368,10 +378,20 @@ for (const sm of screenModules) {
         console.log(`  [OK] Modulo protetto generato e firmato: ${sm.out} (${modBuf.length} byte, CRC32: 0x${checksum.toString(16).toUpperCase()})`);
     }
 
+    // Distribuzione ordinata in SystemProgram e BootSetup senza sporcare la radice
+    try { fs.copyFileSync(binPath, path.join(sysProgModDir, sm.out)); } catch (e) {}
+    if (sm.out.startsWith('BOOTSETUP')) {
+        try { fs.copyFileSync(binPath, path.join(bootSetupModDir, sm.out)); } catch (e) {}
+    }
+
     // Copia file .INI associato
     const iniSrc = path.join(ROOT, sm.ini);
     if (fs.existsSync(iniSrc)) {
-        fs.copyFileSync(iniSrc, path.join(BIN_DIR, sm.iniOut));
+        fs.copyFileSync(iniSrc, path.join(bootModDir, sm.iniOut));
+        try { fs.copyFileSync(iniSrc, path.join(sysProgModDir, sm.iniOut)); } catch (e) {}
+        if (sm.out.startsWith('BOOTSETUP')) {
+            try { fs.copyFileSync(iniSrc, path.join(bootSetupModDir, sm.iniOut)); } catch (e) {}
+        }
     }
 }
 
@@ -414,7 +434,11 @@ for (const cm of codecModules) {
 // 6b3. Compilazione e Firma Librerie Dinamiche di Sistema (.DLL in NewOS/SystemLibrary/)
 console.log('\n--> Compilazione e Firma Librerie Dinamiche (.DLL in NewOS/SystemLibrary/)...');
 const systemLibraries = [
-    { src: 'SystemLibrary/theme_mgr.c', ini: 'SystemLibrary/THEMEMGR.INI', out: 'THEMEMGR.DLL', iniOut: 'THEMEMGR.INI' }
+    { src: 'SystemLibrary/theme_mgr.c', ini: 'SystemLibrary/THEMEMGR.INI', out: 'THEMEMGR.DLL', iniOut: 'THEMEMGR.INI' },
+    { src: 'SystemLibrary/cursor_mgr.c', ini: 'SystemLibrary/CURSORMGR.INI', out: 'CURSORMGR.DLL', iniOut: 'CURSORMGR.INI' },
+    { src: 'SystemLibrary/settings.c', ini: 'SystemLibrary/SETTINGS.INI', out: 'SETTINGS.DLL', iniOut: 'SETTINGS.INI' },
+    { src: 'SystemLibrary/whatsnew.c', ini: 'SystemLibrary/WHATSNEW.INI', out: 'WHATSNEW.DLL', iniOut: 'WHATSNEW.INI' },
+    { src: 'SystemLibrary/rules.c', ini: 'SystemLibrary/RULES.INI', out: 'RULES.DLL', iniOut: 'RULES.INI' }
 ];
 
 const targetLibDir = path.join(BIN_DIR, 'NewOS', 'SystemLibrary');
@@ -439,13 +463,19 @@ for (const sl of systemLibraries) {
         modBuf.writeUInt32LE(checksum, 24);      // checksum CRC32 (offset 24)
         fs.writeFileSync(binPath, modBuf);
         console.log(`  [OK] Libreria Dinamica generata e firmata: ${sl.out} (${modBuf.length} byte, CRC32: 0x${checksum.toString(16).toUpperCase()})`);
+
+        // Copia nelle cartelle ufficiali di sistema per garantire risoluzione rapida
+        const bootLibPath = path.join(BIN_DIR, 'NewOS', 'Boot', sl.out);
+        try { fs.copyFileSync(binPath, bootLibPath); } catch (e) {}
     }
 
     if (sl.ini) {
         const iniSrc = path.join(ROOT, sl.ini);
         if (fs.existsSync(iniSrc)) {
-            fs.copyFileSync(iniSrc, path.join(targetLibDir, sl.iniOut || path.basename(sl.ini)));
+            const iniDst = path.join(targetLibDir, sl.iniOut || path.basename(sl.ini));
+            fs.copyFileSync(iniSrc, iniDst);
             console.log(`  [OK] Descrittore INI sincronizzato: ${sl.iniOut || path.basename(sl.ini)}`);
+            try { fs.copyFileSync(iniSrc, path.join(BIN_DIR, 'NewOS', 'Boot', sl.iniOut || path.basename(sl.ini))); } catch (e) {}
         }
     }
 }
@@ -453,6 +483,16 @@ for (const sl of systemLibraries) {
 // 6c. Organizza e Popola l'albero completo NewOS V1 dentro build/bin/
 const { organizeBuildBin } = require('./tree_manager');
 organizeBuildBin(ROOT, BIN_DIR);
+
+// Bonifica radice build/bin: rimozione cartelle legacy (C:\SYSTEM\) e file sparsi fuori da C:\NewOS\ (Regola 6)
+const legacySys = path.join(BIN_DIR, 'SYSTEM');
+if (fs.existsSync(legacySys)) fs.rmSync(legacySys, { recursive: true, force: true });
+for (const f of fs.readdirSync(BIN_DIR)) {
+    const full = path.join(BIN_DIR, f);
+    if (fs.statSync(full).isFile() && (f.endsWith('.MOD') || f.endsWith('.INI') || f.endsWith('.DLL') || f.endsWith('.TXT'))) {
+        try { fs.unlinkSync(full); } catch (e) {}
+    }
+}
 
 // 6d. Generazione archivio cifrato AES-256 SYSTEM.PAK per BootSetup (Regola 1)
 const { packSystem } = require('./pack_system');

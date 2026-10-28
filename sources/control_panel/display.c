@@ -1,4 +1,5 @@
 #include "control_panel.h"
+#include "cpl_theme.h"
 #include <gui/wm.h>
 #include <gui/graphics.h>
 #include <gui/icons.h>
@@ -492,7 +493,9 @@ static void display_draw(window_t* win) {
     int32_t cy = win->y + 24;
     int32_t cw = win->width - 8;
     int32_t ch = win->height - 28;
-    gfx_fill_rect(cx, cy, cw, ch, COLOR_BTNFACE);
+    cpl_theme_t theme;
+    cpl_theme_init(&theme);
+    cpl_draw_dialog_bg(win, &theme, cx, cy, cw, ch);
     draw_tabs(cx, cy, cw, state->active_tab);
 
     if (state->active_tab == 0)      draw_bg_tab(win, state);

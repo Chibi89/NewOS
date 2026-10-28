@@ -18,6 +18,8 @@
 #include <gui/image.h>
 #include <gui/wm.h>
 #include <gui/theme_mgr.h>
+#include <gui/screen_mgr.h>
+#include <settings.h>
 #include <mm/heap.h>
 #include <string.h>
 
@@ -790,6 +792,13 @@ static void explorer_load_items(explorer_state_t *state) {
     }
     break;
   }
+
+  case EXPLORER_MODE_SETTINGS: {
+    strcpy(state->current_path, "Impostazioni");
+    state->num_items = 0;
+    settings_loader_init();
+    break;
+  }
   }
 
   if (state->sort_mode > 0) {
@@ -1160,6 +1169,9 @@ static void explorer_navigate_address(explorer_state_t *state,
   } else if (strcasecmp(addr, "Pannello di controllo") == 0 ||
              strcasecmp(addr, "Pannello") == 0) {
     explorer_navigate_to(state, EXPLORER_MODE_CONTROL_PANEL, NULL);
+  } else if (strcasecmp(addr, "Impostazioni") == 0 ||
+             strcasecmp(addr, "Settings") == 0) {
+    explorer_navigate_to(state, EXPLORER_MODE_SETTINGS, NULL);
   } else {
     explorer_navigate_to(state, EXPLORER_MODE_FOLDER, addr);
   }
@@ -1186,6 +1198,8 @@ static void explorer_draw(window_t *win) {
     strncpy(win->title, "Cestino", sizeof(win->title) - 1);
   } else if (state->mode == EXPLORER_MODE_CONTROL_PANEL) {
     strncpy(win->title, "Pannello di controllo", sizeof(win->title) - 1);
+  } else if (state->mode == EXPLORER_MODE_SETTINGS) {
+    strncpy(win->title, "Impostazioni", sizeof(win->title) - 1);
   } else if (state->mode == EXPLORER_MODE_FOLDER) {
     const char *leaf = state->folder_name;
     for (int k = 0; state->folder_name[k] != '\0'; k++) {
@@ -1277,7 +1291,8 @@ static void explorer_draw(window_t *win) {
     addr_icon = ICON_FOLDER;
   else if (state->mode == EXPLORER_MODE_RECYCLE_BIN)
     addr_icon = ICON_CESTINO;
-  else if (state->mode == EXPLORER_MODE_CONTROL_PANEL)
+  else if (state->mode == EXPLORER_MODE_CONTROL_PANEL ||
+           state->mode == EXPLORER_MODE_SETTINGS)
     addr_icon = ICON_CONTROL_PANEL;
 
   if (state->show_toolbar) {
@@ -1403,6 +1418,38 @@ static void explorer_draw(window_t *win) {
   int32_t body_y = state->show_toolbar ? (cy + 74) : (cy + 22);
   int32_t body_h = ch - (body_y - cy) - (state->show_statusbar ? 22 : 4);
   int32_t side_w = 160;
+
+  if (state->mode == EXPLORER_MODE_SETTINGS) {
+    state->sidebar_btn_y = -1;
+    state->sidebar_mode_link_y = -1;
+
+    mouse_state_t ms;
+    int32_t rel_mx = -1, rel_my = -1;
+    if (screen_mgr_get_api()->mouse_get_state) {
+      screen_mgr_get_api()->mouse_get_state(&ms);
+      rel_mx = ms.x;
+      rel_my = ms.y;
+    }
+
+    settings_render(screen_mgr_get_api(), cx + 2, body_y, cw - 4, body_h,
+                    rel_mx, rel_my, is_glass, COLOR_WINDOW,
+                    &state->settings_state, cur_th);
+
+    if (state->show_statusbar) {
+      int32_t sb_y = cy + ch - 20;
+      if (is_glass) {
+        gfx_fill_rounded_alpha(cx + 2, sb_y, cw - 4, 18, 4, 0xFFFFFF, 140);
+        gfx_draw_rounded_rect(cx + 2, sb_y, cw - 4, 18, 2, 0xD0D8E8);
+      } else {
+        gfx_fill_rect(cx + 2, sb_y, cw - 4, 18, COLOR_BTNFACE);
+        gfx_draw_bevel_rect(cx + 2, sb_y, cw - 4, 18, true);
+      }
+      gfx_draw_string(cx + 8, sb_y + 2,
+                      "Modalita Impostazioni (Moderna) - Sottosistema scorporato SETTINGS.DLL",
+                      0x0A246A, 0, true);
+    }
+    return;
+  }
 
   if (state->show_folder_tree) {
     // --- Albero Cartelle (Folder Tree) ---
@@ -1829,6 +1876,30 @@ static void explorer_draw(window_t *win) {
                         true);
         gfx_draw_string(cx + 12, info_y + 32, "l'ambiente NewOS V1.", 0x404040,
                         0, true);
+      }
+
+      // Link di attivazione della nuova modalità moderna (Impostazioni)
+      int32_t link_box_y = body_y + body_h - 48;
+      if (link_box_y < info_y + 90) link_box_y = info_y + 90;
+
+      if (is_glass) {
+        gfx_fill_alpha(cx + 10, link_box_y - 6, side_w - 20, 1, 0xFFFFFF, 120);
+      } else {
+        gfx_draw_bevel_rect(cx + 10, link_box_y - 6, side_w - 20, 2, true);
+      }
+
+      gfx_draw_string(cx + 12, link_box_y, "Visualizzazione:", 0x505050, 0, true);
+
+      int32_t link_btn_y = link_box_y + 16;
+      state->sidebar_mode_link_y = link_btn_y;
+      state->sidebar_mode_link_h = 22;
+
+      if (is_glass) {
+        wm_draw_themed_button(cx + 10, link_btn_y, side_w - 20, 22, "Impostazioni >", false);
+      } else {
+        gfx_fill_rect(cx + 10, link_btn_y, side_w - 20, 22, COLOR_BTNFACE);
+        gfx_draw_bevel_rect(cx + 10, link_btn_y, side_w - 20, 22, false);
+        gfx_draw_string(cx + 14, link_btn_y + 4, "Nuova modalita >", 0x0A246A, 0, true);
       }
     } else {
       // Modalità Unità C:, D:, A:, U: o Cartelle generiche
@@ -2529,6 +2600,8 @@ static void explorer_execute_selected(explorer_state_t *state) {
             app_display_props_launch();
           else if (strcasecmp(it->name, "SOUND.CPL") == 0)
             app_sound_props_launch();
+          else if (strcasecmp(it->name, "MAIN.CPL") == 0 || strcasecmp(it->name, "MOUSE.CPL") == 0)
+            app_mouse_props_launch();
           else if (strcasecmp(it->name, "POWER.CPL") == 0)
             app_power_props_launch();
           else if (strcasecmp(it->name, "DEVMGMT.CPL") == 0)
@@ -2634,6 +2707,8 @@ static void explorer_execute_selected(explorer_state_t *state) {
       app_power_props_launch();
     } else if (strcmp(it->name, "Gestione periferiche") == 0) {
       app_devmgmt_launch();
+    } else if (strcmp(it->name, "Mouse") == 0 || strcmp(it->name, "Proprieta mouse") == 0) {
+      app_mouse_props_launch();
     } else if (strcmp(it->name, "Editor del Registro") == 0) {
       app_regedit_launch();
     } else {
@@ -2652,6 +2727,7 @@ static void explorer_execute_selected(explorer_state_t *state) {
 
 static void explorer_mouse(window_t *win, int32_t mx, int32_t my,
                            bool clicked) {
+  outb(0x3F8, 'E'); outb(0x3F8, 'X'); outb(0x3F8, 'P'); outb(0x3F8, '_'); outb(0x3F8, 'M'); outb(0x3F8, 'O'); outb(0x3F8, 'U'); outb(0x3F8, 'S'); outb(0x3F8, 'E'); outb(0x3F8, '\n');
   if (!clicked)
     return;
   explorer_state_t *state = (explorer_state_t *)win->app_data;
@@ -3065,6 +3141,45 @@ static void explorer_mouse(window_t *win, int32_t mx, int32_t my,
   int32_t body_h = ch - (body_y - cy) - (state->show_statusbar ? 22 : 4);
   int32_t side_w = 160;
 
+  if (state->mode == EXPLORER_MODE_SETTINGS) {
+    if (my >= body_y && my <= body_y + body_h) {
+      settings_action_t action = settings_handle_mouse(
+          screen_mgr_get_api(), cx + 2, body_y, cw - 4, body_h, mx, my,
+          clicked, &state->settings_state);
+      if (action == SETTINGS_ACTION_CLASSIC_MODE) {
+        explorer_navigate_to(state, EXPLORER_MODE_CONTROL_PANEL, NULL);
+        return;
+      } else if (action == SETTINGS_ACTION_LAUNCH_DISPLAY) {
+        app_display_props_launch();
+        return;
+      } else if (action == SETTINGS_ACTION_LAUNCH_SOUND) {
+        app_sound_props_launch();
+        return;
+      } else if (action == SETTINGS_ACTION_LAUNCH_MOUSE) {
+        app_mouse_props_launch();
+        return;
+      } else if (action == SETTINGS_ACTION_LAUNCH_DEVMGMT) {
+        app_devmgmt_launch();
+        return;
+      } else if (action == SETTINGS_ACTION_LAUNCH_POWER) {
+        app_power_props_launch();
+        return;
+      } else if (action == SETTINGS_ACTION_LAUNCH_ABOUT) {
+        app_about_launch();
+        return;
+      } else if (action == SETTINGS_ACTION_LAUNCH_REGEDIT) {
+        app_regedit_launch();
+        return;
+      } else if (action >= SETTINGS_ACTION_APPLY_THEME_0 &&
+                 action <= SETTINGS_ACTION_APPLY_THEME_3) {
+        int th_idx = action - SETTINGS_ACTION_APPLY_THEME_0;
+        theme_mgr_apply(th_idx);
+        return;
+      }
+      return;
+    }
+  }
+
   // 6. Clic nell'area sinistra: Albero Cartelle O Web View
   if (mx >= cx + 2 && mx <= cx + 2 + side_w && my >= body_y &&
       my <= body_y + body_h) {
@@ -3092,6 +3207,21 @@ static void explorer_mouse(window_t *win, int32_t mx, int32_t my,
         return;
       }
     } else {
+      // Clic su link per abilitare la Nuova Modalita Moderna (Impostazioni)
+      if (state->mode == EXPLORER_MODE_CONTROL_PANEL && state->sidebar_mode_link_y > 0) {
+        int32_t link_rel_y = state->sidebar_mode_link_y;
+        if (link_rel_y > win->height) {
+          link_rel_y -= win->y;
+        }
+        if (mx >= cx + 2 && mx <= cx + side_w - 2 &&
+            my >= link_rel_y - 25 &&
+            my <= link_rel_y + state->sidebar_mode_link_h + 20) {
+          outb(0x3F8, 'S'); outb(0x3F8, 'W'); outb(0x3F8, 'I'); outb(0x3F8, 'T'); outb(0x3F8, 'C'); outb(0x3F8, 'H'); outb(0x3F8, '\n');
+          explorer_navigate_to(state, EXPLORER_MODE_SETTINGS, NULL);
+          return;
+        }
+      }
+
       // Web View: Clic sul pulsante di azione
       if (mx >= cx + 12 && mx <= cx + 12 + side_w - 24) {
         if (state->mode == EXPLORER_MODE_RECYCLE_BIN) {
@@ -3272,9 +3402,25 @@ static void explorer_right_click(window_t *win, int32_t mx, int32_t my,
 }
 
 static void explorer_key(window_t *win, char c) {
+  outb(0x3F8, 'E'); outb(0x3F8, 'X'); outb(0x3F8, 'P'); outb(0x3F8, '_'); outb(0x3F8, 'K'); outb(0x3F8, 'E'); outb(0x3F8, 'Y'); outb(0x3F8, ':'); outb(0x3F8, c); outb(0x3F8, '\n');
   explorer_state_t *state = (explorer_state_t *)win->app_data;
   if (!state)
     return;
+
+  if (state->mode == EXPLORER_MODE_SETTINGS) {
+    if (settings_handle_key(screen_mgr_get_api(), c, &state->settings_state)) {
+      return;
+    }
+    if (c == 'c' || c == 'C' || c == '\t') {
+      explorer_navigate_to(state, EXPLORER_MODE_CONTROL_PANEL, NULL);
+      return;
+    }
+  } else if (state->mode == EXPLORER_MODE_CONTROL_PANEL) {
+    if (c == 'm' || c == 'M' || c == '\t') {
+      explorer_navigate_to(state, EXPLORER_MODE_SETTINGS, NULL);
+      return;
+    }
+  }
 
   if (state->show_properties) {
     if (c == 27 || c == '\n' || c == '\r') {
@@ -3473,7 +3619,7 @@ static window_t *explorer_create_base(const char *title, explorer_mode_t mode,
   char *ini_buf = (char *)vfs_read_entire_file(
       "C:\\NewOS\\SystemProgram\\EXPLORER.INI", &ini_sz);
   if (!ini_buf)
-    ini_buf = (char *)vfs_read_entire_file("C:\\SYSTEM\\EXPLORER.INI", &ini_sz);
+    ini_buf = (char *)vfs_read_entire_file("/NewOS/SystemProgram/EXPLORER.INI", &ini_sz);
   if (ini_buf) {
     if (strstr(ini_buf, "ShowFolderTree=1"))
       state->show_folder_tree = true;
@@ -3541,4 +3687,8 @@ void app_explorer_open_recycle_bin(void) {
 void app_control_panel_open(void) {
   explorer_create_base("Pannello di controllo", EXPLORER_MODE_CONTROL_PANEL,
                        NULL);
+}
+
+void app_settings_open(void) {
+  explorer_create_base("Impostazioni", EXPLORER_MODE_SETTINGS, NULL);
 }

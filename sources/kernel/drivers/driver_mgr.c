@@ -216,7 +216,7 @@ void driver_mgr_init(void) {
     const char* driver_dir = "C:\\NewOS\\Driver";
     int count = vfs_readdir(driver_dir, dirents, 32);
     if (count <= 0) {
-        driver_dir = "C:\\SYSTEM\\DRIVERS";
+        driver_dir = "/NewOS/Driver";
         count = vfs_readdir(driver_dir, dirents, 32);
     }
 
@@ -332,7 +332,7 @@ bool driver_mgr_reload(const char* name) {
     uint32_t fsize = 0;
     char* ini_content = (char*)vfs_read_entire_file(ini_path, &fsize);
     if (!ini_content) {
-        mini_snprintf(ini_path, sizeof(ini_path), "C:\\SYSTEM\\DRIVERS\\%s", cur->ininame);
+        mini_snprintf(ini_path, sizeof(ini_path), "/NewOS/Driver/%s", cur->ininame);
         ini_content = (char*)vfs_read_entire_file(ini_path, &fsize);
     }
     if (ini_content) {

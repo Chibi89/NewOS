@@ -16,6 +16,7 @@
 #include <gui/graphics.h>
 #include <gui/wm.h>
 #include <gui/theme_mgr.h>
+#include <gui/cursor_loader.h>
 #include <gui/context_menu.h>
 #include <drivers/sound.h>
 #include <drivers/sound_wav.h>
@@ -23,7 +24,6 @@
 #include <user.h>
 #include <apps/boot_menu.h>
 #include <apps/installer.h>
-#include <apps/oobe.h>
 #include <arch/x86_64/cpu.h>
 #include <drivers/ata.h>
 #include <drivers/ahci.h>
@@ -149,43 +149,72 @@ void kernel_main(BootInfo* binfo) {
         }
     }
 
-    // 8. Schermata iniziale di Selezione Boot ("1. Live" o "2. Installa NewOS V1")
-    int boot_choice = was_updating ? 1 : boot_menu_show();
+    // 8. Controllo Bypass del Boot Manager (Post-Installazione OOBE / Registro Nativo NewOS)
+    // Se NewOS V1 risulta già installato (SetupStage = Completed / OOBECompleted = 1),
+    // l'interfaccia interattiva del Boot Menu viene bypassata automaticamente a favore di LOGIN.MOD.
+    int boot_choice = 0;
+    bool bypass_boot = !was_updating && boot_menu_should_bypass();
 
-    // 9. Fase di Installazione / Accesso e Logon:
-    // Se l'utente seleziona "2. Installa NewOS V1 fisicamente su questo PC":
-    // 1° BootSetup (Installer ufficiale) decifra l'archivio AES-256 SYSTEM.PAK ed estrae tutti i file.
-    // 2° Eredita UI classic Win2000 con sfondo LOGIN.BMP.
-    // 3° Terminato il setup ed estratti i file, procede direttamente all'avvio dell'OOBE.
-    if (boot_choice == 2) {
-        bootsetup_result_t setup_res = screen_mgr_run_bootsetup();
-        if (setup_res == BOOTSETUP_CANCELLED) {
-            power_reboot();
-        } else if (setup_res == BOOTSETUP_SUCCESS) {
-            int oobe_res = oobe_run_modal();
-            if (oobe_res == 1) {
-                power_shutdown();
-            } else if (oobe_res == 2) {
-                power_reboot();
-            }
-        } else {
+    // Controllo eventuale override manuale dell'utente (F8 o ESC premuto durante il boot per menu avanzato)
+    bool force_boot_menu = false;
+    if (keyboard_has_char()) {
+        char k = keyboard_get_char();
+        if (k == 27) force_boot_menu = true; // ESC
+    } else {
+        uint8_t kstat = inb(0x64);
+        if ((kstat & 0x01) && !(kstat & 0x20)) {
+            uint8_t sc = inb(0x60);
+            if (sc == 0x42 || sc == 0x01) force_boot_menu = true; // F8 (0x42) o ESC (0x01)
+        }
+    }
+
+    if (bypass_boot && !force_boot_menu) {
+        boot_action_set_direct_login();
+        loginscreen_result_t login_res = screen_mgr_run_loginscreen();
+        if (login_res == LOGIN_SHUTDOWN) {
+            power_shutdown();
+        } else if (login_res == LOGIN_REBOOT) {
             power_reboot();
         }
-    } else if (boot_choice != 1 && boot_choice != 4 && boot_choice != 3 && boot_choice != 6 && boot_choice != 7) {
-        bool first_time = !oobe_is_completed();
-        if (first_time) {
-            int oobe_res = oobe_run_modal();
-            if (oobe_res == 1) {
-                power_shutdown();
-            } else if (oobe_res == 2) {
+    } else {
+        // Schermata iniziale di Selezione Boot ("1. Live" o "2. Installa NewOS V1")
+        boot_choice = was_updating ? 1 : boot_menu_show();
+
+        // 9. Fase di Installazione / Accesso e Logon:
+        // Se l'utente seleziona "2. Installa NewOS V1 fisicamente su questo PC":
+        // 1° BootSetup (Installer ufficiale) decifra l'archivio AES-256 SYSTEM.PAK ed estrae tutti i file.
+        // 2° Eredita UI classic Win2000 con sfondo LOGIN.BMP.
+        // 3° Terminato il setup ed estratti i file, procede direttamente all'avvio dell'OOBE.
+        if (boot_choice == 2) {
+            bootsetup_result_t setup_res = screen_mgr_run_bootsetup();
+            if (setup_res == BOOTSETUP_CANCELLED) {
+                power_reboot();
+            } else if (setup_res == BOOTSETUP_SUCCESS) {
+                oobe_result_t oobe_res = screen_mgr_run_oobe();
+                if (oobe_res == OOBE_SHUTDOWN) {
+                    power_shutdown();
+                } else if (oobe_res == OOBE_REBOOT) {
+                    power_reboot();
+                }
+            } else {
                 power_reboot();
             }
-        } else {
-            loginscreen_result_t login_res = screen_mgr_run_loginscreen();
-            if (login_res == LOGIN_SHUTDOWN) {
-                power_shutdown();
-            } else if (login_res == LOGIN_REBOOT) {
-                power_reboot();
+        } else if (boot_choice != 1 && boot_choice != 4 && boot_choice != 3 && boot_choice != 6 && boot_choice != 7 && boot_choice != 8 && boot_choice != 9 && boot_choice != 10) {
+            bool first_time = !oobe_is_completed();
+            if (first_time) {
+                oobe_result_t oobe_res = screen_mgr_run_oobe();
+                if (oobe_res == OOBE_SHUTDOWN) {
+                    power_shutdown();
+                } else if (oobe_res == OOBE_REBOOT) {
+                    power_reboot();
+                }
+            } else {
+                loginscreen_result_t login_res = screen_mgr_run_loginscreen();
+                if (login_res == LOGIN_SHUTDOWN) {
+                    power_shutdown();
+                } else if (login_res == LOGIN_REBOOT) {
+                    power_reboot();
+                }
             }
         }
     }
@@ -207,6 +236,7 @@ void kernel_main(BootInfo* binfo) {
     int g_idx = theme_mgr_find_by_filename("LIQUID_GLASS.THEMES");
     if (g_idx >= 0) theme_mgr_apply(g_idx);
     else theme_mgr_apply(1);
+    cursor_loader_init();
     // Riproduce il suono di avvio reale .WAV da disco exFAT
     if (!sound_play_wav_file("C:\\NewOS\\Resources\\Sounds\\STARTUP.WAV") &&
         !sound_play_wav_file("/SYSTEM/SOUNDS/STARTUP.WAV")) {
@@ -237,6 +267,12 @@ void kernel_main(BootInfo* binfo) {
         app_explorer_open_this_pc();
     } else if (boot_choice == 7) {
         app_player_launch();
+    } else if (boot_choice == 8) {
+        app_control_panel_open();
+    } else if (boot_choice == 9) {
+        app_settings_open();
+    } else if (boot_choice == 10) {
+        app_mouse_props_launch();
     } else {
         app_explorer_open_this_pc();
     }
@@ -263,6 +299,10 @@ void kernel_main(BootInfo* binfo) {
             mouse.left_button != prev_left || mouse.right_button != prev_right ||
             key != 0) {
             power_notify_user_activity();
+            char mbuf[48];
+            mini_snprintf(mbuf, sizeof(mbuf), "[M] x=%d y=%d btn=%d\n", mouse.x, mouse.y, (int)mouse.left_button);
+            const char* p = mbuf;
+            while (*p) outb(0x3F8, *p++);
             prev_mx = mouse.x;
             prev_my = mouse.y;
             prev_left = mouse.left_button;

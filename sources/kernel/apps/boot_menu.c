@@ -1,4 +1,6 @@
 #include <apps/boot_menu.h>
+#include <fs/registry.h>
+#include <gui/screen_mgr.h>
 #include <gui/graphics.h>
 #include <gui/icons.h>
 #include <drivers/mouse.h>
@@ -10,6 +12,30 @@
 static void serial_log(const char* s) {
     if (!s) return;
     while (*s) outb(0x3F8, *s++);
+}
+
+bool boot_menu_should_bypass(void) {
+    // 1. Interrogazione del Registro di Sistema Nativo NewOS
+    const char* stage = registry_read_string("HKEY_LOCAL_MACHINE\\NEWOS\\SYSTEM", "SetupStage");
+    uint32_t oobe_completed = 0;
+    bool has_oobe = registry_get_value_dword("HKEY_LOCAL_MACHINE\\NEWOS\\SYSTEM", "OOBECompleted", &oobe_completed);
+
+    if ((stage && strcmp(stage, "Completed") == 0) || (has_oobe && oobe_completed == 1)) {
+        return true;
+    }
+
+    // 2. Fallback su file di stato OOBE (OOBE.INI)
+    if (oobe_is_completed()) {
+        return true;
+    }
+
+    return false;
+}
+
+void boot_action_set_direct_login(void) {
+    serial_log("[BOOT_BYPASS] Bypass automatico Boot Menu attivato (SetupStage: Completed / OOBECompleted: 1).\n");
+    serial_log("[BOOT_BYPASS] Dirottamento CPU direttamente al modulo protetto: C:\\NewOS\\Boot\\LOGIN.MOD\n");
+    registry_audit_log("BOOT_BYPASS", "HKEY_LOCAL_MACHINE\\NEWOS\\SYSTEM", "SetupStage", "-", "Bypass automatico Boot Menu -> LOGIN.MOD", REG_RISK_LOW);
 }
 
 int boot_menu_show(void) {
@@ -56,6 +82,9 @@ int boot_menu_show(void) {
                 else if (sc == 0x06) key = '5';
                 else if (sc == 0x07) key = '6';
                 else if (sc == 0x08) key = '7';
+                else if (sc == 0x09) key = '8';
+                else if (sc == 0x0A) key = '9';
+                else if (sc == 0x0B) key = '0';
                 else if (sc == 0x1C) key = '\n';
                 else if (sc == 0x11) key = 'w';
                 else if (sc == 0x1F) key = 's';
@@ -74,6 +103,9 @@ int boot_menu_show(void) {
         if (key == '5') { serial_log("[BOOT_MENU] Scelto 5\n"); return 5; }
         if (key == '6') { serial_log("[BOOT_MENU] Scelto 6\n"); return 6; }
         if (key == '7') { serial_log("[BOOT_MENU] Scelto 7 (Media Player)\n"); return 7; }
+        if (key == '8') { serial_log("[BOOT_MENU] Scelto 8 (Pannello Classico)\n"); return 8; }
+        if (key == '9') { serial_log("[BOOT_MENU] Scelto 9 (Impostazioni Moderne)\n"); return 9; }
+        if (key == '0') { serial_log("[BOOT_MENU] Scelto 0 (Proprieta' Mouse)\n"); return 10; }
         if (key == '\n' || key == '\r') return selected;
         if (key == 'w' || key == 'W') selected = 1;
         if (key == 's' || key == 'S') selected = 2;

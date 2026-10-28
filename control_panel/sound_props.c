@@ -1,4 +1,5 @@
 #include "control_panel.h"
+#include "cpl_theme.h"
 #include <gui/wm.h>
 #include <gui/graphics.h>
 #include <gui/icons.h>
@@ -21,30 +22,32 @@ static void sound_props_draw(window_t* win) {
     sound_state_t* state = (sound_state_t*)win->app_data;
     if (!state) return;
 
+    cpl_theme_t theme;
+    cpl_theme_init(&theme);
+
     int32_t cx = win->x + 4;
     int32_t cy = win->y + 24;
     int32_t cw = win->width - 8;
     int32_t ch = win->height - 28;
 
-    // Sfondo finestra standard
-    gfx_fill_rect(cx, cy, cw, ch, COLOR_BTNFACE);
+    // Sfondo client area adattato al tema attivo
+    cpl_draw_dialog_bg(win, &theme, cx, cy, cw, ch);
 
     // 1. Riquadro Periferica Audio
     int32_t box1_x = cx + 12;
     int32_t box1_y = cy + 14;
     int32_t box1_w = cw - 24;
     int32_t box1_h = 60;
-    gfx_draw_bevel_rect(box1_x, box1_y, box1_w, box1_h, true);
-    gfx_fill_rect(box1_x + 10, box1_y - 6, 120, 12, COLOR_BTNFACE);
-    gfx_draw_string(box1_x + 12, box1_y - 6, " Periferica Audio ", COLOR_WINDOWTEXT, 0, true);
+    cpl_draw_groupbox(box1_x, box1_y, box1_w, box1_h, " Periferica Audio ", &theme);
 
-    // Icona autentica 32x32 altoparlante
+    // Icona 32x32 altoparlante
     gfx_draw_icon_32(box1_x + 14, box1_y + 14, ICON_SOUND);
-    gfx_draw_string(box1_x + 54, box1_y + 14, sound_get_driver_name(), 0x000080, 0, true);
+    gfx_draw_string(box1_x + 54, box1_y + 14, sound_get_driver_name(), theme.accent, 0, true);
     if (sound_is_ac97()) {
-        gfx_draw_string(box1_x + 54, box1_y + 32, "Controller Hardware: Intel ICH AC'97 (DMA Attivo)", 0x205020, 0, true);
+        uint32_t dma_green = theme.is_dark ? 0x2ECC71 : 0x205020;
+        gfx_draw_string(box1_x + 54, box1_y + 32, "Controller Hardware: Intel ICH AC'97 (DMA Attivo)", dma_green, 0, true);
     } else {
-        gfx_draw_string(box1_x + 54, box1_y + 32, "Modalita: Fallback Altoparlante PC Speaker", 0x805000, 0, true);
+        gfx_draw_string(box1_x + 54, box1_y + 32, "Modalita: Fallback Altoparlante PC Speaker", theme.text_secondary, 0, true);
     }
 
     // 2. Riquadro Eventi Sonori
@@ -52,73 +55,74 @@ static void sound_props_draw(window_t* win) {
     int32_t box2_y = cy + 86;
     int32_t box2_w = cw - 24;
     int32_t box2_h = 135;
-    gfx_draw_bevel_rect(box2_x, box2_y, box2_w, box2_h, true);
-    gfx_fill_rect(box2_x + 10, box2_y - 6, 170, 12, COLOR_BTNFACE);
-    gfx_draw_string(box2_x + 12, box2_y - 6, " Eventi Sonori di NewOS V1 ", COLOR_WINDOWTEXT, 0, true);
+    cpl_draw_groupbox(box2_x, box2_y, box2_w, box2_h, " Eventi Sonori di NewOS V1 ", &theme);
 
     // Lista eventi
     for (int i = 0; i < 3; i++) {
         int32_t iy = box2_y + 16 + i * 36;
         bool is_sel = (state->selected_sound == i);
+        int32_t item_w = box2_w - 110;
 
         if (is_sel) {
-            gfx_fill_rect(box2_x + 12, iy, box2_w - 110, 26, 0x0A246A);
-            gfx_draw_string(box2_x + 18, iy + 5, sound_names[i], 0xFFFFFF, 0, true);
+            if (theme.is_classic) {
+                gfx_fill_rect(box2_x + 12, iy, item_w, 26, theme.sel_bg);
+            } else {
+                gfx_fill_rounded_rect(box2_x + 12, iy, item_w, 26, theme.control_radius, theme.sel_bg);
+            }
+            gfx_draw_string(box2_x + 18, iy + 5, sound_names[i], theme.sel_text, 0, true);
         } else {
-            gfx_fill_rect(box2_x + 12, iy, box2_w - 110, 26, 0xFFFFFF);
-            gfx_draw_bevel_rect(box2_x + 12, iy, box2_w - 110, 26, true);
-            gfx_draw_string(box2_x + 18, iy + 5, sound_names[i], COLOR_WINDOWTEXT, 0, true);
+            gfx_fill_rect(box2_x + 12, iy, item_w, 26, theme.input_bg);
+            if (theme.is_classic) {
+                gfx_draw_bevel_rect(box2_x + 12, iy, item_w, 26, true);
+            } else {
+                gfx_draw_rounded_rect(box2_x + 12, iy, item_w, 26, theme.control_radius, theme.input_border);
+            }
+            gfx_draw_string(box2_x + 18, iy + 5, sound_names[i], theme.text_primary, 0, true);
         }
     }
 
-    // Pulsante [ ▶ Prova ]
+    // Pulsante [ > Prova ]
     int32_t play_x = box2_x + box2_w - 90;
     int32_t play_y = box2_y + 36;
-    gfx_fill_rect(play_x, play_y, 76, 26, COLOR_BTNFACE);
-    gfx_draw_bevel_rect(play_x, play_y, 76, 26, false);
-    gfx_draw_string(play_x + 12, play_y + 5, "> Prova", 0x0A246A, 0, true);
+    wm_draw_themed_button(play_x, play_y, 76, 26, "> Prova", false);
 
     // 3. Riquadro Volume Master
     int32_t box3_x = cx + 12;
     int32_t box3_y = cy + 232;
     int32_t box3_w = cw - 24;
     int32_t box3_h = 58;
-    gfx_draw_bevel_rect(box3_x, box3_y, box3_w, box3_h, true);
-    gfx_fill_rect(box3_x + 10, box3_y - 6, 120, 12, COLOR_BTNFACE);
-    gfx_draw_string(box3_x + 12, box3_y - 6, " Volume Master ", COLOR_WINDOWTEXT, 0, true);
+    cpl_draw_groupbox(box3_x, box3_y, box3_w, box3_h, " Volume Master ", &theme);
 
     // Bottone [ - ]
     int32_t btn_minus_x = box3_x + 14;
     int32_t btn_vol_y   = box3_y + 18;
-    gfx_fill_rect(btn_minus_x, btn_vol_y, 24, 24, COLOR_BTNFACE);
-    gfx_draw_bevel_rect(btn_minus_x, btn_vol_y, 24, 24, false);
-    gfx_draw_string(btn_minus_x + 8, btn_vol_y + 4, "-", COLOR_WINDOWTEXT, 0, true);
+    wm_draw_themed_button(btn_minus_x, btn_vol_y, 24, 24, "-", false);
 
-    // Barra del volume (160 px)
+    // Barra del volume
     int32_t bar_x = btn_minus_x + 32;
     int32_t bar_w = box3_w - 110;
-    gfx_fill_rect(bar_x, btn_vol_y + 4, bar_w, 16, 0xFFFFFF);
-    gfx_draw_bevel_rect(bar_x, btn_vol_y + 4, bar_w, 16, true);
+    gfx_fill_rect(bar_x, btn_vol_y + 4, bar_w, 16, theme.input_bg);
+    if (theme.is_classic) {
+        gfx_draw_bevel_rect(bar_x, btn_vol_y + 4, bar_w, 16, true);
+    } else {
+        gfx_draw_rounded_rect(bar_x, btn_vol_y + 4, bar_w, 16, 2, theme.input_border);
+    }
 
     int32_t fill_w = (bar_w - 4) * state->volume / 100;
     if (fill_w > 0) {
-        gfx_fill_rect(bar_x + 2, btn_vol_y + 6, fill_w, 12, 0x0A246A);
+        gfx_fill_rect(bar_x + 2, btn_vol_y + 6, fill_w, 12, theme.accent);
     }
 
     // Bottone [ + ]
     int32_t btn_plus_x = bar_x + bar_w + 8;
-    gfx_fill_rect(btn_plus_x, btn_vol_y, 24, 24, COLOR_BTNFACE);
-    gfx_draw_bevel_rect(btn_plus_x, btn_vol_y, 24, 24, false);
-    gfx_draw_string(btn_plus_x + 8, btn_vol_y + 4, "+", COLOR_WINDOWTEXT, 0, true);
+    wm_draw_themed_button(btn_plus_x, btn_vol_y, 24, 24, "+", false);
 
     // 4. Pulsante OK centrato in basso
     int32_t ok_w = 78;
     int32_t ok_h = 24;
     int32_t ok_x = cx + (cw - ok_w) / 2;
     int32_t ok_y = cy + ch - 32;
-    gfx_fill_rect(ok_x, ok_y, ok_w, ok_h, COLOR_BTNFACE);
-    gfx_draw_bevel_rect(ok_x, ok_y, ok_w, ok_h, false);
-    gfx_draw_string(ok_x + (ok_w - 16) / 2, ok_y + 4, "OK", COLOR_WINDOWTEXT, 0, true);
+    wm_draw_themed_button(ok_x, ok_y, ok_w, ok_h, "OK", false);
 }
 
 static void sound_props_click(window_t* win, int32_t mx, int32_t my, bool clicked) {
@@ -144,7 +148,7 @@ static void sound_props_click(window_t* win, int32_t mx, int32_t my, bool clicke
         }
     }
 
-    // Click sul pulsante [ ▶ Prova ]
+    // Click sul pulsante [ > Prova ]
     int32_t play_x = box2_x + box2_w - 90;
     int32_t play_y = box2_y + 36;
     if (mx >= play_x && mx <= play_x + 76 && my >= play_y && my <= play_y + 26) {

@@ -5,6 +5,11 @@
 #include <mm/heap.h>
 #include <string.h>
 
+static void serial_log(const char* s) {
+    if (!s) return;
+    while (*s) outb(0x3F8, (uint8_t)(*s++));
+}
+
 static bool        g_mounted = false;
 static uint64_t    g_partition_lba = 0;
 static exfat_vbr_t g_vbr;
@@ -83,8 +88,24 @@ void exfat_set_bitmap_bit(uint32_t cluster, bool allocated) {
 }
 
 bool exfat_mount_device(const ata_device_t* dev, uint64_t partition_lba) {
-    g_exfat_dev = dev;
-    return exfat_mount(partition_lba);
+    const ata_device_t* old_dev = g_exfat_dev;
+    uint64_t old_lba = g_partition_lba;
+    bool old_mounted = g_mounted;
+
+    g_exfat_dev = dev ? dev : ata_get_primary_master();
+    if (exfat_mount(partition_lba)) {
+        return true;
+    }
+
+    g_exfat_dev = old_dev;
+    g_partition_lba = old_lba;
+    g_mounted = old_mounted;
+    return false;
+}
+
+void exfat_set_device(const ata_device_t* dev, uint64_t partition_lba) {
+    if (dev) g_exfat_dev = dev;
+    if (partition_lba) g_partition_lba = partition_lba;
 }
 
 bool exfat_mount(uint64_t partition_lba) {
@@ -97,13 +118,7 @@ bool exfat_mount(uint64_t partition_lba) {
     if (exfat_read_sec(partition_lba, 1, sec_buf)) {
         if (memcmp(sec_buf + 3, "EXFAT   ", 8) == 0 && *(uint16_t*)(sec_buf + 510) == 0xAA55) {
             primary_valid = true;
-        } else {
-            outb(0x3F8, '['); outb(0x3F8, 'V'); outb(0x3F8, 'B'); outb(0x3F8, 'R'); outb(0x3F8, ':');
-            for (int k = 3; k < 11; k++) outb(0x3F8, sec_buf[k] ? sec_buf[k] : '?');
-            outb(0x3F8, ']'); outb(0x3F8, '\n');
         }
-    } else {
-        outb(0x3F8, '['); outb(0x3F8, 'R'); outb(0x3F8, 'D'); outb(0x3F8, 'E'); outb(0x3F8, 'R'); outb(0x3F8, 'R'); outb(0x3F8, ']'); outb(0x3F8, '\n');
     }
 
     // Se il Main VBR e' corrotto o non leggibile, tenta il ripristino dal Backup VBR (settore +12)
@@ -331,6 +346,8 @@ bool exfat_find_in_dir(uint32_t dir_cluster, const char* name, exfat_item_info_t
             break;
         }
     }
+
+
 
     kfree(items);
     return res;

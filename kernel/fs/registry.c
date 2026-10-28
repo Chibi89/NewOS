@@ -106,7 +106,7 @@ static void build_default_tree(void) {
     g_root_keys[g_root_count++] = hkcu;
 
     reg_key_t* hkcu_desktop = alloc_key("DESKTOP", "HKEY_CURRENT_USER\\DESKTOP", REG_RISK_LOW, hkcu);
-    add_value_sz(hkcu_desktop, "Wallpaper", "C:\\SYSTEM\\WALLPAPERS\\BLISS.JPG");
+    add_value_sz(hkcu_desktop, "Wallpaper", "C:\\NewOS\\Resources\\Wallpapers\\HERO.BMP");
     add_value_dword(hkcu_desktop, "Theme", 0);
     add_value_dword(hkcu_desktop, "IconSpacing", 72);
     add_value_dword(hkcu_desktop, "TaskbarAutoHide", 0);
@@ -293,6 +293,19 @@ void registry_set_read_only(bool read_only) {
 
 bool registry_is_read_only(void) {
     return g_registry_read_only;
+}
+
+const char* registry_read_string(const char* path, const char* val_name) {
+    if (!path || !val_name) return NULL;
+    reg_key_t* k = registry_get_key(path);
+    if (!k) return NULL;
+
+    for (int i = 0; i < k->num_values; i++) {
+        if (strcasecmp(k->values[i].name, val_name) == 0) {
+            return k->values[i].str_val;
+        }
+    }
+    return NULL;
 }
 
 bool registry_get_value_sz(const char* path, const char* val_name, char* out_buf, size_t max_len) {
@@ -499,8 +512,8 @@ bool registry_load_from_disk(void) {
     if (!content || sz == 0) content = (char*)vfs_read_entire_file("/NewOS/Registry/REGISTRY.DAT", &sz);
     if (!content || sz == 0) content = (char*)vfs_read_entire_file("C:\\NewOS\\REGISTRY.DAT", &sz);
     if (!content || sz == 0) content = (char*)vfs_read_entire_file("/NewOS/REGISTRY.DAT", &sz);
-    if (!content || sz == 0) content = (char*)vfs_read_entire_file("C:\\SYSTEM\\REGISTRY.DAT", &sz);
-    if (!content || sz == 0) content = (char*)vfs_read_entire_file("/SYSTEM/REGISTRY.DAT", &sz);
+    if (!content || sz == 0) content = (char*)vfs_read_entire_file("C:\\NewOS\\Boot\\REGISTRY.DAT", &sz);
+    if (!content || sz == 0) content = (char*)vfs_read_entire_file("/NewOS/Boot/REGISTRY.DAT", &sz);
     if (!content || sz == 0) return false;
 
     char* parse_buf = content;

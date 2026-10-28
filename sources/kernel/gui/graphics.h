@@ -84,6 +84,7 @@ void gfx_draw_char(int32_t x, int32_t y, char c, uint32_t fg, uint32_t bg, bool 
 void gfx_draw_string(int32_t x, int32_t y, const char* str, uint32_t fg, uint32_t bg, bool transparent);
 
 void gfx_draw_cursor(int32_t x, int32_t y);
+void gfx_draw_resize_cursor(int32_t x, int32_t y, int resize_edge);
 void gfx_draw_windows_logo(int32_t x, int32_t y);
 void gfx_draw_icon_computer(int32_t x, int32_t y);
 void gfx_draw_icon_notepad(int32_t x, int32_t y);

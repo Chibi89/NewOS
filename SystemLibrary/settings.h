@@ -1,0 +1,6 @@
+#ifndef SYSTEM_LIBRARY_SETTINGS_H
+#define SYSTEM_LIBRARY_SETTINGS_H
+
+#include <settings.h>
+
+#endif // SYSTEM_LIBRARY_SETTINGS_H

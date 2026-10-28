@@ -43,10 +43,7 @@ int logoutscreen_main(const kernel_api_t* api, const logoutscreen_params_t* para
         bg_img = api->image_load_from_file("C:\\NewOS\\Resources\\Screens\\LOGOUT.BMP");
         if (!bg_img) bg_img = api->image_load_from_file("C:\\NewOS\\Resources\\LOGOUT.BMP");
         if (!bg_img) bg_img = api->image_load_from_file("C:\\NewOS\\Resource\\wallpapers\\LOGOUT.BMP");
-        if (!bg_img) bg_img = api->image_load_from_file("C:\\SYSTEM\\SCREENS\\LOGOUT.BMP");
-        if (!bg_img) bg_img = api->image_load_from_file("C:\\SYSTEM\\SCREENS\\LOGOUT.JPG");
         if (!bg_img) bg_img = api->image_load_from_file("/NewOS/Resources/Screens/LOGOUT.BMP");
-        if (!bg_img) bg_img = api->image_load_from_file("/SYSTEM/SCREENS/LOGOUT.BMP");
     }
 
     user_profile_t* user = api->user_get_current ? api->user_get_current() : NULL;
@@ -281,7 +278,7 @@ perform_action:
     // Suono di chiusura
     if (api->sound_play_wav_file) {
         if (!api->sound_play_wav_file("C:\\NewOS\\Resources\\Sounds\\RECYCLE.WAV")) {
-            api->sound_play_wav_file("C:\\SYSTEM\\SOUNDS\\RECYCLE.WAV");
+            api->sound_play_wav_file("/NewOS/Resources/Sounds/RECYCLE.WAV");
         }
     }
 

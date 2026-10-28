@@ -19,7 +19,7 @@ static const char* g_boot_steps[] = {
     "Inizializzazione sottosistema memoria e heap a 64-bit...",
     "Rilevamento processore x86_64, bus PCI e timer PIT...",
     "Montaggio volume file system Microsoft exFAT (C:\\)...",
-    "Caricamento driver modulari da C:\\SYSTEM\\DRIVERS\\...",
+    "Caricamento driver modulari da C:\\NewOS\\Driver\\...",
     "Avvio stack di rete TCP/IP ed interfacce Ethernet...",
     "Verifica crittografica e autenticazione moduli protetti...",
     "Preparazione interfaccia utente e servizi di sistema..."
@@ -42,10 +42,7 @@ int bootscreen_main(const kernel_api_t* api, const bootscreen_params_t* params) 
         bg_img = api->image_load_from_file("C:\\NewOS\\Resources\\Screens\\BOOTSCR.BMP");
         if (!bg_img) bg_img = api->image_load_from_file("C:\\NewOS\\Resources\\BOOTSCR.BMP");
         if (!bg_img) bg_img = api->image_load_from_file("C:\\NewOS\\Resource\\wallpapers\\BOOTSCR.BMP");
-        if (!bg_img) bg_img = api->image_load_from_file("C:\\SYSTEM\\SCREENS\\BOOTSCR.BMP");
-        if (!bg_img) bg_img = api->image_load_from_file("C:\\SYSTEM\\SCREENS\\BOOTSCR.JPG");
         if (!bg_img) bg_img = api->image_load_from_file("/NewOS/Resources/Screens/BOOTSCR.BMP");
-        if (!bg_img) bg_img = api->image_load_from_file("/SYSTEM/SCREENS/BOOTSCR.BMP");
     }
 
     if (bg_img && api->serial_puts) {
@@ -69,7 +66,7 @@ int bootscreen_main(const kernel_api_t* api, const bootscreen_params_t* params) 
     // Suono di avvio
     if (api->sound_play_wav_file) {
         if (!api->sound_play_wav_file("C:\\NewOS\\Resources\\Sounds\\STARTUP.WAV")) {
-            api->sound_play_wav_file("C:\\SYSTEM\\SOUNDS\\STARTUP.WAV");
+            api->sound_play_wav_file("/NewOS/Resources/Sounds/STARTUP.WAV");
         }
     } else if (api->sound_play) {
         api->sound_play(1); // SOUND_STARTUP

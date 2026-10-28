@@ -18,7 +18,7 @@ static vfs_file_t g_file_pool[MAX_OPEN_FILES];
 
 static void vfs_serial(const char* s) {
     if (!s) return;
-    while (*s) outb(0x3F8, *s++);
+    while (*s) outb(0x3F8, (uint8_t)(*s++));
 }
 
 // Normalizza il percorso: rimuove "C:", "c:", converte '\' in '/' e rimuove slash iniziali
@@ -357,9 +357,10 @@ int32_t vfs_readdir(const char* dir_path, vfs_dirent_t* entries, int32_t max_ent
         dir_cluster = dir_info.first_cluster;
     }
 
-    exfat_item_info_t* raw_items = (exfat_item_info_t*)kmalloc(sizeof(exfat_item_info_t) * 64);
+    int32_t limit = (max_entries > 256) ? 256 : max_entries;
+    exfat_item_info_t* raw_items = (exfat_item_info_t*)kmalloc(sizeof(exfat_item_info_t) * limit);
     if (!raw_items) return 0;
-    int32_t raw_count = exfat_list_dir(dir_cluster, raw_items, (max_entries < 64) ? max_entries : 64);
+    int32_t raw_count = exfat_list_dir(dir_cluster, raw_items, limit);
 
     for (int32_t i = 0; i < raw_count; i++) {
         strncpy(entries[i].name, raw_items[i].name, sizeof(entries[i].name) - 1);

@@ -28,6 +28,15 @@ bool screen_mgr_has_pending_update(void);
 // Esegue il modulo protetto di Aggiornamento Guidato (UPDATE.MOD) fuori sessione
 update_result_t screen_mgr_run_update(void);
 
+// Esegue il modulo protetto di Configurazione Iniziale OOBE (OOBE.MOD)
+oobe_result_t screen_mgr_run_oobe(void);
+
+// Funzioni helper e di stato OOBE per compatibilita' di sistema
+bool oobe_is_completed(void);
+void oobe_mark_completed(void);
+void app_oobe_launch(void);
+void app_installer_launch(void);
+
 // Verifica e autentica crittograficamente un modulo protetto (.MOD)
 bool screen_mgr_verify_module(const void* buffer, uint32_t size, uint32_t expected_type, const char* expected_name);
 

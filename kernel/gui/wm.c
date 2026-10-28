@@ -11,6 +11,7 @@
 #include <gui/icons.h>
 #include <gui/image.h>
 #include <gui/wm.h>
+#include <gui/cursor_loader.h>
 #include <mm/heap.h>
 #include <string.h>
 #include <user.h>
@@ -323,6 +324,25 @@ window_t *wm_create_window(const char *title, int32_t x, int32_t y, int32_t w,
   win->is_dragging = false;
   win->drag_off_x = 0;
   win->drag_off_y = 0;
+
+  // Inizializzazione parametri di ridimensionamento (Window Resize)
+  win->is_resizing = false;
+  win->resize_edge = RESIZE_NONE;
+  win->resize_start_mx = 0;
+  win->resize_start_my = 0;
+  win->resize_orig_x = x;
+  win->resize_orig_y = y;
+  win->resize_orig_w = w;
+  win->resize_orig_h = h;
+  win->min_w = 200;
+  win->min_h = 120;
+  win->is_maximized = false;
+  win->saved_x = x;
+  win->saved_y = y;
+  win->saved_w = w;
+  win->saved_h = h;
+  win->resizable = (type != APP_ABOUT && type != APP_SHUTDOWN);
+
   win->app_type = type;
   win->app_data = NULL;
   win->on_draw = NULL;
@@ -394,6 +414,115 @@ void wm_toggle_minimize(int32_t id) {
   }
 }
 
+void wm_toggle_maximize(int32_t id) {
+  for (int i = 0; i < MAX_WINDOWS; i++) {
+    if (windows[i] && windows[i]->id == id) {
+      window_t *w = windows[i];
+      if (!w->resizable)
+        return;
+
+      uint32_t sw = gfx_get_width();
+      uint32_t sh = gfx_get_height();
+      int32_t ty = sh - 28;
+
+      if (w->is_maximized) {
+        // Ripristina coordinate e dimensioni precedenti
+        w->x = w->saved_x;
+        w->y = w->saved_y;
+        w->width = w->saved_w;
+        w->height = w->saved_h;
+        w->is_maximized = false;
+      } else {
+        // Salva dimensioni attuali e massimizza a pieno schermo
+        w->saved_x = w->x;
+        w->saved_y = w->y;
+        w->saved_w = w->width;
+        w->saved_h = w->height;
+        w->x = 0;
+        w->y = 0;
+        w->width = sw;
+        w->height = ty;
+        w->is_maximized = true;
+      }
+      char lbuf[48];
+      mini_snprintf(lbuf, sizeof(lbuf), "[WM] Maximize id=%d max=%d\n", id, (int)w->is_maximized);
+      const char *lp = lbuf;
+      while (*lp) outb(0x3F8, *lp++);
+
+      wm_focus_window(id);
+      break;
+    }
+  }
+}
+
+static resize_edge_t wm_detect_resize_edge(window_t *w, int32_t mx, int32_t my) {
+  if (!w || !w->resizable || w->is_minimized || w->is_maximized)
+    return RESIZE_NONE;
+
+  int32_t x_min = w->x - 6;
+  int32_t x_max = w->x + w->width + 8;
+  int32_t y_min = w->y - 6;
+  int32_t y_max = w->y + w->height + 8;
+
+  if (mx < x_min || mx > x_max || my < y_min || my > y_max)
+    return RESIZE_NONE;
+
+  int corner_sz = 24;
+  int b_thick = 8;
+
+  // Angolo inferiore destro (Resize Grip primario)
+  if (mx >= w->x + w->width - corner_sz && mx <= x_max &&
+      my >= w->y + w->height - corner_sz && my <= y_max) {
+    return RESIZE_BOTTOM_RIGHT;
+  }
+  // Angolo inferiore sinistro
+  if (mx >= x_min && mx <= w->x + corner_sz &&
+      my >= w->y + w->height - corner_sz && my <= y_max) {
+    return RESIZE_BOTTOM_LEFT;
+  }
+  // Fascia superiore (primi 4px perimetrali per non collidere con controlli)
+  if (my >= y_min && my <= w->y + 4) {
+    if (mx >= x_min && mx <= w->x + corner_sz)
+      return RESIZE_TOP_LEFT;
+    if (mx >= w->x + w->width - corner_sz && mx <= x_max)
+      return RESIZE_TOP_RIGHT;
+    return RESIZE_TOP;
+  }
+
+  // Bordo destro
+  if (mx >= w->x + w->width - b_thick && mx <= x_max) {
+    return RESIZE_RIGHT;
+  }
+  // Bordo sinistro
+  if (mx >= x_min && mx <= w->x + b_thick) {
+    return RESIZE_LEFT;
+  }
+  // Bordo inferiore
+  if (my >= w->y + w->height - b_thick && my <= y_max) {
+    return RESIZE_BOTTOM;
+  }
+
+  return RESIZE_NONE;
+}
+
+static resize_edge_t wm_get_hover_resize_edge(int32_t mx, int32_t my) {
+  for (int i = 0; i < MAX_WINDOWS; i++) {
+    if (windows[i] && windows[i]->is_resizing) {
+      return windows[i]->resize_edge;
+    }
+  }
+  if (active_window_id != -1) {
+    for (int i = 0; i < MAX_WINDOWS; i++) {
+      if (windows[i] && windows[i]->id == active_window_id &&
+          !windows[i]->is_minimized && !windows[i]->is_maximized &&
+          windows[i]->resizable) {
+        return wm_detect_resize_edge(windows[i], mx, my);
+      }
+    }
+  }
+  return RESIZE_NONE;
+}
+
 static icon_id_t wm_get_app_icon(window_t *win) {
   if (win->app_type == APP_CMD)
     return ICON_RUN;
@@ -407,6 +536,8 @@ static icon_id_t wm_get_app_icon(window_t *win) {
     return ICON_DESKTOP;
   if (win->app_type == APP_SOUND)
     return ICON_SOUND;
+  if (win->app_type == APP_MOUSE)
+    return ICON_MOUSE;
   if (win->app_type == APP_RULES)
     return ICON_DOCUMENT;
   if (win->app_type == APP_BROWSER)
@@ -525,10 +656,12 @@ static void draw_window_frame(window_t *win) {
     }
     gfx_draw_string(x + 26, y + (th - 16) / 2, win->title, title_col, 0, true);
 
-    // 7. Pulsanti di controllo finestra (Chiudi, Minimizza)
+    // 7. Pulsanti di controllo finestra (Chiudi, Massimizza, Minimizza)
     int32_t close_x = x + w - 21;
     int32_t close_y = y + 4;
-    int32_t min_x = close_x - 18;
+    int32_t max_x = close_x - 18;
+    int32_t max_y = close_y;
+    int32_t min_x = max_x - 18;
     int32_t min_y = close_y;
 
     if (g_active_theme_props.modern_controls) {
@@ -542,8 +675,19 @@ static void draw_window_frame(window_t *win) {
         gfx_draw_pixel(cx_cl + 7 - k, cy_cl + k, ctrl_fg);
       }
 
-      // Minimizza [_]: glifo flat Windows 11 (nessuna capsula 3D, nessun
-      // rilievo)
+      // Massimizza / Ripristina [□ / ❐]: glifo flat Windows 11
+      if (win->resizable) {
+        int32_t cx_mx = max_x + 3;
+        int32_t cy_mx = y + (th - 8) / 2;
+        if (win->is_maximized) {
+          gfx_draw_rect(cx_mx + 2, cy_mx - 2, 7, 7, ctrl_fg);
+          gfx_draw_rect(cx_mx, cy_mx, 7, 7, ctrl_fg);
+        } else {
+          gfx_draw_rect(cx_mx, cy_mx, 9, 8, ctrl_fg);
+        }
+      }
+
+      // Minimizza [_]: glifo flat Windows 11
       int32_t cx_mn = min_x + 3;
       int32_t cy_mn = y + (th / 2) + 2;
       gfx_fill_rect(cx_mn, cy_mn, 9, 1, ctrl_fg);
@@ -551,6 +695,20 @@ static void draw_window_frame(window_t *win) {
       gfx_fill_rect(close_x, close_y, 16, 14, COLOR_BTNFACE);
       gfx_draw_bevel_rect(close_x, close_y, 16, 14, false);
       gfx_draw_string(close_x + 5, close_y + 1, "x", 0x000000, 0, true);
+
+      if (win->resizable) {
+        gfx_fill_rect(max_x, max_y, 16, 14, COLOR_BTNFACE);
+        gfx_draw_bevel_rect(max_x, max_y, 16, 14, false);
+        if (win->is_maximized) {
+          gfx_draw_rect(max_x + 5, max_y + 2, 6, 6, 0x000000);
+          gfx_fill_rect(max_x + 3, max_y + 4, 6, 6, COLOR_BTNFACE);
+          gfx_draw_rect(max_x + 3, max_y + 4, 6, 6, 0x000000);
+          gfx_fill_rect(max_x + 4, max_y + 5, 4, 1, 0x000000);
+        } else {
+          gfx_draw_rect(max_x + 3, max_y + 3, 9, 8, 0x000000);
+          gfx_fill_rect(max_x + 4, max_y + 4, 7, 2, 0x000000);
+        }
+      }
 
       gfx_fill_rect(min_x, min_y, 16, 14, COLOR_BTNFACE);
       gfx_draw_bevel_rect(min_x, min_y, 16, 14, false);
@@ -560,6 +718,26 @@ static void draw_window_frame(window_t *win) {
     // 8. Contenuto applicazione
     if (win->on_draw)
       win->on_draw(win);
+
+    // 9. Resize Grip nell'angolo inferiore destro (stile moderno/fluent)
+    if (win->resizable && !win->is_maximized) {
+      int32_t gx = x + w - 14;
+      int32_t gy = y + h - 14;
+      uint32_t c_hi = 0xD0D0D0;
+      uint32_t c_sh = 0x505050;
+      gfx_draw_pixel(gx + 10, gy + 10, c_hi);
+      gfx_draw_pixel(gx + 9,  gy + 9,  c_sh);
+      gfx_draw_pixel(gx + 10, gy + 6,  c_hi);
+      gfx_draw_pixel(gx + 9,  gy + 5,  c_sh);
+      gfx_draw_pixel(gx + 6,  gy + 10, c_hi);
+      gfx_draw_pixel(gx + 5,  gy + 9,  c_sh);
+      gfx_draw_pixel(gx + 10, gy + 2,  c_hi);
+      gfx_draw_pixel(gx + 9,  gy + 1,  c_sh);
+      gfx_draw_pixel(gx + 6,  gy + 6,  c_hi);
+      gfx_draw_pixel(gx + 5,  gy + 5,  c_sh);
+      gfx_draw_pixel(gx + 2,  gy + 10, c_hi);
+      gfx_draw_pixel(gx + 1,  gy + 9,  c_sh);
+    }
     return;
   }
 
@@ -595,6 +773,8 @@ static void draw_window_frame(window_t *win) {
     w_icon = ICON_DESKTOP;
   else if (win->app_type == APP_SOUND)
     w_icon = ICON_SOUND;
+  else if (win->app_type == APP_MOUSE)
+    w_icon = ICON_MOUSE;
   else if (win->app_type == APP_RULES)
     w_icon = ICON_DOCUMENT;
   else if (win->app_type == APP_BROWSER)
@@ -631,8 +811,25 @@ static void draw_window_frame(window_t *win) {
   gfx_draw_bevel_rect(close_x, close_y, 16, 14, false);
   gfx_draw_string(close_x + 5, close_y + 1, "x", 0x000000, 0, true);
 
+  // Pulsante Massimizza / Ripristina [□ / ❐]
+  int32_t max_x = close_x - 18;
+  int32_t max_y = close_y;
+  if (win->resizable) {
+    gfx_fill_rect(max_x, max_y, 16, 14, COLOR_BTNFACE);
+    gfx_draw_bevel_rect(max_x, max_y, 16, 14, false);
+    if (win->is_maximized) {
+      gfx_draw_rect(max_x + 5, max_y + 2, 6, 6, 0x000000);
+      gfx_fill_rect(max_x + 3, max_y + 4, 6, 6, COLOR_BTNFACE);
+      gfx_draw_rect(max_x + 3, max_y + 4, 6, 6, 0x000000);
+      gfx_fill_rect(max_x + 4, max_y + 5, 4, 1, 0x000000);
+    } else {
+      gfx_draw_rect(max_x + 3, max_y + 3, 9, 8, 0x000000);
+      gfx_fill_rect(max_x + 4, max_y + 4, 7, 2, 0x000000);
+    }
+  }
+
   // Pulsante Riduci a icona [_]
-  int32_t min_x = close_x - 18;
+  int32_t min_x = max_x - 18;
   int32_t min_y = close_y;
   gfx_fill_rect(min_x, min_y, 16, 14, COLOR_BTNFACE);
   gfx_draw_bevel_rect(min_x, min_y, 16, 14, false);
@@ -641,6 +838,24 @@ static void draw_window_frame(window_t *win) {
   // Disegna contenuto specifico dell'applicazione
   if (win->on_draw) {
     win->on_draw(win);
+  }
+
+  // Resize Grip classico Windows 2000 nell'angolo inferiore destro
+  if (win->resizable && !win->is_maximized) {
+    int32_t gx = x + w - 14;
+    int32_t gy = y + h - 14;
+    gfx_draw_pixel(gx + 10, gy + 10, 0xFFFFFF);
+    gfx_draw_pixel(gx + 9,  gy + 9,  0x808080);
+    gfx_draw_pixel(gx + 10, gy + 6,  0xFFFFFF);
+    gfx_draw_pixel(gx + 9,  gy + 5,  0x808080);
+    gfx_draw_pixel(gx + 6,  gy + 10, 0xFFFFFF);
+    gfx_draw_pixel(gx + 5,  gy + 9,  0x808080);
+    gfx_draw_pixel(gx + 10, gy + 2,  0xFFFFFF);
+    gfx_draw_pixel(gx + 9,  gy + 1,  0x808080);
+    gfx_draw_pixel(gx + 6,  gy + 6,  0xFFFFFF);
+    gfx_draw_pixel(gx + 5,  gy + 5,  0x808080);
+    gfx_draw_pixel(gx + 2,  gy + 10, 0xFFFFFF);
+    gfx_draw_pixel(gx + 1,  gy + 9,  0x808080);
   }
 }
 
@@ -1132,8 +1347,26 @@ void wm_render(void) {
     draw_context_menu(last_mouse_x, last_mouse_y);
   }
 
-  // 7. Cursore mouse
-  gfx_draw_cursor(last_mouse_x, last_mouse_y);
+  // 7. Cursore mouse personalizzato da libreria CURSORMGR.DLL (o fallback legacy)
+  resize_edge_t hover_edge = wm_get_hover_resize_edge(last_mouse_x, last_mouse_y);
+  cursor_system_state_t cur_state = CURSOR_STATE_NORMAL;
+  if (hover_edge == RESIZE_LEFT || hover_edge == RESIZE_RIGHT) {
+    cur_state = CURSOR_STATE_RESIZE_EW;
+  } else if (hover_edge == RESIZE_TOP || hover_edge == RESIZE_BOTTOM) {
+    cur_state = CURSOR_STATE_RESIZE_NS;
+  } else if (hover_edge == RESIZE_TOP_LEFT || hover_edge == RESIZE_BOTTOM_RIGHT) {
+    cur_state = CURSOR_STATE_RESIZE_NWSE;
+  } else if (hover_edge == RESIZE_TOP_RIGHT || hover_edge == RESIZE_BOTTOM_LEFT) {
+    cur_state = CURSOR_STATE_RESIZE_NESW;
+  }
+
+  if (!cursor_mgr_draw(last_mouse_x, last_mouse_y, cur_state)) {
+    if (hover_edge != RESIZE_NONE) {
+      gfx_draw_resize_cursor(last_mouse_x, last_mouse_y, hover_edge);
+    } else {
+      gfx_draw_cursor(last_mouse_x, last_mouse_y);
+    }
+  }
 
   // 8. Blit ultra-veloce a schermo senza flickering
   gfx_flip();
@@ -1153,16 +1386,89 @@ void wm_update(mouse_state_t *mouse, char key) {
   bool mouse_released = !mouse->left_button && prev_mouse_left;
   bool right_clicked = mouse->right_button && !prev_mouse_right;
 
-  // Trascinamento con tasto sinistro (finestre o icone del desktop)
+  // Trascinamento o ridimensionamento con tasto sinistro (finestre o icone del desktop)
   if (mouse->left_button) {
     for (int i = 0; i < MAX_WINDOWS; i++) {
-      if (windows[i] && windows[i]->is_dragging) {
-        windows[i]->x = mouse->x - windows[i]->drag_off_x;
-        windows[i]->y = mouse->y - windows[i]->drag_off_y;
-        if (windows[i]->y < 0)
-          windows[i]->y = 0;
-        if (windows[i]->y > ty - 20)
-          windows[i]->y = ty - 20;
+      window_t *w = windows[i];
+      if (!w)
+        continue;
+
+      if (w->is_resizing) {
+        int32_t dx = mouse->x - w->resize_start_mx;
+        int32_t dy = mouse->y - w->resize_start_my;
+        int32_t min_w = (w->min_w > 0) ? w->min_w : 200;
+        int32_t min_h = (w->min_h > 0) ? w->min_h : 120;
+        int32_t max_w = (int32_t)sw;
+        int32_t max_h = ty;
+
+        int32_t new_x = w->resize_orig_x;
+        int32_t new_y = w->resize_orig_y;
+        int32_t new_w = w->resize_orig_w;
+        int32_t new_h = w->resize_orig_h;
+
+        // Ridimensionamento orizzontale
+        if (w->resize_edge == RESIZE_RIGHT ||
+            w->resize_edge == RESIZE_BOTTOM_RIGHT ||
+            w->resize_edge == RESIZE_TOP_RIGHT) {
+          new_w = w->resize_orig_w + dx;
+          if (new_w < min_w)
+            new_w = min_w;
+          if (new_x + new_w > max_w)
+            new_w = max_w - new_x;
+        } else if (w->resize_edge == RESIZE_LEFT ||
+                   w->resize_edge == RESIZE_BOTTOM_LEFT ||
+                   w->resize_edge == RESIZE_TOP_LEFT) {
+          new_w = w->resize_orig_w - dx;
+          if (new_w < min_w) {
+            new_w = min_w;
+            new_x = w->resize_orig_x + (w->resize_orig_w - min_w);
+          } else {
+            new_x = w->resize_orig_x + dx;
+            if (new_x < 0) {
+              new_w += new_x;
+              new_x = 0;
+            }
+          }
+        }
+
+        // Ridimensionamento verticale
+        if (w->resize_edge == RESIZE_BOTTOM ||
+            w->resize_edge == RESIZE_BOTTOM_RIGHT ||
+            w->resize_edge == RESIZE_BOTTOM_LEFT) {
+          new_h = w->resize_orig_h + dy;
+          if (new_h < min_h)
+            new_h = min_h;
+          if (new_y + new_h > max_h)
+            new_h = max_h - new_y;
+        } else if (w->resize_edge == RESIZE_TOP ||
+                   w->resize_edge == RESIZE_TOP_RIGHT ||
+                   w->resize_edge == RESIZE_TOP_LEFT) {
+          new_h = w->resize_orig_h - dy;
+          if (new_h < min_h) {
+            new_h = min_h;
+            new_y = w->resize_orig_y + (w->resize_orig_h - min_h);
+          } else {
+            new_y = w->resize_orig_y + dy;
+            if (new_y < 0) {
+              new_h += new_y;
+              new_y = 0;
+            }
+          }
+        }
+
+        w->x = new_x;
+        w->y = new_y;
+        w->width = new_w;
+        w->height = new_h;
+        w->is_maximized = false;
+      } else if (w->is_dragging) {
+        w->x = mouse->x - w->drag_off_x;
+        w->y = mouse->y - w->drag_off_y;
+        if (w->y < 0)
+          w->y = 0;
+        if (w->y > ty - 20)
+          w->y = ty - 20;
+        w->is_maximized = false;
       }
     }
 
@@ -1199,8 +1505,11 @@ void wm_update(mouse_state_t *mouse, char key) {
 
   if (mouse_released) {
     for (int i = 0; i < MAX_WINDOWS; i++) {
-      if (windows[i])
+      if (windows[i]) {
         windows[i]->is_dragging = false;
+        windows[i]->is_resizing = false;
+        windows[i]->resize_edge = RESIZE_NONE;
+      }
     }
 
     // Rilascio del trascinamento icona o esecuzione al clic
@@ -1472,8 +1781,8 @@ void wm_update(mouse_state_t *mouse, char key) {
         if (step == 1 && w->is_active)
           continue;
 
-        if (mouse->x >= w->x && mouse->x <= w->x + w->width &&
-            mouse->y >= w->y && mouse->y <= w->y + w->height) {
+        if (mouse->x >= w->x - 6 && mouse->x <= w->x + w->width + 8 &&
+            mouse->y >= w->y - 6 && mouse->y <= w->y + w->height + 8) {
 
           wm_focus_window(w->id);
           window_hit = true;
@@ -1490,12 +1799,43 @@ void wm_update(mouse_state_t *mouse, char key) {
             return;
           }
 
+          // Clic sul pulsante Massimizza / Ripristina [□]
+          int32_t max_x = close_x - 18;
+          int32_t max_y = close_y;
+          if (w->resizable && mouse->x >= max_x && mouse->x <= max_x + 16 &&
+              mouse->y >= max_y && mouse->y <= max_y + 14) {
+            wm_toggle_maximize(w->id);
+            prev_mouse_left = mouse->left_button;
+            prev_mouse_right = mouse->right_button;
+            return;
+          }
+
           // Clic sul pulsante Riduci a icona [_]
-          int32_t min_x = close_x - 18;
+          int32_t min_x = max_x - 18;
           int32_t min_y = close_y;
           if (mouse->x >= min_x && mouse->x <= min_x + 16 &&
               mouse->y >= min_y && mouse->y <= min_y + 14) {
             wm_toggle_minimize(w->id);
+            prev_mouse_left = mouse->left_button;
+            prev_mouse_right = mouse->right_button;
+            return;
+          }
+
+          // Rilevamento click su bordi e angoli per Resize
+          resize_edge_t edge = wm_detect_resize_edge(w, mouse->x, mouse->y);
+          if (edge != RESIZE_NONE && !w->is_maximized) {
+            w->is_resizing = true;
+            w->resize_edge = edge;
+            w->resize_start_mx = mouse->x;
+            w->resize_start_my = mouse->y;
+            w->resize_orig_x = w->x;
+            w->resize_orig_y = w->y;
+            w->resize_orig_w = w->width;
+            w->resize_orig_h = w->height;
+            char rbuf[64];
+            mini_snprintf(rbuf, sizeof(rbuf), "[WM] RESIZE START edge=%d orig=(%d,%d)\n", (int)edge, w->width, w->height);
+            const char *rp = rbuf;
+            while (*rp) outb(0x3F8, *rp++);
             prev_mouse_left = mouse->left_button;
             prev_mouse_right = mouse->right_button;
             return;

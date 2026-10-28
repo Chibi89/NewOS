@@ -22,9 +22,6 @@ void icons_init(void) {
     if (!vfs_data) {
         vfs_data = vfs_read_entire_file("/NewOS/Resources/Icons/ICONS.BIN", &file_sz);
     }
-    if (!vfs_data) {
-        vfs_data = vfs_read_entire_file("C:\\SYSTEM\\ICONS.BIN", &file_sz);
-    }
     if (vfs_data && file_sz >= 2048) {
         const uint8_t* p = (const uint8_t*)vfs_data;
         if (p[0] == 'M' && p[1] == 'I' && p[2] == 'C' && p[3] == 'O') {

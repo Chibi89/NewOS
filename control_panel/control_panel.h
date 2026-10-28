@@ -23,6 +23,9 @@ void app_shutdown_dialog_launch(void);
 // Applet Gestione Periferiche Hardware (DEVMGMT.MSC / DEVMGMT.CPL)
 void app_devmgmt_launch(void);
 
+// Applet Proprietà Mouse e Puntatori (MAIN.CPL)
+void app_mouse_props_launch(void);
+
 // Applet Informazioni su NewOS (WINVER.EXE / SYSDM.CPL)
 void app_about_launch(void);
 

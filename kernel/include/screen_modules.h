@@ -18,6 +18,7 @@
 #define MODULE_TYPE_CODEC 5
 #define MODULE_TYPE_UPDATE 6
 #define MODULE_TYPE_SYSTEM_LIBRARY 7
+#define MODULE_TYPE_OOBE 8
 
 #define SEC_FLAG_PROTECTED 0x01
 #define SEC_FLAG_SYSTEM_SIGNED 0x02
@@ -126,14 +127,31 @@ typedef struct {
   int32_t (*vfs_readdir)(const char *dir_path, void *entries,
                          int32_t max_entries);
   bool (*vfs_exists)(const char *path);
+  bool (*vfs_create)(const char *path);
+  void (*registry_set_read_only)(bool ro);
+  bool (*registry_set_value_sz)(const char *path, const char *val_name, const char *new_val);
+  bool (*registry_set_value_dword)(const char *path, const char *val_name, uint32_t new_val);
+  bool (*registry_save_to_disk)(void);
   void *(*kmalloc)(size_t size);
   void (*kfree)(void *ptr);
+  void (*wm_destroy_window)(int32_t id);
+  void (*app_explorer_open_folder)(const char *folder_name);
+  bool (*registry_is_read_only)(void);
 
   // Installazione fisica e gestione dischi
   bool (*disk_install_chunk)(uint32_t chunk_idx, uint32_t total_chunks,
                              char *out_status, uint32_t max_status);
   bool (*disk_get_info)(int index, char *out_model, uint32_t *out_size_mb,
                         bool *is_cd);
+
+  // Rete e Diagnostica per Moduli
+  void *(*net_nic_get_active)(void);
+  void (*net_format_mac)(const uint8_t mac[6], char *buf, size_t buf_size);
+  void (*net_format_ip)(uint32_t ip, char *buf, size_t buf_size);
+  uint32_t (*net_parse_ip)(const char *ip_str);
+  bool (*dhcp_discover)(void);
+  void (*net_nic_poll)(void);
+  bool (*icmp_ping_ip)(uint32_t ip, uint32_t count, void *stats, void *on_reply);
 } kernel_api_t;
 
 // Parametri e risultati Bootscreen
@@ -211,5 +229,20 @@ typedef int (*bootsetup_entry_fn)(const kernel_api_t *api,
                                   const bootsetup_params_t *params);
 typedef int (*update_entry_fn)(const kernel_api_t *api,
                                const update_params_t *params);
+
+// Parametri e risultati OOBE (OOBE.MOD)
+typedef struct {
+  bool allow_skip;
+} oobe_params_t;
+
+typedef enum {
+  OOBE_SUCCESS = 0,
+  OOBE_SHUTDOWN = 1,
+  OOBE_REBOOT = 2,
+  OOBE_ERROR = -1
+} oobe_result_t;
+
+typedef int (*oobe_entry_fn)(const kernel_api_t *api,
+                             const oobe_params_t *params);
 
 #endif // SCREEN_MODULES_H

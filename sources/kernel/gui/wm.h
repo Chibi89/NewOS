@@ -26,7 +26,8 @@ typedef enum {
     APP_BROWSER,
     APP_PLAYER,
     APP_WHATSNEW,
-    APP_TASKMGR
+    APP_TASKMGR,
+    APP_MOUSE
 } app_type_t;
 
 typedef struct window window_t;
@@ -34,6 +35,18 @@ typedef struct window window_t;
 typedef void (*win_draw_func_t)(window_t* win);
 typedef void (*win_mouse_func_t)(window_t* win, int32_t local_x, int32_t local_y, bool clicked);
 typedef void (*win_key_func_t)(window_t* win, char c);
+
+typedef enum {
+    RESIZE_NONE = 0,
+    RESIZE_RIGHT,
+    RESIZE_BOTTOM,
+    RESIZE_BOTTOM_RIGHT,
+    RESIZE_LEFT,
+    RESIZE_TOP,
+    RESIZE_TOP_RIGHT,
+    RESIZE_BOTTOM_LEFT,
+    RESIZE_TOP_LEFT
+} resize_edge_t;
 
 struct window {
     int32_t id;
@@ -47,6 +60,25 @@ struct window {
     bool is_dragging;
     int32_t drag_off_x;
     int32_t drag_off_y;
+
+    // Stato di Ridimensionamento (Window Resize)
+    bool is_resizing;
+    resize_edge_t resize_edge;
+    int32_t resize_start_mx;
+    int32_t resize_start_my;
+    int32_t resize_orig_x;
+    int32_t resize_orig_y;
+    int32_t resize_orig_w;
+    int32_t resize_orig_h;
+    int32_t min_w;
+    int32_t min_h;
+    bool is_maximized;
+    int32_t saved_x;
+    int32_t saved_y;
+    int32_t saved_w;
+    int32_t saved_h;
+    bool resizable;
+
     app_type_t app_type;
     void* app_data;
 
@@ -61,6 +93,7 @@ window_t* wm_create_window(const char* title, int32_t x, int32_t y, int32_t w, i
 void wm_destroy_window(int32_t id);
 void wm_focus_window(int32_t id);
 void wm_toggle_minimize(int32_t id);
+void wm_toggle_maximize(int32_t id);
 
 void wm_set_background_type(int bg_type);
 int  wm_get_background_type(void);
@@ -84,11 +117,13 @@ void app_calc_launch(void);
 void app_about_launch(void);
 void app_display_props_launch(void);
 void app_sound_props_launch(void);
+void app_mouse_props_launch(void);
 void app_explorer_open_this_pc(void);
 void app_explorer_open_drive_c(void);
 void app_explorer_open_folder(const char* folder_name);
 void app_explorer_open_recycle_bin(void);
 void app_control_panel_open(void);
+void app_settings_open(void);
 void app_power_props_launch(void);
 void app_shutdown_dialog_launch(void);
 void app_installer_launch(void);

@@ -387,6 +387,7 @@ bool context_menu_execute_primary(const context_menu_t* menu) {
     } else if (strcmp(cmd, "CPL") == 0) {
         if (strcasecmp(menu->target_name, "DISPLAY.CPL") == 0) app_display_props_launch();
         else if (strcasecmp(menu->target_name, "SOUND.CPL") == 0) app_sound_props_launch();
+        else if (strcasecmp(menu->target_name, "MAIN.CPL") == 0 || strcasecmp(menu->target_name, "MOUSE.CPL") == 0) app_mouse_props_launch();
         else if (strcasecmp(menu->target_name, "POWER.CPL") == 0) app_power_props_launch();
         else if (strcasecmp(menu->target_name, "DEVMGMT.CPL") == 0) app_devmgmt_launch();
         else if (strcasecmp(menu->target_name, "REGEDIT.CPL") == 0) app_regedit_launch();

@@ -59,6 +59,7 @@ typedef struct {
 
 bool exfat_mount(uint64_t partition_lba);
 bool exfat_mount_device(const ata_device_t* dev, uint64_t partition_lba);
+void exfat_set_device(const ata_device_t* dev, uint64_t partition_lba);
 bool exfat_is_mounted(void);
 const exfat_vbr_t* exfat_get_vbr(void);
 uint32_t exfat_get_root_cluster(void);

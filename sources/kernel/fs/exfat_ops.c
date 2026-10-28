@@ -499,8 +499,11 @@ static bool exfat_vfs_mount(vfs_mount_t* mnt) {
 }
 
 static bool exfat_vfs_open(vfs_mount_t* mnt, const char* rel_path, vfs_file_t* file) {
-    (void)mnt;
     if (!rel_path || !file) return false;
+
+    if (mnt && mnt->priv_data) {
+        exfat_set_device((const ata_device_t*)mnt->priv_data, mnt->partition_lba);
+    }
 
     // Ricerca tramite VFS root cluster
     uint32_t cur_cl = exfat_get_root_cluster();
@@ -549,8 +552,11 @@ static bool exfat_vfs_open(vfs_mount_t* mnt, const char* rel_path, vfs_file_t* f
 }
 
 static int32_t exfat_vfs_read(vfs_mount_t* mnt, vfs_file_t* file, void* buf, uint32_t count) {
-    (void)mnt;
     if (!file || !buf || count == 0) return 0;
+
+    if (mnt && mnt->priv_data) {
+        exfat_set_device((const ata_device_t*)mnt->priv_data, mnt->partition_lba);
+    }
 
     exfat_item_info_t info;
     info.size = file->size;
@@ -741,8 +747,11 @@ static int32_t exfat_vfs_readdir(vfs_mount_t* mnt, const char* rel_path, vfs_dir
         dir_cl = df.first_cluster;
     }
 
-    exfat_item_info_t raw_items[64];
-    int32_t count = exfat_list_dir(dir_cl, raw_items, (max_entries < 64) ? max_entries : 64);
+    int32_t limit = (max_entries > 256) ? 256 : max_entries;
+    exfat_item_info_t* raw_items = (exfat_item_info_t*)kmalloc(sizeof(exfat_item_info_t) * limit);
+    if (!raw_items) return 0;
+
+    int32_t count = exfat_list_dir(dir_cl, raw_items, limit);
 
     for (int32_t i = 0; i < count; i++) {
         strncpy(entries[i].name, raw_items[i].name, sizeof(entries[i].name) - 1);
@@ -751,6 +760,7 @@ static int32_t exfat_vfs_readdir(vfs_mount_t* mnt, const char* rel_path, vfs_dir
         entries[i].attributes = raw_items[i].attributes;
         entries[i].is_directory = raw_items[i].is_directory;
     }
+    kfree(raw_items);
     return count;
 }
 

@@ -259,6 +259,109 @@ void gfx_draw_cursor(int32_t x, int32_t y) {
   }
 }
 
+void gfx_draw_resize_cursor(int32_t x, int32_t y, int resize_edge) {
+  static const char *const cur_horiz[9] = {
+      "..B.........B..",
+      ".BWB.......BWB.",
+      "BWWWB.....BWWWB",
+      "BWWWWBBBBBWWWWB",
+      "BWWWWWWWWWWWWWB",
+      "BWWWWBBBBBWWWWB",
+      "BWWWB.....BWWWB",
+      ".BWB.......BWB.",
+      "..B.........B.."};
+
+  static const char *const cur_vert[15] = {
+      "....B....",
+      "...BWB...",
+      "..BWWWB..",
+      ".BWWWWWB.",
+      "BWWWWWWWB",
+      "..BBWBB..",
+      "..BBWBB..",
+      "..BBWBB..",
+      "..BBWBB..",
+      "..BBWBB..",
+      "BWWWWWWWB",
+      ".BWWWWWB.",
+      "..BWWWB..",
+      "...BWB...",
+      "....B...."};
+
+  static const char *const cur_diag_nwse[13] = {
+      "BBBBBB.......",
+      "BWWWWWB......",
+      "BWWWWWB......",
+      "BWWBB........",
+      "BWB.BWB......",
+      "BB...BWB.....",
+      "......BWB....",
+      ".....BWB...BB",
+      "......BWB.BWB",
+      "........BBWWB",
+      "......BWWWWWB",
+      "......BWWWWWB",
+      ".......BBBBBB"};
+
+  static const char *const cur_diag_nesw[13] = {
+      ".......BBBBBB",
+      "......BWWWWWB",
+      "......BWWWWWB",
+      "........BBWWB",
+      "......BWB.BWB",
+      ".....BWB...BB",
+      "....BWB......",
+      "BB...BWB.....",
+      "BWB.BWB......",
+      "BWWBB........",
+      "BWWWWWB......",
+      "BWWWWWB......",
+      "BBBBBB......."};
+
+  const char *const *bmp = NULL;
+  int w = 0, h = 0, ox = 0, oy = 0;
+
+  if (resize_edge == 1 || resize_edge == 4) { // RESIZE_RIGHT, RESIZE_LEFT
+    bmp = cur_horiz;
+    w = 15;
+    h = 9;
+    ox = 7;
+    oy = 4;
+  } else if (resize_edge == 2 || resize_edge == 5) { // RESIZE_BOTTOM, RESIZE_TOP
+    bmp = cur_vert;
+    w = 9;
+    h = 15;
+    ox = 4;
+    oy = 7;
+  } else if (resize_edge == 3 || resize_edge == 8) { // RESIZE_BOTTOM_RIGHT, RESIZE_TOP_LEFT
+    bmp = cur_diag_nwse;
+    w = 13;
+    h = 13;
+    ox = 6;
+    oy = 6;
+  } else if (resize_edge == 6 || resize_edge == 7) { // RESIZE_TOP_RIGHT, RESIZE_BOTTOM_LEFT
+    bmp = cur_diag_nesw;
+    w = 13;
+    h = 13;
+    ox = 6;
+    oy = 6;
+  } else {
+    gfx_draw_cursor(x, y);
+    return;
+  }
+
+  for (int cy = 0; cy < h; cy++) {
+    for (int cx = 0; cx < w; cx++) {
+      char c = bmp[cy][cx];
+      if (c == 'B') {
+        gfx_draw_pixel(x - ox + cx, y - oy + cy, 0x000000);
+      } else if (c == 'W') {
+        gfx_draw_pixel(x - ox + cx, y - oy + cy, 0xFFFFFF);
+      }
+    }
+  }
+}
+
 void gfx_draw_windows_logo(int32_t x, int32_t y) {
   // 4 riquadri iconici di Windows 2000 (Rosso, Verde, Blu, Giallo)
   gfx_fill_rect(x, y, 7, 7, 0xEE3224);         // Rosso (Top Left)

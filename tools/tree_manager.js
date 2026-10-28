@@ -191,7 +191,6 @@ function organizeBuildBin(rootDir, binDir) {
     const dirsToCreate = [
         'NewOS/Driver/NET',
         'NewOS/Resources/Wallpapers',
-        'NewOS/Resources/cursor',
         'NewOS/Resources/Sounds',
         'NewOS/Resources/Screens',
         'NewOS/Resources/Icons',
@@ -272,13 +271,11 @@ function organizeBuildBin(rootDir, binDir) {
         }
     }
 
-    // Cursori del mouse
-    const curDst1 = path.join(binDir, 'NewOS', 'Resources', 'cursor');
-    const curDst2 = path.join(binDir, 'NewOS', 'Resource', 'cursor');
-    const curInfo = "NewOS V1 Cursor Graphics Resource Data\nFormat: 32x32 RGBA / Monochrome 1-bit mask\n";
-    for (const c of ['ARROW.CUR', 'BEAM.CUR', 'WAIT.CUR', 'HAND.CUR']) {
-        fs.writeFileSync(path.join(curDst1, c), curInfo);
-        fs.writeFileSync(path.join(curDst2, c), curInfo);
+    // Cursori del mouse (C:\NewOS\Resource\cursor\)
+    const curSrc = path.join(rootDir, 'resources', 'cursor');
+    const curDst = path.join(binDir, 'NewOS', 'Resource', 'cursor');
+    if (fs.existsSync(curSrc)) {
+        fs.cpSync(curSrc, curDst, { recursive: true });
     }
 
     // Suoni
@@ -322,10 +319,6 @@ function organizeBuildBin(rootDir, binDir) {
         const dstIcons = path.join(binDir, 'NewOS', 'Resources', 'Icons');
         if (!fs.existsSync(dstIcons)) fs.mkdirSync(dstIcons, { recursive: true });
         fs.copyFileSync(iconSrc, path.join(dstIcons, 'ICONS.BIN'));
-
-        const dstSys = path.join(binDir, 'SYSTEM');
-        if (!fs.existsSync(dstSys)) fs.mkdirSync(dstSys, { recursive: true });
-        fs.copyFileSync(iconSrc, path.join(dstSys, 'ICONS.BIN'));
     }
 
     // Risorse Web per il Web Browser (C:\NewOS\Resources\Web\)
@@ -444,24 +437,32 @@ Manuale Utente Ufficiale - NewOS V1 (64-bit Edition)
     const newosBackupDir = path.join(newosUpdateDir, 'Backup');
     if (!fs.existsSync(newosBackupDir)) fs.mkdirSync(newosBackupDir, { recursive: true });
 
-    for (const mod of ['BOOTSCR.MOD', 'BOOTSCR.INI', 'LOGIN.MOD', 'LOGIN.INI', 'LOGOUT.MOD', 'LOGOUT.INI', 'BOOTSETUP.MOD', 'BOOTSETUP.INI', 'UPDATE.MOD', 'UPDATE.INI']) {
-        const srcMod = path.join(binDir, mod);
+    for (const mod of ['BOOTSCR.MOD', 'BOOTSCR.INI', 'LOGIN.MOD', 'LOGIN.INI', 'LOGOUT.MOD', 'LOGOUT.INI', 'BOOTSETUP.MOD', 'BOOTSETUP.INI', 'UPDATE.MOD', 'UPDATE.INI', 'OOBE.MOD', 'OOBE.INI']) {
+        let srcMod = path.join(newosBootDir, mod);
+        if (!fs.existsSync(srcMod)) srcMod = path.join(binDir, mod);
         if (fs.existsSync(srcMod)) {
-            fs.copyFileSync(srcMod, path.join(sysProgDir, mod));
-            fs.copyFileSync(srcMod, path.join(newosBootDir, mod));
+            try { fs.copyFileSync(srcMod, path.join(sysProgDir, mod)); } catch (e) {}
+            try { fs.copyFileSync(srcMod, path.join(newosBootDir, mod)); } catch (e) {}
         }
     }
     const bootSetupDir = path.join(binDir, 'BootSetup');
     for (const mod of ['BOOTSETUP.MOD', 'BOOTSETUP.INI']) {
-        const srcMod = path.join(binDir, mod);
+        let srcMod = path.join(newosBootDir, mod);
+        if (!fs.existsSync(srcMod)) srcMod = path.join(binDir, mod);
         if (fs.existsSync(srcMod)) {
-            fs.copyFileSync(srcMod, path.join(bootSetupDir, mod));
+            try { fs.copyFileSync(srcMod, path.join(bootSetupDir, mod)); } catch (e) {}
         }
     }
 
     // 9. Popola OOBE (C:\NewOS\OOBE\)
     const oobeDir = path.join(binDir, 'NewOS', 'OOBE');
     if (!fs.existsSync(oobeDir)) fs.mkdirSync(oobeDir, { recursive: true });
+    for (const mod of ['OOBE.MOD', 'OOBE.INI']) {
+        const srcMod = path.join(binDir, mod);
+        if (fs.existsSync(srcMod)) {
+            try { fs.copyFileSync(srcMod, path.join(oobeDir, mod)); } catch (e) {}
+        }
+    }
     const oobeIniSrc = path.join(rootDir, 'oobe', 'oobe.ini');
     if (fs.existsSync(oobeIniSrc)) {
         fs.copyFileSync(oobeIniSrc, path.join(oobeDir, 'OOBE.INI'));

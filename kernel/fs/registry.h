@@ -61,6 +61,7 @@ reg_risk_t registry_get_risk_level(const char* path, const char* val_name);
 const char* registry_get_risk_string(reg_risk_t risk);
 
 // Lettura e modifica valori
+const char* registry_read_string(const char* path, const char* val_name);
 bool registry_get_value_sz(const char* path, const char* val_name, char* out_buf, size_t max_len);
 bool registry_get_value_dword(const char* path, const char* val_name, uint32_t* out_val);
 bool registry_set_value_sz(const char* path, const char* val_name, const char* new_val);

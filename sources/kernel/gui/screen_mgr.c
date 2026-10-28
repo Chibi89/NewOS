@@ -7,9 +7,14 @@
 #include <drivers/sound_wav.h>
 #include <drivers/timer.h>
 #include <fs/vfs.h>
+#include <fs/registry.h>
+#include <drivers/net/net_nic.h>
+#include <net/icmp.h>
+#include <net/dhcp.h>
 #include <gui/graphics.h>
 #include <gui/icons.h>
 #include <gui/image.h>
+#include <gui/wm.h>
 #include <gui/screen_mgr.h>
 #include <mm/heap.h>
 #include <string.h>
@@ -302,15 +307,32 @@ void screen_mgr_init(void) {
   g_kernel_api.vfs_readdir =
       (int32_t (*)(const char *, void *, int32_t))vfs_readdir;
   g_kernel_api.vfs_exists = vfs_exists;
+  g_kernel_api.vfs_create = vfs_create;
+  g_kernel_api.registry_set_read_only = registry_set_read_only;
+  g_kernel_api.registry_set_value_sz = registry_set_value_sz;
+  g_kernel_api.registry_set_value_dword = registry_set_value_dword;
+  g_kernel_api.registry_save_to_disk = registry_save_to_disk;
   g_kernel_api.kmalloc = kmalloc;
   g_kernel_api.kfree = kfree;
+  g_kernel_api.wm_destroy_window = wm_destroy_window;
+  g_kernel_api.app_explorer_open_folder = app_explorer_open_folder;
+  g_kernel_api.registry_is_read_only = registry_is_read_only;
 
   // Installazione fisica e dischi
   g_kernel_api.disk_install_chunk = disk_install_chunk;
   g_kernel_api.disk_get_info = disk_get_info;
 
+  // Rete e Diagnostica
+  g_kernel_api.net_nic_get_active = (void *(*)(void))net_nic_get_active;
+  g_kernel_api.net_format_mac = net_format_mac;
+  g_kernel_api.net_format_ip = net_format_ip;
+  g_kernel_api.net_parse_ip = net_parse_ip;
+  g_kernel_api.dhcp_discover = dhcp_discover;
+  g_kernel_api.net_nic_poll = net_nic_poll;
+  g_kernel_api.icmp_ping_ip = (bool (*)(uint32_t, uint32_t, void*, void*))icmp_ping_ip;
+
   g_api_initialized = true;
-  serial_log("[SCREEN_MGR] Tabella API Kernel collegata con successo (36 "
+  serial_log("[SCREEN_MGR] Tabella API Kernel collegata con successo (43 "
              "Entrypoint).\n");
 }
 
@@ -736,3 +758,93 @@ update_result_t screen_mgr_run_update(void) {
              "autentico.\n");
   return UPDATE_ERROR;
 }
+
+static oobe_result_t oobe_fallback(void) {
+  serial_log("[OOBE] Fallback: modulo protetto assente o corrotto, procedura segnata completata.\n");
+  oobe_mark_completed();
+  return OOBE_SUCCESS;
+}
+
+oobe_result_t screen_mgr_run_oobe(void) {
+  screen_mgr_init();
+
+  const char *paths[] = {
+      "C:\\NewOS\\Boot\\OOBE.MOD",
+      "C:\\NewOS\\SystemProgram\\OOBE.MOD",
+      "C:\\NewOS\\OOBE\\OOBE.MOD",
+      "/NewOS/Boot/OOBE.MOD",
+      "/NewOS/SystemProgram/OOBE.MOD",
+      "/NewOS/OOBE/OOBE.MOD",
+      "OOBE.MOD"
+  };
+
+  uint8_t *mod_buf = NULL;
+  uint32_t mod_size = 0;
+
+  for (int i = 0; i < (int)(sizeof(paths) / sizeof(paths[0])); i++) {
+    mod_buf = (uint8_t *)vfs_read_entire_file(paths[i], &mod_size);
+    if (mod_buf && mod_size > 0)
+      break;
+  }
+
+  if (mod_buf && mod_size >= sizeof(module_header_t)) {
+    if (screen_mgr_verify_module(mod_buf, mod_size, MODULE_TYPE_OOBE, "OOBE.MOD")) {
+      // Buffer protetto con cuscinetto BSS azzerato (64 KB)
+      uint8_t *exec_buf = (uint8_t *)kmalloc(mod_size + 65536);
+      if (exec_buf) {
+        memcpy(exec_buf, mod_buf, mod_size);
+        memset(exec_buf + mod_size, 0, 65536);
+        kfree(mod_buf);
+        mod_buf = exec_buf;
+      }
+
+      const module_header_t *h = (const module_header_t *)mod_buf;
+      oobe_entry_fn entry = (oobe_entry_fn)(mod_buf + h->entry_offset);
+
+      oobe_params_t p = { .allow_skip = true };
+      oobe_result_t res = (oobe_result_t)entry(&g_kernel_api, &p);
+
+      kfree(mod_buf);
+      return res;
+    }
+    kfree(mod_buf);
+  }
+
+  return oobe_fallback();
+}
+
+bool oobe_is_completed(void) {
+  uint32_t fsize = 0;
+  char *ini = (char *)vfs_read_entire_file("C:\\NewOS\\OOBE\\OOBE.INI", &fsize);
+  if (!ini) {
+    ini = (char *)vfs_read_entire_file("/NewOS/OOBE/OOBE.INI", &fsize);
+  }
+
+  if (ini && fsize > 0) {
+    bool comp = (strstr(ini, "Completed=1") != NULL);
+    kfree(ini);
+    return comp;
+  }
+  return false;
+}
+
+void oobe_mark_completed(void) {
+  vfs_create("C:\\NewOS\\OOBE\\OOBE.INI");
+  const char *txt = "[OOBE]\nCompleted=1\nSetupStage=Done\nLanguage=IT_IT\nDefaultUser=Morgan\nAllowSkip=1\n";
+  vfs_write_entire_file_inplace("C:\\NewOS\\OOBE\\OOBE.INI", txt, (uint32_t)strlen(txt));
+}
+
+void app_oobe_launch(void) {
+  screen_mgr_run_oobe();
+  wm_render();
+  gfx_flip();
+}
+
+void app_installer_launch(void) {
+  serial_log("[APP_INSTALLER] Lancio procedura BootSetup esterna protetta...\n");
+  screen_mgr_run_bootsetup();
+  wm_render();
+  gfx_flip();
+}
+
+

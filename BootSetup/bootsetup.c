@@ -109,12 +109,10 @@ int bootsetup_main(const kernel_api_t* api, const bootsetup_params_t* params) {
             "C:\\NewOS\\Resources\\Screens\\LOGIN.BMP",
             "C:\\NewOS\\Resources\\LOGIN.BMP",
             "C:\\NewOS\\Resource\\wallpapers\\LOGIN.BMP",
-            "C:\\SYSTEM\\SCREENS\\LOGIN.BMP",
             "/NewOS/Resources/Screens/LOGIN.BMP",
-            "/SYSTEM/SCREENS/LOGIN.BMP",
             "LOGIN.BMP"
         };
-        for (int i = 0; i < 7; i++) {
+        for (int i = 0; i < 5; i++) {
             bg_img = api->image_load_from_file(bg_paths[i]);
             if (bg_img) break;
         }

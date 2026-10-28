@@ -1,4 +1,5 @@
 #include "control_panel.h"
+#include "cpl_theme.h"
 #include <gui/graphics.h>
 #include <gui/wm.h>
 #include <mm/heap.h>
@@ -75,28 +76,29 @@ static void about_init_lines(void) {
 }
 
 static void about_draw(window_t *win) {
+    cpl_theme_t theme;
+    cpl_theme_init(&theme);
+
     int32_t cx = win->x + 4;
     int32_t cy = win->y + 24;
     int32_t cw = win->width - 8;
     int32_t ch = win->height - 28;
 
-    // Sfondo finestra grigio standard Windows 2000
-    gfx_fill_rect(cx, cy, cw, ch, COLOR_BTNFACE);
+    // Sfondo finestra coordinato con il tema attivo
+    cpl_draw_dialog_bg(win, &theme, cx, cy, cw, ch);
 
-    // 1. Banner superiore con logo Windows 2000
+    // 1. Banner superiore con logo e intestazione
     gfx_draw_windows_logo(cx + 18, cy + 14);
-    gfx_draw_string(cx + 44, cy + 10, "NewOS V1 64-bit Edition", 0x000080, 0, true);
-    gfx_draw_string(cx + 44, cy + 24, "Build 2026 x86_64 - @ Newspoint Software", 0x404040, 0, true);
+    gfx_draw_string(cx + 44, cy + 10, "NewOS V1 64-bit Edition", theme.accent, 0, true);
+    gfx_draw_string(cx + 44, cy + 24, "Build 2026 x86_64 - @ Newspoint Software", theme.text_secondary, 0, true);
 
-    // 2. Riquadro scavato (Group Box) con bordo in rilievo per le informazioni
+    // 2. Riquadro per le informazioni
     int32_t box_x = cx + 12;
     int32_t box_y = cy + 56;
     int32_t box_w = cw - 24;
     int32_t box_h = ch - 96;
 
-    gfx_draw_bevel_rect(box_x, box_y, box_w, box_h, true);
-    gfx_fill_rect(box_x + 10, box_y - 6, 170, 12, COLOR_BTNFACE);
-    gfx_draw_string(box_x + 12, box_y - 6, " Informazioni di Sistema ", COLOR_WINDOWTEXT, 0, true);
+    cpl_draw_groupbox(box_x, box_y, box_w, box_h, " Informazioni di Sistema ", &theme);
 
     // Disegno dinamico e omogeneo di tutte le righe di specifiche
     for (int i = 0; i < num_about_lines; i++) {
@@ -105,12 +107,16 @@ static void about_draw(window_t *win) {
 
         int32_t line_y = box_y + 14 + i * 18;
         if (line[0] == ' ' && line[1] == ' ') {
-            // Voce dettagliata con bullet point blu stile Win2k
-            gfx_fill_rect(box_x + 14, line_y + 6, 4, 4, 0x0A246A);
-            gfx_draw_string(box_x + 24, line_y, line + 2, 0x000000, 0, true);
+            // Voce dettagliata con bullet point temizzato
+            if (theme.is_classic) {
+                gfx_fill_rect(box_x + 14, line_y + 6, 4, 4, theme.accent);
+            } else {
+                gfx_fill_rounded_rect(box_x + 14, line_y + 6, 4, 4, 2, theme.accent);
+            }
+            gfx_draw_string(box_x + 24, line_y, line + 2, theme.text_primary, 0, true);
         } else {
-            // Intestazione sezione in grassetto blu
-            gfx_draw_string(box_x + 12, line_y, line, 0x0A246A, 0, true);
+            // Intestazione sezione in accento del tema
+            gfx_draw_string(box_x + 12, line_y, line, theme.accent, 0, true);
         }
     }
 
@@ -120,9 +126,7 @@ static void about_draw(window_t *win) {
     int32_t btn_x = cx + (cw - btn_w) / 2;
     int32_t btn_y = cy + ch - 32;
 
-    gfx_fill_rect(btn_x, btn_y, btn_w, btn_h, COLOR_BTNFACE);
-    gfx_draw_bevel_rect(btn_x, btn_y, btn_w, btn_h, false);
-    gfx_draw_string(btn_x + (btn_w - 16) / 2, btn_y + 4, "OK", COLOR_WINDOWTEXT, 0, true);
+    wm_draw_themed_button(btn_x, btn_y, btn_w, btn_h, "OK", false);
 }
 
 static void about_click(window_t *win, int32_t local_x, int32_t local_y, bool clicked) {

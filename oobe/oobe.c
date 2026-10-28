@@ -1,26 +1,94 @@
 #include "oobe.h"
-#include <apps/oobe.h>
+#include <screen_modules.h>
 #include <gui/wm.h>
 #include <gui/graphics.h>
 #include <gui/icons.h>
 #include <gui/image.h>
 #include <user.h>
-#include <drivers/vga.h>
-#include <drivers/ac97.h>
-#include <drivers/sound.h>
-#include <drivers/sound_wav.h>
-#include <drivers/timer.h>
 #include <drivers/mouse.h>
 #include <drivers/keyboard.h>
-#include <drivers/net/net_nic.h>
-#include <net/icmp.h>
-#include <net/dhcp.h>
 #include <fs/vfs.h>
 #include <fs/registry.h>
 #include <mm/heap.h>
 #include <string.h>
-#include <arch/x86_64/cpu.h>
 #include <arch/x86_64/io.h>
+
+__attribute__((section(".header"), used))
+module_header_t g_oobe_header = {
+    .magic          = MODULE_MAGIC_NEWOS,
+    .header_size    = sizeof(module_header_t),
+    .module_version = MODULE_VERSION_CURRENT,
+    .module_type    = MODULE_TYPE_OOBE,
+    .code_size      = 0,
+    .entry_offset   = 64,
+    .checksum       = 0,
+    .security_flags = SEC_FLAG_PROTECTED | SEC_FLAG_SYSTEM_SIGNED | SEC_FLAG_VERIFIED,
+    .module_name    = "OOBE.MOD",
+    .signature      = MODULE_AUTH_TAG
+};
+
+static const kernel_api_t* g_api = NULL;
+
+#define gfx_get_width() g_api->gfx_get_width()
+#define gfx_get_height() g_api->gfx_get_height()
+#define gfx_flip() g_api->gfx_flip()
+#define gfx_clear(c) g_api->gfx_clear(c)
+#define gfx_fill_rect(x,y,w,h,c) g_api->gfx_fill_rect(x,y,w,h,c)
+#define gfx_draw_rect(x,y,w,h,c) g_api->gfx_draw_rect(x,y,w,h,c)
+#define gfx_draw_bevel_rect(x,y,w,h,s) g_api->gfx_draw_bevel_rect(x,y,w,h,s)
+#define gfx_draw_gradient_h(x,y,w,h,c1,c2) g_api->gfx_draw_gradient_h(x,y,w,h,c1,c2)
+#define gfx_draw_gradient_v(x,y,w,h,c1,c2) g_api->gfx_draw_gradient_v(x,y,w,h,c1,c2)
+#define gfx_draw_string(x,y,s,c,bg,t) g_api->gfx_draw_string(x,y,s,c,bg,t)
+#define gfx_draw_char(x,y,ch,c,bg,t) g_api->gfx_draw_char(x,y,ch,c,bg,t)
+#define gfx_draw_cursor(x,y) g_api->gfx_draw_cursor(x,y)
+#define gfx_draw_windows_logo(x,y) g_api->gfx_draw_windows_logo(x,y)
+#define gfx_draw_icon_32(x,y,i) g_api->gfx_draw_icon_32(x,y,i)
+#define gfx_draw_icon_16(x,y,i) g_api->gfx_draw_icon_16(x,y,i)
+#define gfx_draw_image(x,y,im) g_api->gfx_draw_image(x,y,im)
+#define image_load_from_file(p) g_api->image_load_from_file(p)
+#define image_free(im) g_api->image_free(im)
+#define mouse_get_state(s) g_api->mouse_get_state(s)
+#define keyboard_has_char() g_api->keyboard_has_char()
+#define keyboard_get_char() g_api->keyboard_get_char()
+#define timer_get_ticks() g_api->timer_get_ticks()
+#define timer_sleep(ms) g_api->timer_sleep(ms)
+#include <drivers/net/net_nic.h>
+#include <net/icmp.h>
+#include <drivers/sound.h>
+#define sound_play(id) g_api->sound_play(id)
+#define sound_play_wav_file(p) g_api->sound_play_wav_file(p)
+#define vfs_read_entire_file(p,s) (void*)g_api->vfs_read_entire_file(p,s)
+#define vfs_write_entire_file_inplace(p,b,c) g_api->vfs_write_entire_file_inplace(p,b,c)
+#define vfs_create(p) g_api->vfs_create(p)
+#define registry_set_read_only(ro) g_api->registry_set_read_only(ro)
+#define kmalloc(sz) g_api->kmalloc(sz)
+#define kfree(p) g_api->kfree(p)
+#define user_set_profile(u,p,c,t,pw,i) g_api->user_set_profile(u,p,c,t,pw,i)
+#define user_save_config() g_api->user_save_config()
+#define power_shutdown() g_api->power_shutdown()
+#define power_reboot() g_api->power_reboot()
+#define net_nic_get_active() ((net_nic_t*)(g_api->net_nic_get_active ? g_api->net_nic_get_active() : NULL))
+#define net_format_mac(m,b,s) if (g_api->net_format_mac) g_api->net_format_mac(m,b,s)
+#define net_format_ip(i,b,s) if (g_api->net_format_ip) g_api->net_format_ip(i,b,s)
+#define net_parse_ip(s) (g_api->net_parse_ip ? g_api->net_parse_ip(s) : 0)
+#define dhcp_discover() if (g_api->dhcp_discover) g_api->dhcp_discover()
+#define net_nic_poll() if (g_api->net_nic_poll) g_api->net_nic_poll()
+#define icmp_ping_ip(t,c,s,r) (g_api->icmp_ping_ip ? g_api->icmp_ping_ip(t,c,s,r) : false)
+#define registry_set_value_sz(p,v,n) if (g_api->registry_set_value_sz) g_api->registry_set_value_sz(p,v,n)
+#define registry_set_value_dword(p,v,n) if (g_api->registry_set_value_dword) g_api->registry_set_value_dword(p,v,n)
+#define registry_save_to_disk() if (g_api->registry_save_to_disk) g_api->registry_save_to_disk()
+#define registry_audit_log(a,p,v,o,n,r) (void)0
+#define user_get_current() (g_api->user_get_current ? g_api->user_get_current() : NULL)
+
+int oobe_run_modal(void);
+
+__attribute__((section(".text.entry"), used))
+int oobe_main(const kernel_api_t* api, const oobe_params_t* params) {
+    if (!api) return -1;
+    g_api = api;
+    (void)params;
+    return oobe_run_modal();
+}
 
 typedef struct {
     int current_step; // 0 = Benvenuto, 1 = Video & Schermo, 2 = Verifica Audio, 3 = Connessione Rete, 4 = Account & Stile, 5 = Fine
@@ -877,8 +945,6 @@ int oobe_run_modal(void) {
     image_t* bg_img = image_load_from_file("C:\\NewOS\\Resources\\Screens\\LOGIN.BMP");
     if (!bg_img) bg_img = image_load_from_file("C:\\NewOS\\Resources\\LOGIN.BMP");
     if (!bg_img) bg_img = image_load_from_file("C:\\NewOS\\Resource\\wallpapers\\LOGIN.BMP");
-    if (!bg_img) bg_img = image_load_from_file("C:\\SYSTEM\\SCREENS\\LOGIN.BMP");
-    if (!bg_img) bg_img = image_load_from_file("C:\\SYSTEM\\SCREENS\\LOGIN.JPG");
     if (!bg_img) bg_img = image_load_from_file("/NewOS/Resources/Screens/LOGIN.BMP");
 
     oobe_state_t state;
@@ -953,84 +1019,4 @@ int oobe_run_modal(void) {
 
     outb(0x3F8, 'K');
     return 0; // Successo
-}
-
-// ------------------------------------------------------------------------------
-// Esecuzione come Finestra Desktop Manuale (se invocata da CMD o Explorer)
-// ------------------------------------------------------------------------------
-static void oobe_draw(window_t* win) {
-    oobe_state_t* state = (oobe_state_t*)win->app_data;
-    if (!state) return;
-    int32_t cx = win->x + 4;
-    int32_t cy = win->y + 24;
-    int32_t cw = win->width - 8;
-    int32_t ch = win->height - 28;
-    oobe_render_content(cx, cy, cw, ch, state);
-}
-
-static void oobe_mouse(window_t* win, int32_t lx, int32_t ly, bool clicked) {
-    if (!clicked) return;
-    oobe_state_t* state = (oobe_state_t*)win->app_data;
-    if (!state) return;
-
-    int32_t rx = lx - 4;
-    int32_t ry = ly - 24;
-    int32_t cw = win->width - 8;
-    int32_t ch = win->height - 28;
-
-    if (rx >= 0 && rx < cw && ry >= 0 && ry < ch) {
-        oobe_handle_click(rx, ry, cw, ch, state);
-        if (state->completed) {
-            oobe_mark_completed();
-            user_set_profile(state->username, state->password, state->computer_name, state->selected_theme, 0, true);
-            user_save_config();
-            sound_play(SOUND_STARTUP);
-            wm_destroy_window(win->id);
-        }
-    }
-}
-
-static void oobe_key(window_t* win, char c) {
-    oobe_state_t* state = (oobe_state_t*)win->app_data;
-    if (!state) return;
-
-    if (c == 27) { // Escape
-        wm_destroy_window(win->id);
-        return;
-    }
-
-    oobe_handle_key(c, state);
-    if (state->completed) {
-        oobe_mark_completed();
-        user_set_profile(state->username, state->password, state->computer_name, state->selected_theme, 0, true);
-        user_save_config();
-        sound_play(SOUND_STARTUP);
-        wm_destroy_window(win->id);
-    }
-}
-
-void app_oobe_launch(void) {
-    uint32_t sw = gfx_get_width();
-    uint32_t sh = gfx_get_height();
-
-    int32_t dw = 860;
-    int32_t dh = 530;
-    if (dw > (int32_t)sw - 20) dw = sw - 20;
-    if (dh > (int32_t)sh - 40) dh = sh - 40;
-
-    int32_t dx = (sw - dw) / 2;
-    int32_t dy = (sh - dh) / 2;
-
-    window_t* win = wm_create_window("Configurazione Guidata di NewOS V1 (OOBE)", dx, dy, dw, dh, APP_OOBE);
-    if (!win) return;
-
-    oobe_state_t* state = (oobe_state_t*)kmalloc(sizeof(oobe_state_t));
-    if (!state) return;
-
-    oobe_init_state(state, sw, sh);
-
-    win->app_data = state;
-    win->on_draw = oobe_draw;
-    win->on_mouse = oobe_mouse;
-    win->on_key = oobe_key;
 }

@@ -867,6 +867,9 @@ static void cmd_execute_internal(cmd_state_t* state, const char* cmd) {
     } else if (strcmp(cmd, "sound") == 0 || strcmp(cmd, "mmsys") == 0) {
         cmd_print(state, "Apertura Proprietà Audio...");
         app_sound_props_launch();
+    } else if (strcmp(cmd, "mouse") == 0 || strcmp(cmd, "main.cpl") == 0 || strcmp(cmd, "mouse.cpl") == 0) {
+        cmd_print(state, "Apertura Proprietà Mouse...");
+        app_mouse_props_launch();
     } else if (strcmp(cmd, "control") == 0 || strcmp(cmd, "controlpanel") == 0) {
         cmd_print(state, "Apertura Pannello di controllo...");
         app_control_panel_open();

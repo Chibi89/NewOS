@@ -53,10 +53,7 @@ int loginscreen_main(const kernel_api_t* api, const loginscreen_params_t* params
         bg_img = api->image_load_from_file("C:\\NewOS\\Resources\\Screens\\LOGIN.BMP");
         if (!bg_img) bg_img = api->image_load_from_file("C:\\NewOS\\Resources\\LOGIN.BMP");
         if (!bg_img) bg_img = api->image_load_from_file("C:\\NewOS\\Resource\\wallpapers\\LOGIN.BMP");
-        if (!bg_img) bg_img = api->image_load_from_file("C:\\SYSTEM\\SCREENS\\LOGIN.BMP");
-        if (!bg_img) bg_img = api->image_load_from_file("C:\\SYSTEM\\SCREENS\\LOGIN.JPG");
         if (!bg_img) bg_img = api->image_load_from_file("/NewOS/Resources/Screens/LOGIN.BMP");
-        if (!bg_img) bg_img = api->image_load_from_file("/SYSTEM/SCREENS/LOGIN.BMP");
     }
 
     // Ricava profilo utente
@@ -105,7 +102,7 @@ int loginscreen_main(const kernel_api_t* api, const loginscreen_params_t* params
                     }
                     if (api->sound_play_wav_file) {
                         if (!api->sound_play_wav_file("C:\\NewOS\\Resources\\Sounds\\DING.WAV")) {
-                            api->sound_play_wav_file("C:\\SYSTEM\\SOUNDS\\DING.WAV");
+                            api->sound_play_wav_file("/NewOS/Resources/Sounds/DING.WAV");
                         }
                     }
                     if (bg_img && api->image_free) api->image_free(bg_img);

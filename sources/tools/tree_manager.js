@@ -322,10 +322,6 @@ function organizeBuildBin(rootDir, binDir) {
         const dstIcons = path.join(binDir, 'NewOS', 'Resources', 'Icons');
         if (!fs.existsSync(dstIcons)) fs.mkdirSync(dstIcons, { recursive: true });
         fs.copyFileSync(iconSrc, path.join(dstIcons, 'ICONS.BIN'));
-
-        const dstSys = path.join(binDir, 'SYSTEM');
-        if (!fs.existsSync(dstSys)) fs.mkdirSync(dstSys, { recursive: true });
-        fs.copyFileSync(iconSrc, path.join(dstSys, 'ICONS.BIN'));
     }
 
     // Risorse Web per il Web Browser (C:\NewOS\Resources\Web\)
@@ -444,18 +440,20 @@ Manuale Utente Ufficiale - NewOS V1 (64-bit Edition)
     const newosBackupDir = path.join(newosUpdateDir, 'Backup');
     if (!fs.existsSync(newosBackupDir)) fs.mkdirSync(newosBackupDir, { recursive: true });
 
-    for (const mod of ['BOOTSCR.MOD', 'BOOTSCR.INI', 'LOGIN.MOD', 'LOGIN.INI', 'LOGOUT.MOD', 'LOGOUT.INI', 'BOOTSETUP.MOD', 'BOOTSETUP.INI', 'UPDATE.MOD', 'UPDATE.INI']) {
-        const srcMod = path.join(binDir, mod);
+    for (const mod of ['BOOTSCR.MOD', 'BOOTSCR.INI', 'LOGIN.MOD', 'LOGIN.INI', 'LOGOUT.MOD', 'LOGOUT.INI', 'BOOTSETUP.MOD', 'BOOTSETUP.INI', 'UPDATE.MOD', 'UPDATE.INI', 'OOBE.MOD', 'OOBE.INI']) {
+        let srcMod = path.join(newosBootDir, mod);
+        if (!fs.existsSync(srcMod)) srcMod = path.join(binDir, mod);
         if (fs.existsSync(srcMod)) {
-            fs.copyFileSync(srcMod, path.join(sysProgDir, mod));
-            fs.copyFileSync(srcMod, path.join(newosBootDir, mod));
+            try { fs.copyFileSync(srcMod, path.join(sysProgDir, mod)); } catch (e) {}
+            try { fs.copyFileSync(srcMod, path.join(newosBootDir, mod)); } catch (e) {}
         }
     }
     const bootSetupDir = path.join(binDir, 'BootSetup');
     for (const mod of ['BOOTSETUP.MOD', 'BOOTSETUP.INI']) {
-        const srcMod = path.join(binDir, mod);
+        let srcMod = path.join(newosBootDir, mod);
+        if (!fs.existsSync(srcMod)) srcMod = path.join(binDir, mod);
         if (fs.existsSync(srcMod)) {
-            fs.copyFileSync(srcMod, path.join(bootSetupDir, mod));
+            try { fs.copyFileSync(srcMod, path.join(bootSetupDir, mod)); } catch (e) {}
         }
     }
 

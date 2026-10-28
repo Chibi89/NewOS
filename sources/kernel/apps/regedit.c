@@ -238,7 +238,7 @@ static void regedit_draw(window_t* win) {
         gfx_fill_rect(log_x, log_y, log_w, log_h, 0x000000);
         gfx_draw_bevel_rect(log_x, log_y, log_w, log_h, true);
 
-        gfx_draw_string(log_x + 8, log_y + 6, "=== Registro Operazioni e Audit Trail di NewOS V1 (C:\\SYSTEM\\REGISTRY.LOG) ===", 0x00FF00, 0, true);
+        gfx_draw_string(log_x + 8, log_y + 6, "=== Registro Operazioni e Audit Trail di NewOS V1 (C:\\NewOS\\Registry\\REGISTRY.LOG) ===", 0x00FF00, 0, true);
 
         int log_count = registry_get_log_count();
         int max_lines = (log_h - 30) / 16;
