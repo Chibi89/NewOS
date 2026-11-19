@@ -13,7 +13,7 @@
 #define CURSOR_BMP_SIZE        32
 #define CURSOR_MAX_SCHEMES     16
 #define CURSOR_MAX_SINGLES     256
-#define CURSOR_DEFAULT_PATH    "C:/NewOS/Resource/cursor"
+#define CURSOR_DEFAULT_PATH    "C:/NewOS/Resources/cursor"
 
 /**
  * Stati di sistema standard del cursore (Windows Cursor Roles)

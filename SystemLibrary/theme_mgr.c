@@ -1,7 +1,7 @@
 /**
  * SystemLibrary/theme_mgr.c
  * Libreria Dinamica Out-of-Kernel per NewOS V1 (64-bit)
- * Scansione, decodifica ed ordinamento automatico temi in C:\NewOS\Resource\Themes
+ * Scansione, decodifica ed ordinamento automatico temi in C:\NewOS\Resources\Themes
  * (C) Newspoint Software - NewSoft Dynamic System Library
  */
 
@@ -278,6 +278,23 @@ static bool parse_theme_file(const kernel_api_t* api, const char* full_path, con
     out->start_btn_text = 0x1E1E1E;
     out->active_tab_indicator = 0x0078D4;
     out->tray_pill_color = 0xEAEAEA;
+    out->button_radius = 0xFF;
+    out->tab_radius = 0xFF;
+    out->input_radius = 0xFF;
+    out->panel_radius = 0xFF;
+    out->taskbar_btn_radius = 0xFF;
+    out->start_btn_radius = 0xFF;
+    out->tray_radius = 0xFF;
+    out->border_follows_corner = true;
+    out->border_radius = 0xFF;
+    out->control_border_follows_radius = true;
+    out->button_border_radius = 0xFF;
+    out->tab_border_radius = 0xFF;
+    out->input_border_radius = 0xFF;
+    out->panel_border_radius = 0xFF;
+    out->taskbar_border_radius = 0xFF;
+    out->start_btn_border_radius = 0xFF;
+    out->tray_border_radius = 0xFF;
     out->theme_id = 1;
 
     if (local_strstr(filename, "CLASSIC") || local_strstr(filename, "TEAL")) {
@@ -307,23 +324,8 @@ static bool parse_theme_file(const kernel_api_t* api, const char* full_path, con
         out->specular_rim = false;
         out->modern_controls = false;
         out->control_radius = 0;
-        out->button_radius = 0xFF;
-        out->tab_radius = 0xFF;
-        out->input_radius = 0xFF;
-        out->panel_radius = 0xFF;
-        out->taskbar_btn_radius = 0xFF;
-        out->start_btn_radius = 0xFF;
-        out->tray_radius = 0xFF;
-        out->border_follows_corner = true;
-        out->border_radius = 0xFF;
-        out->control_border_follows_radius = true;
-        out->button_border_radius = 0xFF;
-        out->tab_border_radius = 0xFF;
-        out->input_border_radius = 0xFF;
-        out->panel_border_radius = 0xFF;
-        out->taskbar_border_radius = 0xFF;
-        out->start_btn_border_radius = 0xFF;
-        out->tray_border_radius = 0xFF;
+        out->border_follows_corner = false;
+        out->control_border_follows_radius = false;
         out->theme_id = 0;
     }
 
@@ -871,7 +873,7 @@ int thememgr_dll_entry(const kernel_api_t* api, int cmd, theme_mgr_cmd_params_t*
     }
 
     if (cmd == THEME_CMD_SCAN) {
-        const char* path_to_scan = params->dir_path ? params->dir_path : "C:/NewOS/Resource/Themes";
+        const char* path_to_scan = params->dir_path ? params->dir_path : "C:/NewOS/Resources/Themes";
         log_msg(api, "[THEMEMGR.DLL] Scansione temi fuori dal kernel in: ");
         log_msg(api, path_to_scan);
         log_msg(api, "\n");
@@ -884,11 +886,11 @@ int thememgr_dll_entry(const kernel_api_t* api, int cmd, theme_mgr_cmd_params_t*
         // Buffer temporaneo per le voci di directory allocato sullo stack
         dll_vfs_dirent_t dir_entries[32];
         int32_t dcount = api->vfs_readdir(path_to_scan, dir_entries, 32);
-        if (dcount <= 0 && local_strcmp(path_to_scan, "C:/NewOS/Resource/Themes") == 0) {
-            dcount = api->vfs_readdir("C:\\NewOS\\Resource\\Themes", dir_entries, 32);
+        if (dcount <= 0 && local_strcmp(path_to_scan, "C:/NewOS/Resources/Themes") == 0) {
+            dcount = api->vfs_readdir("C:\\NewOS\\Resources\\Themes", dir_entries, 32);
         }
-        if (dcount <= 0 && local_strcmp(path_to_scan, "C:/NewOS/Resource/Themes") == 0) {
-            dcount = api->vfs_readdir("/NewOS/Resource/Themes", dir_entries, 32);
+        if (dcount <= 0 && local_strcmp(path_to_scan, "C:/NewOS/Resources/Themes") == 0) {
+            dcount = api->vfs_readdir("/NewOS/Resources/Themes", dir_entries, 32);
         }
         if (dcount <= 0) {
             dcount = api->vfs_readdir("C:/NewOS/Themes", dir_entries, 32);

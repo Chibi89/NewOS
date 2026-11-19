@@ -469,6 +469,16 @@ static void render_home_section(const kernel_api_t* api, int32_t x, int32_t y, i
 
 // --- Rendering Sezione SISTEMA ---
 
+static void st_uint_to_str(uint32_t v, char* buf) {
+    char tmp[16];
+    int i = 0;
+    if (v == 0) { buf[0] = '0'; buf[1] = '\0'; return; }
+    while (v > 0 && i < 15) { tmp[i++] = (char)('0' + (v % 10)); v /= 10; }
+    int k = 0;
+    while (i > 0) buf[k++] = tmp[--i];
+    buf[k] = '\0';
+}
+
 static void render_system_section(const kernel_api_t* api, int32_t x, int32_t y, int32_t w, int32_t h,
                                   const settings_render_params_t* p) {
     (void)h;
@@ -478,31 +488,59 @@ static void render_system_section(const kernel_api_t* api, int32_t x, int32_t y,
     draw_clipped_string(api, x, y, "Specifiche Hardware e Sistema", 0x1A1A1A, 0, true, clip_top, clip_bot);
     draw_clipped_string(api, x, y + 16, "Architettura processore, memoria e scheda madre", 0x6E7781, 0, true, clip_top, clip_bot);
 
-    int32_t box_y = y + 36;
-    draw_clipped_card_bg(api, x, box_y, w, 160, 6, 0xFFFFFF, 0xDCE1E7, p->is_glass, clip_top, clip_bot);
+    int32_t box_y = y + 32;
+    draw_clipped_card_bg(api, x, box_y, w, 134, 6, 0xFFFFFF, 0xDCE1E7, p->is_glass, clip_top, clip_bot);
 
-    draw_clipped_string(api, x + 16, box_y + 12, "Processore:", 0x005FB8, 0, true, clip_top, clip_bot);
-    draw_clipped_string(api, x + 130, box_y + 12, "x86_64 Long Mode (AMD64 / Intel 64-bit Freestanding)", 0x1A1A1A, 0, true, clip_top, clip_bot);
+    draw_clipped_string(api, x + 16, box_y + 10, "Processore:", 0x005FB8, 0, true, clip_top, clip_bot);
+    draw_clipped_string(api, x + 130, box_y + 10, "x86_64 Long Mode (AMD64 / Intel 64-bit Freestanding)", 0x1A1A1A, 0, true, clip_top, clip_bot);
 
-    draw_clipped_string(api, x + 16, box_y + 34, "Scheda Madre:", 0x005FB8, 0, true, clip_top, clip_bot);
-    draw_clipped_string(api, x + 130, box_y + 34, "X870E AORUS ELITE X3D (PCI Express / ACPI 2.0)", 0x1A1A1A, 0, true, clip_top, clip_bot);
+    draw_clipped_string(api, x + 16, box_y + 29, "Scheda Madre:", 0x005FB8, 0, true, clip_top, clip_bot);
+    draw_clipped_string(api, x + 130, box_y + 29, "X870E AORUS ELITE X3D (PCI Express / ACPI 2.0)", 0x1A1A1A, 0, true, clip_top, clip_bot);
 
-    draw_clipped_string(api, x + 16, box_y + 56, "Memoria RAM:", 0x005FB8, 0, true, clip_top, clip_bot);
-    draw_clipped_string(api, x + 130, box_y + 56, "128 MB Allocati (Paginazione PML4 a 4 livelli, No-Execute)", 0x1A1A1A, 0, true, clip_top, clip_bot);
+    draw_clipped_string(api, x + 16, box_y + 48, "Memoria RAM:", 0x005FB8, 0, true, clip_top, clip_bot);
+    draw_clipped_string(api, x + 130, box_y + 48, "128 MB Allocati (Paginazione PML4 a 4 livelli, No-Execute)", 0x1A1A1A, 0, true, clip_top, clip_bot);
 
-    draw_clipped_string(api, x + 16, box_y + 78, "Multiprocessore:", 0x005FB8, 0, true, clip_top, clip_bot);
-    draw_clipped_string(api, x + 130, box_y + 78, "SMP Hardware Attivo con Local APIC e I/O APIC", 0x1A1A1A, 0, true, clip_top, clip_bot);
+    draw_clipped_string(api, x + 16, box_y + 67, "Multiprocessore:", 0x005FB8, 0, true, clip_top, clip_bot);
+    draw_clipped_string(api, x + 130, box_y + 67, "SMP Hardware Attivo con Local APIC e I/O APIC", 0x1A1A1A, 0, true, clip_top, clip_bot);
 
-    draw_clipped_string(api, x + 16, box_y + 100, "Kernel Budget:", 0x005FB8, 0, true, clip_top, clip_bot);
-    draw_clipped_string(api, x + 130, box_y + 100, "Conforme (< 480 KB) con Moduli Out-of-Kernel (.MOD / .DLL)", 0x1A1A1A, 0, true, clip_top, clip_bot);
+    draw_clipped_string(api, x + 16, box_y + 86, "Kernel Budget:", 0x005FB8, 0, true, clip_top, clip_bot);
+    draw_clipped_string(api, x + 130, box_y + 86, "Conforme (< 480 KB) con Moduli Out-of-Kernel (.MOD / .DLL)", 0x1A1A1A, 0, true, clip_top, clip_bot);
 
-    draw_clipped_string(api, x + 16, box_y + 122, "File System:", 0x005FB8, 0, true, clip_top, clip_bot);
-    draw_clipped_string(api, x + 130, box_y + 122, "Volume exFAT C: a 64 cluster con VFS dinamico", 0x1A1A1A, 0, true, clip_top, clip_bot);
+    draw_clipped_string(api, x + 16, box_y + 105, "File System:", 0x005FB8, 0, true, clip_top, clip_bot);
+    draw_clipped_string(api, x + 130, box_y + 105, "Volume exFAT C: a 64 cluster con VFS dinamico", 0x1A1A1A, 0, true, clip_top, clip_bot);
 
     // Azioni rapide
-    int32_t btn_y = box_y + 172;
-    draw_clipped_action_btn(api, x, btn_y, 160, 24, "Gestione periferiche", false, true, clip_top, clip_bot);
-    draw_clipped_action_btn(api, x + 170, btn_y, 160, 24, "Informazioni su NewOS", false, false, clip_top, clip_bot);
+    int32_t btn_y = box_y + 142;
+    draw_clipped_action_btn(api, x, btn_y, 150, 24, "Gestione periferiche", false, true, clip_top, clip_bot);
+    draw_clipped_action_btn(api, x + 158, btn_y, 145, 24, "Data, Ora e Lingua", false, false, clip_top, clip_bot);
+    draw_clipped_action_btn(api, x + 311, btn_y, 140, 24, "Info su NewOS", false, false, clip_top, clip_bot);
+
+    // Card Accelerazione Hardware & Scaling DPI (HWACCEL.DLL)
+    int32_t hw_y = btn_y + 30;
+    draw_clipped_card_bg(api, x, hw_y, w, 86, 6, 0xFFFFFF, 0xDCE1E7, p->is_glass, clip_top, clip_bot);
+    if (p->state) {
+        draw_clipped_string(api, x + 16, hw_y + 10, "GPU & Accel:", 0x005FB8, 0, true, clip_top, clip_bot);
+        draw_clipped_string(api, x + 130, hw_y + 10, p->state->hw_gpu_name[0] ? p->state->hw_gpu_name : "Standard VESA/BGA", 0x1A1A1A, 0, true, clip_top, clip_bot);
+
+        char dpi_str[16], pct_str[16];
+        st_uint_to_str(p->state->hw_dpi ? p->state->hw_dpi : 96, dpi_str);
+        st_uint_to_str(p->state->hw_scale_pct ? p->state->hw_scale_pct : 100, pct_str);
+        draw_clipped_string(api, x + 16, hw_y + 30, "PAT/WC & Blit:", 0x005FB8, 0, true, clip_top, clip_bot);
+        draw_clipped_string(api, x + 130, hw_y + 30, p->state->hw_pat_wc ? "PAT WC Attivo" : "PAT Standard", 0x1A7F37, 0, true, clip_top, clip_bot);
+        draw_clipped_string(api, x + 245, hw_y + 30, p->state->hw_sse2 ? "| Blit SSE2" : "| Scalar", 0x1A1A1A, 0, true, clip_top, clip_bot);
+        draw_clipped_string(api, x + 345, hw_y + 30, "| DPI:", 0x5C646D, 0, true, clip_top, clip_bot);
+        draw_clipped_string(api, x + 398, hw_y + 30, dpi_str, 0x005FB8, 0, true, clip_top, clip_bot);
+
+        draw_clipped_string(api, x + 16, hw_y + 56, "Scala Schermo:", 0x005FB8, 0, true, clip_top, clip_bot);
+        for (int s = 0; s < 4; s++) {
+            const char* lbl = (s == 0) ? "Auto" : (s == 1) ? "100%" : (s == 2) ? "125%" : "150%";
+            uint32_t val = (s == 0) ? 0 : (s == 1) ? 100 : (s == 2) ? 125 : 150;
+            int32_t sx = x + 130 + s * 76;
+            bool act = (s == 0 && p->state->hw_scale_mode == 0) ||
+                       (s > 0 && p->state->hw_scale_mode == 1 && p->state->hw_scale_pct == val);
+            draw_clipped_action_btn(api, sx, hw_y + 52, 68, 24, lbl, false, act, clip_top, clip_bot);
+        }
+    }
 }
 
 // --- Rendering Sezione RETE E INTERNET ---
@@ -534,6 +572,7 @@ static void render_network_section(const kernel_api_t* api, int32_t x, int32_t y
     draw_clipped_string(api, x + 240, box_y + 84, "Server DNS: 10.0.2.3", 0x5C646D, 0, true, clip_top, clip_bot);
 
     draw_clipped_string(api, x + 20, box_y + 104, "Protocolli Attivi: TCP/IP, UDP, DHCP, DNS, ARP, ICMP", 0x005FB8, 0, true, clip_top, clip_bot);
+    draw_clipped_action_btn(api, x, box_y + 150, 220, 24, "Connessioni e Diagnostica Ping...", false, true, clip_top, clip_bot);
 }
 
 // --- Rendering Sezione PERSONALIZZAZIONE ---
@@ -545,20 +584,20 @@ static void render_personalization_section(const kernel_api_t* api, int32_t x, i
     int32_t clip_bot = clip_top + (p->ch - 44);
 
     draw_clipped_string(api, x, y, "Personalizzazione e Temi Grafici", 0x1A1A1A, 0, true, clip_top, clip_bot);
-    draw_clipped_string(api, x, y + 16, "Seleziona uno stile visivo applicato in tempo reale da THEMEMGR.DLL", 0x6E7781, 0, true, clip_top, clip_bot);
+    draw_clipped_string(api, x, y + 14, "Stili visivi THEMEMGR.DLL e UI Style (C:\\NewOS\\Resources\\UIStyle)", 0x6E7781, 0, true, clip_top, clip_bot);
 
-    int32_t box_y = y + 36;
-    draw_clipped_card_bg(api, x, box_y, w, 170, 6, 0xFFFFFF, 0xDCE1E7, p->is_glass, clip_top, clip_bot);
+    int32_t box_y = y + 28;
+    draw_clipped_card_bg(api, x, box_y, w, 118, 6, 0xFFFFFF, 0xDCE1E7, p->is_glass, clip_top, clip_bot);
 
     const char* themes[] = {
-        "1. Windows 11 Fluent Glass Light (Alta Trasparenza, Blur e Rim Speculare)",
-        "2. Windows 11 Mica Light (Stile moderno opaco satinato)",
-        "3. Windows 11 Mica Dark (Tema scuro per ambienti a basso contrasto)",
-        "4. Windows 2000 Classic 3D (Stile tradizionale Bevel tridimensionale)"
+        "1. Fluent Glass Light (Trasparenza e Blur)",
+        "2. Mica Light (Stile moderno satinato)",
+        "3. Mica Dark (Tema scuro contrastato)",
+        "4. Classic 3D (Stile tradizionale Bevel)"
     };
 
     for (int i = 0; i < 4; i++) {
-        int32_t ry = box_y + 10 + i * 38;
+        int32_t ry = box_y + 6 + i * 27;
         draw_clipped_string(api, x + 16, ry + 4, themes[i], 0x1A1A1A, 0, true, clip_top, clip_bot);
 
         int32_t btn_w = 90;
@@ -568,7 +607,29 @@ static void render_personalization_section(const kernel_api_t* api, int32_t x, i
         draw_clipped_action_btn(api, btn_x, ry, btn_w, 22, "Applica", is_hov, (i == 0), clip_top, clip_bot);
     }
 
-    draw_clipped_action_btn(api, x, box_y + 180, 200, 24, "Proprieta Schermo Avanzate", false, false, clip_top, clip_bot);
+    draw_clipped_action_btn(api, x, box_y + 124, 200, 22, "Proprieta Schermo Avanzate", false, false, clip_top, clip_bot);
+
+    // Sezione UI Style (Interfaccia Desktop modulare in NewOS\Resources\UIStyle)
+    int32_t ui_y = box_y + 150;
+    draw_clipped_string(api, x, ui_y, "UI Style (NewOS\\Resources\\UIStyle)", 0x1A1A1A, 0, true, clip_top, clip_bot);
+    int32_t ui_box_y = ui_y + 16;
+    draw_clipped_card_bg(api, x, ui_box_y, w, 72, 6, 0xFFFFFF, 0xDCE1E7, p->is_glass, clip_top, clip_bot);
+
+    const char* uistyles[] = {
+        "1. Standard NewOS (Shell classica / Glass)",
+        "2. Copenhagen Glass UI (COPENHAGEN.DLL)"
+    };
+    int cur_ui = p->state ? p->state->active_ui_style : 0;
+    for (int i = 0; i < 2; i++) {
+        int32_t ry = ui_box_y + 8 + i * 30;
+        draw_clipped_string(api, x + 16, ry + 4, uistyles[i], 0x1A1A1A, 0, true, clip_top, clip_bot);
+        int32_t btn_w = 90;
+        int32_t btn_x = x + w - btn_w - 14;
+        bool is_hov = (p->mouse_x >= btn_x && p->mouse_x <= btn_x + btn_w &&
+                       p->mouse_y >= ry && p->mouse_y <= ry + 22);
+        bool is_active = (cur_ui == i);
+        draw_clipped_action_btn(api, btn_x, ry, btn_w, 22, is_active ? "Attivo" : "Applica", is_hov, is_active, clip_top, clip_bot);
+    }
 }
 
 // --- Rendering Sezione DISPOSITIVI E AUDIO ---
@@ -606,7 +667,8 @@ static void render_devices_section(const kernel_api_t* api, int32_t x, int32_t y
     draw_clipped_string(api, x + 40, kbox_y + 14, "Mouse: PS/2 con schemi cursori personalizzati", 0x1A1A1A, 0, true, clip_top, clip_bot);
     draw_clipped_action_btn(api, x + w - 165, kbox_y + 10, 150, 22, "Proprieta' Mouse...", false, false, clip_top, clip_bot);
     draw_clipped_icon_16(api, x + 16, kbox_y + 38, ICON_KEYBOARD, clip_top, clip_bot);
-    draw_clipped_string(api, x + 40, kbox_y + 38, "Tastiera: Layout Italiano (IT), Ripetizione 30 cps", 0x1A1A1A, 0, true, clip_top, clip_bot);
+    draw_clipped_string(api, x + 40, kbox_y + 38, "Tastiera: Layout IT/US e Ripetizione", 0x1A1A1A, 0, true, clip_top, clip_bot);
+    draw_clipped_action_btn(api, x + w - 165, kbox_y + 36, 150, 22, "Proprieta' Tastiera...", false, false, clip_top, clip_bot);
 }
 
 // --- Rendering Sezione OPZIONI ENERGIA ---
@@ -650,6 +712,7 @@ static void render_security_section(const kernel_api_t* api, int32_t x, int32_t 
     draw_clipped_string(api, x + 16, box_y + 72, "Registro di Sistema: C:\\NewOS\\Registry\\SYSTEM.DAT", 0x1A1A1A, 0, true, clip_top, clip_bot);
 
     draw_clipped_action_btn(api, x + 16, box_y + 92, 190, 22, "Editor del Registro (REGEDIT)", false, true, clip_top, clip_bot);
+    draw_clipped_action_btn(api, x + 216, box_y + 92, 200, 22, "Account Utente e Password...", false, false, clip_top, clip_bot);
 }
 
 // --- Rendering Risultati Ricerca ("Trova un'impostazione") ---
@@ -735,14 +798,18 @@ static void render_settings_view(const kernel_api_t* api, const settings_render_
     }
     api->gfx_fill_rect(cx + side_w - 1, cy, 1, ch, 0xDCE1E7);
 
-    // Profilo Utente in cima alla Sidebar
+    // Profilo Utente in cima alla Sidebar (cliccabile per aprire USERACCT.DLL)
     int32_t prof_y = cy + 8;
+    const user_profile_t* up = (api && api->user_get_current) ? api->user_get_current() : NULL;
+    const char* uname = (up && up->username[0]) ? up->username : "Account Utente";
+    char init_str[3] = { (uname[0] ? uname[0] : 'U'), '\0', '\0' };
+
     api->gfx_fill_rect(cx + 10, prof_y + 2, 28, 28, 0x005FB8);
     api->gfx_draw_rect(cx + 10, prof_y + 2, 28, 28, 0x004588);
-    api->gfx_draw_string(cx + 17, prof_y + 8, "GM", 0xFFFFFF, 0, true);
+    api->gfx_draw_string(cx + 20, prof_y + 8, init_str, 0xFFFFFF, 0, true);
 
-    api->gfx_draw_string(cx + 44, prof_y + 2, "Giuseppe Morgana", 0x1A1A1A, 0, true);
-    api->gfx_draw_string(cx + 44, prof_y + 18, "morganagiuseppe@..", 0x707070, 0, true);
+    api->gfx_draw_string(cx + 44, prof_y + 2, uname, 0x1A1A1A, 0, true);
+    api->gfx_draw_string(cx + 44, prof_y + 18, "Gestisci profilo >", 0x005FB8, 0, true);
 
     api->gfx_fill_rect(cx + 10, prof_y + 36, side_w - 20, 1, 0xDCE1E7);
 
@@ -879,6 +946,11 @@ static settings_action_t handle_mouse_events(const kernel_api_t* api, const sett
         return SETTINGS_ACTION_CLASSIC_MODE;
     }
 
+    // 1b. Clic sul badge Profilo Utente in cima alla Sidebar -> apre USERACCT.DLL
+    if (mx >= cx + 6 && mx <= cx + side_w - 6 && my >= cy + 8 && my <= cy + 42) {
+        return SETTINGS_ACTION_LAUNCH_USERACCT;
+    }
+
     // 2. Clic sulle schede della barra di navigazione
     int32_t nav_y = cy + 52;
     for (int i = 0; i < SETTINGS_NUM_SECTIONS; i++) {
@@ -971,12 +1043,12 @@ static settings_action_t handle_mouse_events(const kernel_api_t* api, const sett
             SETTINGS_ACTION_LAUNCH_SOUND,
             SETTINGS_ACTION_LAUNCH_DEVMGMT,
             SETTINGS_ACTION_LAUNCH_POWER,
-            SETTINGS_ACTION_NONE,
+            SETTINGS_ACTION_LAUNCH_NETCPL,
             SETTINGS_ACTION_LAUNCH_DISPLAY,
             SETTINGS_ACTION_LAUNCH_ABOUT,
             SETTINGS_ACTION_LAUNCH_REGEDIT,
             SETTINGS_ACTION_LAUNCH_MOUSE,
-            SETTINGS_ACTION_NONE
+            SETTINGS_ACTION_LAUNCH_KEYBCPL
         };
 
         for (int i = 0; i < 10; i++) {
@@ -1023,15 +1095,33 @@ static settings_action_t handle_mouse_events(const kernel_api_t* api, const sett
             if (my >= sys_y + 28 && my <= sys_y + 58) return SETTINGS_ACTION_LAUNCH_REGEDIT;
         }
     } else if (p->state->active_section == SETTINGS_SECTION_SYSTEM) {
-        int32_t btn_y = content_y + 36 + 172;
+        int32_t btn_y = content_y + 32 + 142;
         if (my >= btn_y && my <= btn_y + 24 && my >= clip_top && my <= clip_bot) {
-            if (mx >= main_x && mx <= main_x + 160) return SETTINGS_ACTION_LAUNCH_DEVMGMT;
-            if (mx >= main_x + 170 && mx <= main_x + 330) return SETTINGS_ACTION_LAUNCH_ABOUT;
+            if (mx >= main_x && mx <= main_x + 150) return SETTINGS_ACTION_LAUNCH_DEVMGMT;
+            if (mx >= main_x + 158 && mx <= main_x + 303) return SETTINGS_ACTION_LAUNCH_TIMEDATE;
+            if (mx >= main_x + 311 && mx <= main_x + 451) return SETTINGS_ACTION_LAUNCH_ABOUT;
+        }
+        int32_t hw_y = btn_y + 30;
+        if (my >= hw_y + 52 && my <= hw_y + 76 && my >= clip_top && my <= clip_bot) {
+            for (int s = 0; s < 4; s++) {
+                int32_t sx = main_x + 130 + s * 76;
+                if (mx >= sx && mx <= sx + 68) {
+                    if (s == 0) return SETTINGS_ACTION_SET_SCALE_AUTO;
+                    if (s == 1) return SETTINGS_ACTION_SET_SCALE_100;
+                    if (s == 2) return SETTINGS_ACTION_SET_SCALE_125;
+                    return SETTINGS_ACTION_SET_SCALE_150;
+                }
+            }
+        }
+    } else if (p->state->active_section == SETTINGS_SECTION_NETWORK) {
+        int32_t btn_y = content_y + 36 + 150;
+        if (my >= btn_y && my <= btn_y + 24 && mx >= main_x && mx <= main_x + 220 && my >= clip_top && my <= clip_bot) {
+            return SETTINGS_ACTION_LAUNCH_NETCPL;
         }
     } else if (p->state->active_section == SETTINGS_SECTION_PERSONAL) {
-        int32_t box_y = content_y + 36;
+        int32_t box_y = content_y + 28;
         for (int i = 0; i < 4; i++) {
-            int32_t ry = box_y + 10 + i * 38;
+            int32_t ry = box_y + 6 + i * 27;
             if (my >= ry && my <= ry + 24 && my >= clip_top && my <= clip_bot) {
                 if (i == 0) return SETTINGS_ACTION_APPLY_THEME_1;
                 if (i == 1) return SETTINGS_ACTION_APPLY_THEME_2;
@@ -1039,8 +1129,15 @@ static settings_action_t handle_mouse_events(const kernel_api_t* api, const sett
                 if (i == 3) return SETTINGS_ACTION_APPLY_THEME_0;
             }
         }
-        if (my >= box_y + 180 && my <= box_y + 204 && my >= clip_top && my <= clip_bot) {
+        if (my >= box_y + 124 && my <= box_y + 146 && my >= clip_top && my <= clip_bot) {
             return SETTINGS_ACTION_LAUNCH_DISPLAY;
+        }
+        int32_t ui_box_y = box_y + 150 + 16;
+        for (int i = 0; i < 2; i++) {
+            int32_t ry = ui_box_y + 8 + i * 30;
+            if (my >= ry && my <= ry + 24 && mx >= main_x + main_w - 110 && my >= clip_top && my <= clip_bot) {
+                return (i == 0) ? SETTINGS_ACTION_APPLY_UISTYLE_0 : SETTINGS_ACTION_APPLY_UISTYLE_1;
+            }
         }
     } else if (p->state->active_section == SETTINGS_SECTION_DEVICES) {
         int32_t box_y = content_y + 36;
@@ -1051,6 +1148,9 @@ static settings_action_t handle_mouse_events(const kernel_api_t* api, const sett
         if (my >= kbox_y + 10 && my <= kbox_y + 32 && mx >= main_x + main_w - 175 && mx <= main_x + main_w && my >= clip_top && my <= clip_bot) {
             return SETTINGS_ACTION_LAUNCH_MOUSE;
         }
+        if (my >= kbox_y + 36 && my <= kbox_y + 58 && mx >= main_x + main_w - 175 && mx <= main_x + main_w && my >= clip_top && my <= clip_bot) {
+            return SETTINGS_ACTION_LAUNCH_KEYBCPL;
+        }
     } else if (p->state->active_section == SETTINGS_SECTION_POWER) {
         int32_t box_y = content_y + 36;
         if (my >= box_y + 78 && my <= box_y + 100 && my >= clip_top && my <= clip_bot) {
@@ -1059,6 +1159,7 @@ static settings_action_t handle_mouse_events(const kernel_api_t* api, const sett
     } else if (p->state->active_section == SETTINGS_SECTION_SECURITY) {
         int32_t box_y = content_y + 36;
         if (my >= box_y + 92 && my <= box_y + 114 && my >= clip_top && my <= clip_bot) {
+            if (mx >= main_x + 216 && mx <= main_x + 416) return SETTINGS_ACTION_LAUNCH_USERACCT;
             return SETTINGS_ACTION_LAUNCH_REGEDIT;
         }
     }

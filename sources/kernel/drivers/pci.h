@@ -33,4 +33,10 @@ bool pci_find_class(uint8_t class_id, uint8_t subclass_id, pci_device_t* dev);
 bool pci_find_class_prog_if(uint8_t class_id, uint8_t subclass_id, uint8_t prog_if, pci_device_t* dev);
 void pci_enable_bus_master(pci_device_t* dev);
 
+// Enumerazione completa bus PCI/PCIe (0..255) e decodifica BAR 32/64-bit
+void                pci_scan_all(void);
+int                 pci_get_device_count(void);
+const pci_device_t* pci_get_device(int index);
+uint64_t            pci_get_bar_addr(const pci_device_t* dev, int bar_idx);
+
 #endif // DRIVERS_PCI_H

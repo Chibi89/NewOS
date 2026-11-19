@@ -168,6 +168,22 @@ setup_vbe:
     mov ax, 0x4F02
     mov bx, [ds:selected_vbe_mode]
     int 0x10
+
+    ; Lettura opzionale EDID 128-byte (VBE DDC 0x4F15) in 0x0000:0x9100
+    push es
+    xor ax, ax
+    mov es, ax
+    mov di, 0x9100
+    mov cx, 64
+    xor ax, ax
+    rep stosw               ; Azzera 128 byte preventivamente
+    mov ax, 0x4F15
+    mov bl, 0x01
+    xor cx, cx
+    xor dx, dx
+    mov di, 0x9100
+    int 0x10
+    pop es
     ret
 
 ; ------------------------------------------------------------------------------

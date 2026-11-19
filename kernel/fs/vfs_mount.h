@@ -91,4 +91,7 @@ char vfs_get_first_free_letter(void);
 // Elenco lettere unità attive (es. "CDR")
 int vfs_list_drives(char* out_letters, int max_drives);
 
+// Rileva il bus fisico reale sottostante una lettera di unità
+bool vfs_get_drive_bus_info(char drive_letter, vfs_bus_info_t* out_info);
+
 #endif // FS_VFS_MOUNT_H

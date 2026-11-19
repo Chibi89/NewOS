@@ -26,6 +26,18 @@ void app_devmgmt_launch(void);
 // Applet Proprietà Mouse e Puntatori (MAIN.CPL)
 void app_mouse_props_launch(void);
 
+// Applet Gestione Account Utente Out-of-Kernel (USERACCT.CPL -> USERACCT.DLL)
+void app_user_accounts_launch(void);
+
+// Applet Data, Ora e Lingua Out-of-Kernel (TIMEDATE.CPL -> TIMEDATE.DLL)
+void app_timedate_props_launch(void);
+
+// Applet Connessioni di Rete Out-of-Kernel (NCPA.CPL -> NETCPL.DLL)
+void app_net_props_launch(void);
+
+// Applet Proprietà Tastiera Out-of-Kernel (KEYBOARD.CPL -> KEYBCPL.DLL)
+void app_keyboard_props_launch(void);
+
 // Applet Informazioni su NewOS (WINVER.EXE / SYSDM.CPL)
 void app_about_launch(void);
 

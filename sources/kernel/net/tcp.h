@@ -35,8 +35,8 @@ typedef struct __attribute__((packed)) {
     uint16_t urgent_ptr;
 } tcp_header_t;
 
-#define TCP_MAX_SOCKETS 16
-#define TCP_BUFFER_SIZE 4096
+#define TCP_MAX_SOCKETS 8
+#define TCP_BUFFER_SIZE 65536
 
 typedef struct {
     int         id;
@@ -49,7 +49,7 @@ typedef struct {
     uint32_t    snd_nxt;     // Next sequence to send
     uint32_t    rcv_nxt;     // Next sequence expected to receive
     uint16_t    rcv_wnd;     // Receive window
-    uint8_t     rx_buf[TCP_BUFFER_SIZE];
+    uint8_t*    rx_buf;      // Buffer RX allocato dinamicamente (TCP_BUFFER_SIZE)
     uint32_t    rx_head;
     uint32_t    rx_tail;
     bool        is_listening;

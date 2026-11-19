@@ -17,8 +17,8 @@ kernel_entry:
     mov gs, ax
     mov ss, ax
 
-    ; Imposta lo stack del kernel a 0x200000 con allineamento a 16 byte
-    mov rsp, 0x200000
+    ; Imposta lo stack del kernel a 0x380000 (ben sopra _kernel_end e sotto heap_start 0x400000)
+    mov rsp, 0x380000
     and rsp, -16
 
     ; Abilita FPU e SSE (CR0.EM=0, CR0.MP=1, CR4.OSFXSR=1, CR4.OSXMMEXCPT=1)

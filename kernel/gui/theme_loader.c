@@ -19,7 +19,7 @@ static bool g_attempted_load = false;
 
 static theme_info_t s_loaded_themes[MAX_SYSTEM_THEMES];
 static int s_loaded_count = 0;
-static char s_current_scanned_dir[128] = "C:/NewOS/Resource/Themes";
+static char s_current_scanned_dir[128] = "C:/NewOS/Resources/Themes";
 
 // Fallback di sicurezza incorporati (se THEMEMGR.DLL non è presente)
 static void init_fallback_themes(void) {
@@ -136,7 +136,7 @@ static void init_fallback_themes(void) {
     s_loaded_themes[1].tray_border_radius = 6;
     s_loaded_themes[1].control_border = true;
     s_loaded_themes[1].theme_id = 1;
-    strncpy(s_loaded_themes[1].wallpaper_file, "C:\\NewOS\\Resource\\wallpapers\\FLOW.BMP", sizeof(s_loaded_themes[1].wallpaper_file) - 1);
+    strncpy(s_loaded_themes[1].wallpaper_file, "C:\\NewOS\\Resources\\Wallpapers\\FLOW.BMP", sizeof(s_loaded_themes[1].wallpaper_file) - 1);
 
     // 2. Windows 11 Mica Light
     strncpy(s_loaded_themes[2].filename, "MICA_LIGHT.THEMES", sizeof(s_loaded_themes[2].filename) - 1);
@@ -198,7 +198,7 @@ static void init_fallback_themes(void) {
     s_loaded_themes[2].start_btn_border_radius = 6;
     s_loaded_themes[2].tray_border_radius = 5;
     s_loaded_themes[2].theme_id = 2;
-    strncpy(s_loaded_themes[2].wallpaper_file, "C:\\NewOS\\Resource\\wallpapers\\FLOW.BMP", sizeof(s_loaded_themes[2].wallpaper_file) - 1);
+    strncpy(s_loaded_themes[2].wallpaper_file, "C:\\NewOS\\Resources\\Wallpapers\\FLOW.BMP", sizeof(s_loaded_themes[2].wallpaper_file) - 1);
 
     // 3. Windows 11 Mica Dark
     strncpy(s_loaded_themes[3].filename, "MICA_DARK.THEMES", sizeof(s_loaded_themes[3].filename) - 1);
@@ -260,7 +260,7 @@ static void init_fallback_themes(void) {
     s_loaded_themes[3].start_btn_border_radius = 6;
     s_loaded_themes[3].tray_border_radius = 5;
     s_loaded_themes[3].theme_id = 3;
-    strncpy(s_loaded_themes[3].wallpaper_file, "C:\\NewOS\\Resource\\wallpapers\\FLOW.BMP", sizeof(s_loaded_themes[3].wallpaper_file) - 1);
+    strncpy(s_loaded_themes[3].wallpaper_file, "C:\\NewOS\\Resources\\Wallpapers\\FLOW.BMP", sizeof(s_loaded_themes[3].wallpaper_file) - 1);
 }
 
 static void try_load_dll(void) {
@@ -271,7 +271,7 @@ static void try_load_dll(void) {
         "C:\\NewOS\\SystemLibrary\\THEMEMGR.DLL",
         "D:\\NewOS\\SystemLibrary\\THEMEMGR.DLL",
         "/NewOS/SystemLibrary/THEMEMGR.DLL",
-        "C:\\NewOS\\Resource\\Themes\\THEMEMGR.DLL",
+        "C:\\NewOS\\Resources\\Themes\\THEMEMGR.DLL",
         "THEMEMGR.DLL"
     };
 
@@ -301,7 +301,7 @@ static void try_load_dll(void) {
 }
 
 int theme_mgr_scan(const char* dir_path) {
-    const char* path_to_scan = dir_path ? dir_path : "C:/NewOS/Resource/Themes";
+    const char* path_to_scan = dir_path ? dir_path : "C:/NewOS/Resources/Themes";
     strncpy(s_current_scanned_dir, path_to_scan, sizeof(s_current_scanned_dir) - 1);
     s_current_scanned_dir[sizeof(s_current_scanned_dir) - 1] = '\0';
 
@@ -330,7 +330,7 @@ int theme_mgr_scan(const char* dir_path) {
 }
 
 int theme_mgr_init(const char* custom_dir) {
-    return theme_mgr_scan(custom_dir ? custom_dir : "C:/NewOS/Resource/Themes");
+    return theme_mgr_scan(custom_dir ? custom_dir : "C:/NewOS/Resources/Themes");
 }
 
 void theme_mgr_sort(theme_sort_order_t order) {
@@ -348,14 +348,14 @@ void theme_mgr_sort(theme_sort_order_t order) {
 
 int theme_mgr_get_count(void) {
     if (s_loaded_count == 0) {
-        theme_mgr_init("C:/NewOS/Resource/Themes");
+        theme_mgr_init("C:/NewOS/Resources/Themes");
     }
     return s_loaded_count;
 }
 
 const theme_info_t* theme_mgr_get(int index) {
     if (s_loaded_count == 0) {
-        theme_mgr_init("C:/NewOS/Resource/Themes");
+        theme_mgr_init("C:/NewOS/Resources/Themes");
     }
     if (index < 0 || index >= s_loaded_count) return NULL;
     return &s_loaded_themes[index];
@@ -363,7 +363,7 @@ const theme_info_t* theme_mgr_get(int index) {
 
 int theme_mgr_find_by_filename(const char* filename) {
     if (!filename) return -1;
-    if (s_loaded_count == 0) theme_mgr_init("C:/NewOS/Resource/Themes");
+    if (s_loaded_count == 0) theme_mgr_init("C:/NewOS/Resources/Themes");
     for (int i = 0; i < s_loaded_count; i++) {
         if (strcasecmp(s_loaded_themes[i].filename, filename) == 0) return i;
     }
@@ -371,7 +371,7 @@ int theme_mgr_find_by_filename(const char* filename) {
 }
 
 int theme_mgr_find_by_id(int theme_id) {
-    if (s_loaded_count == 0) theme_mgr_init("C:/NewOS/Resource/Themes");
+    if (s_loaded_count == 0) theme_mgr_init("C:/NewOS/Resources/Themes");
     for (int i = 0; i < s_loaded_count; i++) {
         if (s_loaded_themes[i].theme_id == theme_id) return i;
     }
@@ -379,7 +379,7 @@ int theme_mgr_find_by_id(int theme_id) {
 }
 
 bool theme_mgr_apply(int index) {
-    if (s_loaded_count == 0) theme_mgr_init("C:/NewOS/Resource/Themes");
+    if (s_loaded_count == 0) theme_mgr_init("C:/NewOS/Resources/Themes");
     if (index < 0 || index >= s_loaded_count) return false;
     if (strstr(s_loaded_themes[index].wallpaper_file, "FLOW") || strstr(s_loaded_themes[index].wallpaper_file, "flow")) {
         wm_set_background_type(BG_PHOTO_FLOW);
@@ -389,7 +389,6 @@ bool theme_mgr_apply(int index) {
         wm_set_background_type(BG_BLISS_XP);
     }
     wm_apply_theme_props(&s_loaded_themes[index]);
-    wm_set_theme(s_loaded_themes[index].theme_id);
     return true;
 }
 
@@ -403,7 +402,6 @@ void theme_mgr_apply_props(const theme_info_t* theme) {
         wm_set_background_type(BG_BLISS_XP);
     }
     wm_apply_theme_props(theme);
-    wm_set_theme(theme->theme_id);
 }
 
 const theme_info_t* theme_mgr_get_active(void) {

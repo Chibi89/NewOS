@@ -27,7 +27,12 @@ typedef enum {
     APP_PLAYER,
     APP_WHATSNEW,
     APP_TASKMGR,
-    APP_MOUSE
+    APP_MOUSE,
+    APP_USERACCT,
+    APP_TIMEDATE,
+    APP_NETCPL,
+    APP_KEYBCPL,
+    APP_COMDLG
 } app_type_t;
 
 typedef struct window window_t;
@@ -118,6 +123,10 @@ void app_about_launch(void);
 void app_display_props_launch(void);
 void app_sound_props_launch(void);
 void app_mouse_props_launch(void);
+void app_user_accounts_launch(void);
+void app_timedate_props_launch(void);
+void app_net_props_launch(void);
+void app_keyboard_props_launch(void);
 void app_explorer_open_this_pc(void);
 void app_explorer_open_drive_c(void);
 void app_explorer_open_folder(const char* folder_name);

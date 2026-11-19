@@ -109,7 +109,7 @@ bool cursor_loader_init(void) {
     // Esegui scansione risorse e sottocartelle
     memset(&params, 0, sizeof(params));
     params.ctx = &g_cursor_ctx;
-    params.root_dir = "C:/NewOS/Resource/cursor";
+    params.root_dir = "C:/NewOS/Resources/Cursor";
     int out_cnt = 0;
     params.out_count = &out_cnt;
 

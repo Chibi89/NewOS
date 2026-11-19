@@ -1,5 +1,6 @@
 #include <drivers/sound_wav.h>
 #include <drivers/ac97.h>
+#include <drivers/hda.h>
 #include <drivers/speaker.h>
 #include <fs/vfs.h>
 #include <mm/heap.h>
@@ -83,7 +84,10 @@ bool sound_play_wav_file(const char* vfs_path) {
     }
     g_active_wav_buffer = wav_data;
 
-    if (ac97_is_available()) {
+    if (hda_is_available()) {
+        hda_play_pcm(info.pcm_data, info.pcm_size, info.sample_rate);
+        return true;
+    } else if (ac97_is_available()) {
         ac97_play_pcm(info.pcm_data, info.pcm_size, info.sample_rate);
         return true;
     } else {

@@ -1,6 +1,8 @@
 #include <drivers/net/net_nic.h>
 #include <drivers/net/e1000.h>
 #include <drivers/net/rtl8139.h>
+#include <drivers/net/r8169.h>
+#include <drivers/net/virtio_net.h>
 #include <drivers/net/wifi.h>
 #include <drivers/pci.h>
 #include <drivers/usb/usb.h>
@@ -78,9 +80,9 @@ bool net_nic_init(void) {
 
     serial_log("[NET_NIC] Ricerca hardware Ethernet PCI...\n");
 
-    // 1. Prova schede Intel E1000 (82540EM e varianti)
+    // 1. Prova schede Intel E1000 / e1000e (82540EM, 82574L, I217, I219)
     pci_device_t pci_dev;
-    uint16_t intel_dev_ids[] = { 0x100E, 0x1004, 0x100F, 0x1010, 0x1011, 0x1012, 0x101D, 0x1079, 0x107C };
+    uint16_t intel_dev_ids[] = { 0x100E, 0x1004, 0x100F, 0x1010, 0x1011, 0x1012, 0x101D, 0x1079, 0x107C, 0x10D3, 0x153A, 0x15B7, 0x15B8, 0x15D8, 0x15E3 };
     bool found_e1000 = false;
 
     for (size_t i = 0; i < sizeof(intel_dev_ids) / sizeof(intel_dev_ids[0]); i++) {
@@ -118,12 +120,30 @@ bool net_nic_init(void) {
     }
 
     if (!found_e1000) {
-        // 2. Prova controller Realtek RTL8139
-        if (pci_find_device(0x10EC, 0x8139, &pci_dev)) {
+        bool found_other = false;
+        // 2. Prova VirtIO-Net (QEMU/KVM)
+        if (pci_find_device(0x1AF4, 0x1000, &pci_dev) && virtio_net_init(&pci_dev, &g_active_nic)) {
+            serial_log("[NET_NIC] Trovato controller VirtIO-Net Gigabit.\n");
+            found_other = true;
+        }
+        // 3. Prova Realtek RTL8111/8168/8125 Gigabit/2.5GbE
+        if (!found_other) {
+            uint16_t r8169_ids[] = { 0x8168, 0x8169, 0x8161, 0x8136, 0x8125 };
+            for (size_t r = 0; r < sizeof(r8169_ids) / sizeof(r8169_ids[0]); r++) {
+                if (pci_find_device(0x10EC, r8169_ids[r], &pci_dev) && r8169_init(&pci_dev, &g_active_nic)) {
+                    serial_log("[NET_NIC] Trovato controller Realtek RTL8111/8168 Gigabit.\n");
+                    found_other = true;
+                    break;
+                }
+            }
+        }
+        // 4. Prova controller Realtek RTL8139
+        if (!found_other && pci_find_device(0x10EC, 0x8139, &pci_dev) && rtl8139_init(&pci_dev, &g_active_nic)) {
             serial_log("[NET_NIC] Trovato controller Realtek RTL8139 Fast Ethernet.\n");
-            rtl8139_init(&pci_dev, &g_active_nic);
-        } else {
-            // 3. Se presente controller Wi-Fi, attiva Wi-Fi come scheda principale
+            found_other = true;
+        }
+        if (!found_other) {
+            // 5. Se presente controller Wi-Fi, attiva Wi-Fi come scheda principale
             if (wifi_is_present()) {
                 serial_log("[NET_NIC] Attivazione controller Wi-Fi come interfaccia di rete primaria.\n");
                 wifi_init(found_wifi_pci ? &wifi_pci : NULL, &g_active_nic);
@@ -171,6 +191,10 @@ bool net_nic_send_packet(const void* data, uint16_t len) {
         return wifi_send(data, len);
     } else if (g_active_nic.type == NIC_TYPE_E1000) {
         return e1000_send(data, len);
+    } else if (g_active_nic.type == NIC_TYPE_R8169) {
+        return r8169_send(data, len);
+    } else if (g_active_nic.type == NIC_TYPE_VIRTIO) {
+        return virtio_net_send(data, len);
     } else if (g_active_nic.type == NIC_TYPE_RTL8139) {
         return rtl8139_send(data, len);
     } else {
@@ -197,6 +221,10 @@ void net_nic_poll(void) {
         wifi_poll(g_rx_handler);
     } else if (g_active_nic.type == NIC_TYPE_E1000) {
         e1000_poll(g_rx_handler);
+    } else if (g_active_nic.type == NIC_TYPE_R8169) {
+        r8169_poll(g_rx_handler);
+    } else if (g_active_nic.type == NIC_TYPE_VIRTIO) {
+        virtio_net_poll(g_rx_handler);
     } else if (g_active_nic.type == NIC_TYPE_RTL8139) {
         rtl8139_poll(g_rx_handler);
     }

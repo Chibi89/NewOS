@@ -7,6 +7,7 @@
 #include <apps/taskmgr.h>
 #include <arch/x86_64/io.h>
 #include <drivers/ata.h>
+#include <drivers/keyboard.h>
 #include <drivers/sound_wav.h>
 #include <drivers/timer.h>
 #include <drivers/usb/usb_msc.h>
@@ -16,13 +17,16 @@
 #include <gui/graphics.h>
 #include <gui/icons.h>
 #include <gui/image.h>
-#include <gui/wm.h>
-#include <gui/theme_mgr.h>
 #include <gui/screen_mgr.h>
-#include <settings.h>
+#include <gui/theme_mgr.h>
+#include <gui/uistyle_loader.h>
+#include <gui/hwaccel_loader.h>
+#include <gui/wm.h>
+#include <include/clipboard.h>
+#include <include/comdlg.h>
 #include <mm/heap.h>
+#include <settings.h>
 #include <string.h>
-
 
 static bool str_contains_nocase(const char *haystack, const char *needle) {
   if (!haystack || !needle || !*needle)
@@ -520,6 +524,19 @@ static void explorer_load_items(explorer_state_t *state) {
       cp->is_folder = true;
       cp->content[0] = '\0';
     }
+
+    // 6. Gestore Stack & Rete FTP (COMDLG.DLL)
+    if (!state->search_active || state->search_filter[0] == '\0' ||
+        str_contains_nocase("Stack & Rete FTP", state->search_filter)) {
+      explorer_item_t *ftp = &state->items[state->num_items++];
+      strcpy(ftp->name, "Stack & Rete FTP");
+      strcpy(ftp->desc, "Trasferimento file PC <-> FTP (COMDLG.DLL)");
+      ftp->icon_id = ICON_NET;
+      ftp->size_bytes = 0;
+      ftp->is_drive = false;
+      ftp->is_folder = true;
+      ftp->content[0] = '\0';
+    }
     break;
   }
 
@@ -723,34 +740,32 @@ static void explorer_load_items(explorer_state_t *state) {
   }
 
   case EXPLORER_MODE_RECYCLE_BIN: {
-    strcpy(state->current_path, "Cestino");
-
-    explorer_item_t *it1 = &state->items[state->num_items++];
-    strcpy(it1->name, "vecchio_log.txt");
-    strcpy(it1->desc, "C:\\");
-    it1->icon_id = ICON_DOCUMENT;
-    it1->is_drive = false;
-    it1->is_folder = false;
-    it1->size_bytes = 4096;
-    strcpy(it1->content, "Log di debug della sessione precedente.\n");
-
-    explorer_item_t *it2 = &state->items[state->num_items++];
-    strcpy(it2->name, "bozza_progetto.bak");
-    strcpy(it2->desc, "C:\\Progetti");
-    it2->icon_id = ICON_DOCUMENT;
-    it2->is_drive = false;
-    it2->is_folder = false;
-    it2->size_bytes = 8192;
-    strcpy(it2->content, "Bozza non piu utilizzata.\n");
-
-    explorer_item_t *it3 = &state->items[state->num_items++];
-    strcpy(it3->name, "file_temporaneo.tmp");
-    strcpy(it3->desc, "C:\\Sistema");
-    it3->icon_id = ICON_DOCUMENT;
-    it3->is_drive = false;
-    it3->is_folder = false;
-    it3->size_bytes = 1024;
-    strcpy(it3->content, "File temporaneo rimosso dal sistema.\n");
+    strcpy(state->current_path, "Cestino (C:\\Recycle.Bin)");
+    if (!vfs_exists("C:\\Recycle.Bin")) {
+      vfs_mkdir("C:\\Recycle.Bin");
+    }
+    vfs_dirent_t rec_entries[MAX_EXPLORER_ITEMS];
+    int32_t rcount =
+        vfs_readdir("C:/Recycle.Bin", rec_entries, MAX_EXPLORER_ITEMS);
+    if (rcount > 0) {
+      for (int32_t i = 0; i < rcount && state->num_items < MAX_EXPLORER_ITEMS;
+           i++) {
+        if (strcasecmp(rec_entries[i].name, "RECYCLE.IDX") == 0 ||
+            strcasecmp(rec_entries[i].name, "RECYCLE.CFG") == 0)
+          continue;
+        explorer_item_t *it = &state->items[state->num_items++];
+        strncpy(it->name, rec_entries[i].name, sizeof(it->name) - 1);
+        it->name[sizeof(it->name) - 1] = '\0';
+        strcpy(it->desc, "Elemento eliminato in C:\\Recycle.Bin");
+        it->icon_id = ICON_DOCUMENT;
+        it->is_drive = false;
+        it->is_folder = rec_entries[i].is_directory;
+        it->size_bytes = rec_entries[i].size;
+        strcpy(it->content,
+               "Elemento presente nel Cestino di sistema.\nUsa 'Ripristina "
+               "elemento' per riportarlo nel percorso originale.");
+      }
+    }
     break;
   }
 
@@ -768,19 +783,23 @@ static void explorer_load_items(explorer_state_t *state) {
         {"Sistema", ICON_INFO, "Specifiche hardware, CPU e Long Mode 64-bit"},
         {"Mouse", ICON_MOUSE, "Velocita puntatore e doppio clic"},
         {"Tastiera", ICON_KEYBOARD, "Layout tastiera e ripetizione tasti"},
+        {"Account utente", ICON_ACCESSIBILITY,
+         "Gestione profilo C:\\User, hostname e password"},
+        {"Data, ora e lingua", ICON_INFO,
+         "Orologio hardware CMOS, fuso orario e layout IT/US"},
         {"Opzioni risparmio energia", ICON_ENERGY,
          "Standby monitor e spegnimento sistema"},
         {"Strumenti di manutenzione", ICON_MAINTENANCE,
          "Diagnostica disco e pulizia risorse"},
         {"Connessioni di rete", ICON_NET,
-         "Stato scheda di rete e indirizzo IP"},
+         "Stato scheda di rete, DHCP e diagnostica Ping"},
         {"Caratteri", ICON_FONT, "Tipi di carattere bitmap e TrueType"},
         {"Gestione periferiche", ICON_MAINTENANCE,
          "Stato driver hardware (.SYS) e configurazioni (.INI)"},
         {"Editor del Registro", ICON_MAINTENANCE,
          "Database delle configurazioni di sistema (REGEDIT.EXE)"}};
 
-    for (int i = 0; i < 11; i++) {
+    for (int i = 0; i < 13; i++) {
       explorer_item_t *it = &state->items[state->num_items++];
       strcpy(it->name, cp_list[i].name);
       strcpy(it->desc, cp_list[i].desc);
@@ -950,6 +969,18 @@ static void explorer_delete_item(explorer_state_t *state, int idx) {
   if (it->is_drive)
     return;
 
+  if (state->mode == EXPLORER_MODE_RECYCLE_BIN) {
+    char rpath[160];
+    mini_snprintf(rpath, sizeof(rpath), "C:\\Recycle.Bin\\%s", it->name);
+    if (!comdlg_exec_file_op(COMDLG_OP_DELETE_PERM, rpath, NULL)) {
+      vfs_unlink(rpath);
+    }
+    explorer_load_items(state);
+    state->ctx_menu.is_open = false;
+    state->active_menu = EXPLORER_MENU_NONE;
+    return;
+  }
+
   char pfx = 'C';
   if (state->mode == EXPLORER_MODE_DRIVE_U)
     pfx = 'U';
@@ -966,7 +997,9 @@ static void explorer_delete_item(explorer_state_t *state, int idx) {
   } else {
     mini_snprintf(path, sizeof(path), "%c:/%s", pfx, it->name);
   }
-  vfs_unlink(path);
+  if (!comdlg_exec_file_op(COMDLG_OP_RECYCLE, path, NULL)) {
+    vfs_unlink(path);
+  }
   explorer_load_items(state);
   state->ctx_menu.is_open = false;
   state->active_menu = EXPLORER_MENU_NONE;
@@ -1011,49 +1044,10 @@ static void explorer_get_item_path(explorer_state_t *state, int idx,
   }
 }
 
-static void explorer_cut_item(explorer_state_t *state, int idx) {
-  if (idx < 0 || idx >= state->num_items)
+static void explorer_get_current_dir_path(explorer_state_t *state,
+                                          char *out_dir, size_t max_len) {
+  if (!out_dir || max_len == 0)
     return;
-  explorer_item_t *it = &state->items[idx];
-  if (it->is_drive)
-    return;
-
-  explorer_get_item_path(state, idx, g_explorer_clipboard.source_path,
-                         sizeof(g_explorer_clipboard.source_path));
-  strncpy(g_explorer_clipboard.filename, it->name,
-          sizeof(g_explorer_clipboard.filename) - 1);
-  g_explorer_clipboard.filename[sizeof(g_explorer_clipboard.filename) - 1] =
-      '\0';
-  g_explorer_clipboard.is_directory = it->is_folder;
-  g_explorer_clipboard.op = CLIPBOARD_CUT;
-  state->ctx_menu.is_open = false;
-  state->active_menu = EXPLORER_MENU_NONE;
-}
-
-static void explorer_copy_item(explorer_state_t *state, int idx) {
-  if (idx < 0 || idx >= state->num_items)
-    return;
-  explorer_item_t *it = &state->items[idx];
-  if (it->is_drive)
-    return;
-
-  explorer_get_item_path(state, idx, g_explorer_clipboard.source_path,
-                         sizeof(g_explorer_clipboard.source_path));
-  strncpy(g_explorer_clipboard.filename, it->name,
-          sizeof(g_explorer_clipboard.filename) - 1);
-  g_explorer_clipboard.filename[sizeof(g_explorer_clipboard.filename) - 1] =
-      '\0';
-  g_explorer_clipboard.is_directory = it->is_folder;
-  g_explorer_clipboard.op = CLIPBOARD_COPY;
-  state->ctx_menu.is_open = false;
-  state->active_menu = EXPLORER_MENU_NONE;
-}
-
-static void explorer_paste_item(explorer_state_t *state) {
-  if (g_explorer_clipboard.op == CLIPBOARD_NONE ||
-      g_explorer_clipboard.source_path[0] == '\0')
-    return;
-
   char pfx = 'C';
   if (state->mode == EXPLORER_MODE_DRIVE_U)
     pfx = 'U';
@@ -1062,33 +1056,119 @@ static void explorer_paste_item(explorer_state_t *state) {
       pfx = 'U';
   }
 
-  char target_path[VFS_MAX_PATH];
   if (state->mode == EXPLORER_MODE_FOLDER && state->folder_name[0]) {
     char clean[128];
     explorer_clean_path(state->folder_name, clean, sizeof(clean));
-    mini_snprintf(target_path, sizeof(target_path), "%c:/%s/%s", pfx, clean,
-                  g_explorer_clipboard.filename);
+    mini_snprintf(out_dir, max_len, "%c:\\%s", pfx, clean);
+  } else if (state->mode == EXPLORER_MODE_RECYCLE_BIN) {
+    mini_snprintf(out_dir, max_len, "C:\\Recycle.Bin");
   } else {
-    mini_snprintf(target_path, sizeof(target_path), "%c:/%s", pfx,
-                  g_explorer_clipboard.filename);
+    mini_snprintf(out_dir, max_len, "%c:\\", pfx);
   }
+}
 
-  if (g_explorer_clipboard.op == CLIPBOARD_CUT) {
-    vfs_rename(g_explorer_clipboard.source_path, target_path);
-    g_explorer_clipboard.op = CLIPBOARD_NONE;
-    g_explorer_clipboard.source_path[0] = '\0';
-  } else if (g_explorer_clipboard.op == CLIPBOARD_COPY) {
-    uint32_t fsize = 0;
-    void *data = vfs_read_entire_file(g_explorer_clipboard.source_path, &fsize);
-    if (data) {
-      vfs_write_entire_file_inplace(target_path, data, fsize);
-      kfree(data);
+static void explorer_cut_item(explorer_state_t *state, int idx) {
+  char curr_dir[128];
+  explorer_get_current_dir_path(state, curr_dir, sizeof(curr_dir));
+
+  if (idx >= 0 && idx < state->num_items && !state->items[idx].is_drive) {
+    explorer_item_t *it = &state->items[idx];
+    explorer_get_item_path(state, idx, g_explorer_clipboard.source_path,
+                           sizeof(g_explorer_clipboard.source_path));
+    strncpy(g_explorer_clipboard.filename, it->name,
+            sizeof(g_explorer_clipboard.filename) - 1);
+    g_explorer_clipboard.filename[sizeof(g_explorer_clipboard.filename) - 1] =
+        '\0';
+    g_explorer_clipboard.is_directory = it->is_folder;
+    g_explorer_clipboard.op = CLIPBOARD_CUT;
+    clipboard_push_file(g_explorer_clipboard.source_path, true);
+  }
+  state->ctx_menu.is_open = false;
+  state->active_menu = EXPLORER_MENU_NONE;
+  if (g_explorer_clipboard.source_path[0] != '\0') {
+    app_comdlg_copy_move_launch(COMDLG_OP_MOVE,
+                                g_explorer_clipboard.source_path, curr_dir);
+  }
+}
+
+static void explorer_move_item(explorer_state_t *state, int idx) {
+  explorer_cut_item(state, idx);
+}
+
+static void explorer_copy_item(explorer_state_t *state, int idx) {
+  char curr_dir[128];
+  explorer_get_current_dir_path(state, curr_dir, sizeof(curr_dir));
+
+  if (idx >= 0 && idx < state->num_items && !state->items[idx].is_drive) {
+    explorer_item_t *it = &state->items[idx];
+    explorer_get_item_path(state, idx, g_explorer_clipboard.source_path,
+                           sizeof(g_explorer_clipboard.source_path));
+    strncpy(g_explorer_clipboard.filename, it->name,
+            sizeof(g_explorer_clipboard.filename) - 1);
+    g_explorer_clipboard.filename[sizeof(g_explorer_clipboard.filename) - 1] =
+        '\0';
+    g_explorer_clipboard.is_directory = it->is_folder;
+    g_explorer_clipboard.op = CLIPBOARD_COPY;
+    clipboard_push_file(g_explorer_clipboard.source_path, false);
+  }
+  state->ctx_menu.is_open = false;
+  state->active_menu = EXPLORER_MENU_NONE;
+  if (g_explorer_clipboard.source_path[0] != '\0') {
+    app_comdlg_copy_move_launch(COMDLG_OP_COPY,
+                                g_explorer_clipboard.source_path, curr_dir);
+  }
+}
+
+static void explorer_paste_item(explorer_state_t *state) {
+  char curr_dir[128];
+  explorer_get_current_dir_path(state, curr_dir, sizeof(curr_dir));
+
+  if (g_explorer_clipboard.op != CLIPBOARD_NONE &&
+      g_explorer_clipboard.source_path[0] != '\0') {
+    char pfx = 'C';
+    if (state->mode == EXPLORER_MODE_DRIVE_U)
+      pfx = 'U';
+    else if (state->mode == EXPLORER_MODE_FOLDER) {
+      if (state->folder_name[0] == 'U' || state->folder_name[0] == 'u')
+        pfx = 'U';
+    }
+
+    char target_path[VFS_MAX_PATH];
+    if (state->mode == EXPLORER_MODE_FOLDER && state->folder_name[0]) {
+      char clean[128];
+      explorer_clean_path(state->folder_name, clean, sizeof(clean));
+      mini_snprintf(target_path, sizeof(target_path), "%c:/%s/%s", pfx, clean,
+                    g_explorer_clipboard.filename);
+    } else {
+      mini_snprintf(target_path, sizeof(target_path), "%c:/%s", pfx,
+                    g_explorer_clipboard.filename);
+    }
+
+    if (g_explorer_clipboard.op == CLIPBOARD_CUT) {
+      if (!comdlg_exec_file_op(COMDLG_OP_MOVE, g_explorer_clipboard.source_path,
+                               target_path)) {
+        vfs_rename(g_explorer_clipboard.source_path, target_path);
+      }
+      g_explorer_clipboard.op = CLIPBOARD_NONE;
+    } else if (g_explorer_clipboard.op == CLIPBOARD_COPY) {
+      if (!comdlg_exec_file_op(COMDLG_OP_COPY, g_explorer_clipboard.source_path,
+                               target_path)) {
+        uint32_t fsize = 0;
+        void *data =
+            vfs_read_entire_file(g_explorer_clipboard.source_path, &fsize);
+        if (data) {
+          vfs_write_entire_file_inplace(target_path, data, fsize);
+          kfree(data);
+        }
+      }
     }
   }
 
   explorer_load_items(state);
   state->ctx_menu.is_open = false;
   state->active_menu = EXPLORER_MENU_NONE;
+  app_comdlg_copy_move_launch(COMDLG_OP_PASTE, g_explorer_clipboard.source_path,
+                              curr_dir);
 }
 
 static void explorer_rename_item(explorer_state_t *state, int idx) {
@@ -1223,7 +1303,11 @@ static void explorer_draw(window_t *win) {
 
   const theme_info_t *cur_th = wm_get_current_theme_props();
   bool is_glass =
-      (cur_th && cur_th->modern_controls && cur_th->surface_alpha < 240);
+      (cur_th && (cur_th->modern_controls || wm_get_theme() != THEME_CLASSIC));
+  uint32_t th_txt = (is_glass && cur_th->window_text) ? cur_th->window_text
+                                                      : COLOR_WINDOWTEXT;
+  uint32_t th_acc =
+      (is_glass && cur_th->accent_color) ? cur_th->accent_color : 0x0A246A;
 
   // Sfondo generale finestra (preserva il frosted glass se il tema e'
   // trasparente)
@@ -1234,45 +1318,61 @@ static void explorer_draw(window_t *win) {
   // 1. Barra dei Menu (File, Modifica, Visualizza, Strumenti, ?)
   int32_t menu_y = cy + 2;
   if (state->active_menu == EXPLORER_MENU_FILE) {
-    gfx_fill_rect(cx + 6, menu_y, 36, 16, 0x0A246A);
+    if (is_glass)
+      gfx_fill_rounded_rect(cx + 6, menu_y, 36, 16, 4, th_acc);
+    else
+      gfx_fill_rect(cx + 6, menu_y, 36, 16, 0x0A246A);
     gfx_draw_string(cx + 8, menu_y + 1, "File", 0xFFFFFF, 0, true);
   } else {
-    gfx_draw_string(cx + 8, menu_y + 1, "File", COLOR_WINDOWTEXT, 0, true);
+    gfx_draw_string(cx + 8, menu_y + 1, "File", th_txt, 0, true);
   }
 
   if (state->active_menu == EXPLORER_MENU_EDIT) {
-    gfx_fill_rect(cx + 44, menu_y, 68, 16, 0x0A246A);
+    if (is_glass)
+      gfx_fill_rounded_rect(cx + 44, menu_y, 68, 16, 4, th_acc);
+    else
+      gfx_fill_rect(cx + 44, menu_y, 68, 16, 0x0A246A);
     gfx_draw_string(cx + 46, menu_y + 1, "Modifica", 0xFFFFFF, 0, true);
   } else {
-    gfx_draw_string(cx + 46, menu_y + 1, "Modifica", COLOR_WINDOWTEXT, 0, true);
+    gfx_draw_string(cx + 46, menu_y + 1, "Modifica", th_txt, 0, true);
   }
 
   if (state->active_menu == EXPLORER_MENU_VIEW) {
-    gfx_fill_rect(cx + 116, menu_y, 80, 16, 0x0A246A);
+    if (is_glass)
+      gfx_fill_rounded_rect(cx + 116, menu_y, 80, 16, 4, th_acc);
+    else
+      gfx_fill_rect(cx + 116, menu_y, 80, 16, 0x0A246A);
     gfx_draw_string(cx + 118, menu_y + 1, "Visualizza", 0xFFFFFF, 0, true);
   } else {
-    gfx_draw_string(cx + 118, menu_y + 1, "Visualizza", COLOR_WINDOWTEXT, 0,
-                    true);
+    gfx_draw_string(cx + 118, menu_y + 1, "Visualizza", th_txt, 0, true);
   }
 
   if (state->active_menu == EXPLORER_MENU_TOOLS) {
-    gfx_fill_rect(cx + 200, menu_y, 76, 16, 0x0A246A);
+    if (is_glass)
+      gfx_fill_rounded_rect(cx + 200, menu_y, 76, 16, 4, th_acc);
+    else
+      gfx_fill_rect(cx + 200, menu_y, 76, 16, 0x0A246A);
     gfx_draw_string(cx + 202, menu_y + 1, "Strumenti", 0xFFFFFF, 0, true);
   } else {
-    gfx_draw_string(cx + 202, menu_y + 1, "Strumenti", COLOR_WINDOWTEXT, 0,
-                    true);
+    gfx_draw_string(cx + 202, menu_y + 1, "Strumenti", th_txt, 0, true);
   }
 
   if (state->active_menu == EXPLORER_MENU_HELP) {
-    gfx_fill_rect(cx + 280, menu_y, 16, 16, 0x0A246A);
+    if (is_glass)
+      gfx_fill_rounded_rect(cx + 280, menu_y, 16, 16, 4, th_acc);
+    else
+      gfx_fill_rect(cx + 280, menu_y, 16, 16, 0x0A246A);
     gfx_draw_string(cx + 282, menu_y + 1, "?", 0xFFFFFF, 0, true);
   } else {
-    gfx_draw_string(cx + 282, menu_y + 1, "?", COLOR_WINDOWTEXT, 0, true);
+    gfx_draw_string(cx + 282, menu_y + 1, "?", th_txt, 0, true);
   }
 
   // Separatore sotto la barra dei menu
   if (is_glass) {
-    gfx_fill_alpha(cx + 4, cy + 18, cw - 8, 1, 0xFFFFFF, 90);
+    gfx_fill_alpha(cx + 4, cy + 19, cw - 8, 1,
+                   cur_th->control_border_color ? cur_th->control_border_color
+                                                : 0xC8D4E2,
+                   140);
   } else {
     gfx_draw_bevel_rect(cx + 2, cy + 18, cw - 4, 2, true);
   }
@@ -1303,7 +1403,10 @@ static void explorer_draw(window_t *win) {
       wm_draw_themed_button(cx + 6, tb_y, 74, 22, "Indietro", false);
       wm_draw_themed_button(cx + 84, tb_y, 64, 22, "Avanti", false);
       wm_draw_themed_button(cx + 152, tb_y, 96, 22, "Livello sup.", false);
-      gfx_fill_alpha(cx + 252, tb_y + 2, 1, 18, 0xFFFFFF, 120);
+      gfx_fill_alpha(cx + 252, tb_y + 2, 1, 18,
+                     cur_th->control_border_color ? cur_th->control_border_color
+                                                  : 0xC8D4E2,
+                     160);
       wm_draw_themed_button(cx + 258, tb_y, 56, 22, "Cerca",
                             state->search_active);
       wm_draw_themed_button(cx + 318, tb_y, 68, 22, "Cartelle",
@@ -1352,54 +1455,75 @@ static void explorer_draw(window_t *win) {
 
     // Box input filtro ricerca se attivo
     if (state->search_active) {
-      gfx_draw_string(cx + 392, tb_y + 4, "Filtro:", COLOR_WINDOWTEXT, 0, true);
+      gfx_draw_string(cx + 392, tb_y + 4, "Filtro:", th_txt, 0, true);
       int32_t fw = cw - 446;
       if (fw > 160)
         fw = 160;
-      gfx_fill_rect(cx + 440, tb_y + 2, fw, 18, 0xFFFFFF);
-      gfx_draw_bevel_rect(cx + 440, tb_y + 2, fw, 18, true);
+      if (is_glass) {
+        uint16_t in_r = cur_th->input_radius > 0 ? cur_th->input_radius : 5;
+        gfx_fill_rounded_alpha(cx + 448, tb_y + 2, fw, 18, in_r,
+                               cur_th->window_bg ? cur_th->window_bg : 0xFFFFFF,
+                               220);
+        gfx_draw_rounded_rect(cx + 448, tb_y + 2, fw, 18, in_r,
+                              cur_th->control_border_color
+                                  ? cur_th->control_border_color
+                                  : 0xC8D4E2);
+      } else {
+        gfx_fill_rect(cx + 448, tb_y + 2, fw, 18, 0xFFFFFF);
+        gfx_draw_bevel_rect(cx + 448, tb_y + 2, fw, 18, true);
+      }
       char s_disp[48];
       mini_snprintf(s_disp, sizeof(s_disp), "%s|", state->search_filter);
-      gfx_draw_string(cx + 444, tb_y + 3, s_disp, 0x000080, 0, true);
+      gfx_draw_string(cx + 452, tb_y + 3, s_disp, th_acc, 0, true);
     }
 
     // Separatore sotto toolbar
     if (is_glass) {
-      gfx_fill_alpha(cx + 4, cy + 46, cw - 8, 1, 0xFFFFFF, 90);
+      gfx_fill_alpha(cx + 4, cy + 47, cw - 8, 1,
+                     cur_th->control_border_color ? cur_th->control_border_color
+                                                  : 0xC8D4E2,
+                     140);
     } else {
       gfx_draw_bevel_rect(cx + 2, cy + 46, cw - 4, 2, true);
     }
 
     // 3. Barra degli Indirizzi
     int32_t addr_y = cy + 50;
-    gfx_draw_string(cx + 8, addr_y + 4, "Indirizzo", COLOR_WINDOWTEXT, 0, true);
+    gfx_draw_string(cx + 8, addr_y + 4, "Indirizzo:", th_txt, 0, true);
 
-    int32_t box_addr_x = cx + 76;
-    int32_t box_addr_w = cw - 124;
+    int32_t box_addr_x = cx + 90;
+    int32_t box_addr_w = cw - 138;
     if (is_glass) {
       uint16_t in_rad =
           cur_th->input_radius > 0
               ? cur_th->input_radius
               : (cur_th->control_radius > 0 ? cur_th->control_radius : 5);
       gfx_fill_rounded_alpha(box_addr_x, addr_y + 2, box_addr_w, 20, in_rad,
-                             0xFFFFFF, 200);
-      uint16_t in_b_rad = cur_th->input_border_radius;
+                             cur_th->window_bg ? cur_th->window_bg : 0xFFFFFF,
+                             190);
+      uint16_t in_b_rad = cur_th->input_border_radius > 0
+                              ? cur_th->input_border_radius
+                              : in_rad;
       gfx_draw_rounded_rect(box_addr_x, addr_y + 2, box_addr_w, 20, in_b_rad,
-                             0xCCD8E6);
+                            cur_th->control_border_color
+                                ? cur_th->control_border_color
+                                : 0xC8D4E2);
+      if (cur_th->panel_script[0] != '\0')
+        theme_mgr_render_script(cur_th->panel_script, box_addr_x, addr_y + 2,
+                                box_addr_w, 20, in_rad, 0);
     } else {
       gfx_fill_rect(box_addr_x, addr_y + 2, box_addr_w, 20, 0xFFFFFF);
       gfx_draw_bevel_rect(box_addr_x, addr_y + 2, box_addr_w, 20, true);
     }
 
-    gfx_draw_icon_16(box_addr_x + 3, addr_y + 4, addr_icon);
+    gfx_draw_icon_16(box_addr_x + 4, addr_y + 4, addr_icon);
     if (state->address_editing) {
       char addr_disp[140];
       mini_snprintf(addr_disp, sizeof(addr_disp), "%s|", state->address_buf);
-      gfx_draw_string(box_addr_x + 24, addr_y + 4, addr_disp, 0x000080, 0,
-                      true);
+      gfx_draw_string(box_addr_x + 24, addr_y + 4, addr_disp, th_acc, 0, true);
     } else {
-      gfx_draw_string(box_addr_x + 24, addr_y + 4, state->current_path,
-                      COLOR_WINDOWTEXT, 0, true);
+      gfx_draw_string(box_addr_x + 24, addr_y + 4, state->current_path, th_txt,
+                      0, true);
     }
 
     // Tasto [ Vai ]
@@ -1431,6 +1555,21 @@ static void explorer_draw(window_t *win) {
       rel_my = ms.y;
     }
 
+    state->settings_state.active_ui_style = uistyle_get_active();
+    const hwaccel_info_t *hw = hwaccel_get_info();
+    if (hw) {
+      state->settings_state.hw_scale_mode = hw->scale_mode;
+      state->settings_state.hw_scale_pct = hw->scale_percent;
+      state->settings_state.hw_dpi = hw->detected_dpi;
+      state->settings_state.hw_pat_wc = hw->pat_wc_active;
+      state->settings_state.hw_sse2 = hw->sse2_supported;
+      int k = 0;
+      while (hw->gpu_name[k] && k < 46) {
+        state->settings_state.hw_gpu_name[k] = hw->gpu_name[k];
+        k++;
+      }
+      state->settings_state.hw_gpu_name[k] = '\0';
+    }
     settings_render(screen_mgr_get_api(), cx + 2, body_y, cw - 4, body_h,
                     rel_mx, rel_my, is_glass, COLOR_WINDOW,
                     &state->settings_state, cur_th);
@@ -1438,30 +1577,52 @@ static void explorer_draw(window_t *win) {
     if (state->show_statusbar) {
       int32_t sb_y = cy + ch - 20;
       if (is_glass) {
-        gfx_fill_rounded_alpha(cx + 2, sb_y, cw - 4, 18, 4, 0xFFFFFF, 140);
-        gfx_draw_rounded_rect(cx + 2, sb_y, cw - 4, 18, 2, 0xD0D8E8);
+        gfx_fill_rounded_alpha(cx + 2, sb_y, cw - 4, 18, 4, 0xFFFFFF, 160);
+        gfx_draw_rounded_rect(cx + 2, sb_y, cw - 4, 18, 4,
+                              cur_th->control_border_color
+                                  ? cur_th->control_border_color
+                                  : 0xD0D8E8);
       } else {
         gfx_fill_rect(cx + 2, sb_y, cw - 4, 18, COLOR_BTNFACE);
         gfx_draw_bevel_rect(cx + 2, sb_y, cw - 4, 18, true);
       }
       gfx_draw_string(cx + 8, sb_y + 2,
-                      "Modalita Impostazioni (Moderna) - Sottosistema scorporato SETTINGS.DLL",
-                      0x0A246A, 0, true);
+                      "Modalita Impostazioni (Moderna) - Sottosistema "
+                      "scorporato SETTINGS.DLL",
+                      th_acc, 0, true);
     }
     return;
   }
 
   if (state->show_folder_tree) {
     // --- Albero Cartelle (Folder Tree) ---
-    gfx_fill_rect(cx + 2, body_y, side_w, body_h, 0xFFFFFF);
-    gfx_draw_bevel_rect(cx + 2, body_y, side_w, body_h, true);
+    if (is_glass) {
+      uint16_t p_rad = cur_th->panel_radius > 0 ? cur_th->panel_radius : 8;
+      gfx_fill_rounded_alpha(cx + 4, body_y, side_w - 4, body_h, p_rad,
+                             cur_th->window_bg ? cur_th->window_bg : 0xFFFFFF,
+                             210);
+      gfx_draw_rounded_rect(cx + 4, body_y, side_w - 4, body_h, p_rad,
+                            cur_th->control_border_color
+                                ? cur_th->control_border_color
+                                : 0xC8D4E2);
+      gfx_draw_icon_16(cx + 10, body_y + 4, ICON_FOLDER);
+      gfx_draw_string(cx + 30, body_y + 5, "Tutte le cartelle", th_acc, 0,
+                      true);
+      gfx_fill_alpha(cx + 10, body_y + 22, side_w - 16, 1,
+                     cur_th->control_border_color ? cur_th->control_border_color
+                                                  : 0xC8D4E2,
+                     160);
+    } else {
+      gfx_fill_rect(cx + 2, body_y, side_w, body_h, 0xFFFFFF);
+      gfx_draw_bevel_rect(cx + 2, body_y, side_w, body_h, true);
 
-    // Intestazione "Tutte le cartelle"
-    gfx_fill_rect(cx + 3, body_y + 1, side_w - 2, 20, COLOR_BTNFACE);
-    gfx_draw_bevel_rect(cx + 3, body_y + 1, side_w - 2, 20, false);
-    gfx_draw_icon_16(cx + 6, body_y + 3, ICON_FOLDER);
-    gfx_draw_string(cx + 26, body_y + 4, "Tutte le cartelle", COLOR_WINDOWTEXT,
-                    0, true);
+      // Intestazione "Tutte le cartelle"
+      gfx_fill_rect(cx + 3, body_y + 1, side_w - 2, 20, COLOR_BTNFACE);
+      gfx_draw_bevel_rect(cx + 3, body_y + 1, side_w - 2, 20, false);
+      gfx_draw_icon_16(cx + 6, body_y + 3, ICON_FOLDER);
+      gfx_draw_string(cx + 26, body_y + 4, "Tutte le cartelle",
+                      COLOR_WINDOWTEXT, 0, true);
+    }
 
     const struct {
       const char *name;
@@ -1478,18 +1639,23 @@ static void explorer_draw(window_t *win) {
         {"Cestino", ICON_CESTINO, 14, EXPLORER_MODE_RECYCLE_BIN},
         {"Pannello", ICON_CONTROL_PANEL, 14, EXPLORER_MODE_CONTROL_PANEL}};
 
-    int32_t ty = body_y + 24;
+    int32_t ty = body_y + 26;
     for (int t = 0; t < 8; t++) {
       if (t == 4 && !usb_msc_is_present())
         continue;
-      int32_t tx = cx + 4 + tree_nodes[t].indent;
+      int32_t tx = cx + 6 + tree_nodes[t].indent;
       bool is_cur = (state->mode == tree_nodes[t].target_mode);
       if (is_cur) {
-        gfx_fill_rect(cx + 4, ty - 1, side_w - 6, 18, 0x0A246A);
+        if (is_glass) {
+          gfx_fill_rounded_alpha(cx + 6, ty - 1, side_w - 8, 18, 4, th_acc,
+                                 190);
+        } else {
+          gfx_fill_rect(cx + 4, ty - 1, side_w - 6, 18, 0x0A246A);
+        }
       }
       gfx_draw_icon_16(tx, ty, tree_nodes[t].icon);
       gfx_draw_string(tx + 20, ty + 2, tree_nodes[t].name,
-                      is_cur ? 0xFFFFFF : COLOR_WINDOWTEXT, 0, true);
+                      is_cur ? 0xFFFFFF : th_txt, 0, true);
       ty += 22;
     }
   } else {
@@ -1500,15 +1666,21 @@ static void explorer_draw(window_t *win) {
           cur_th->panel_radius > 0
               ? cur_th->panel_radius
               : (cur_th->control_radius > 0 ? cur_th->control_radius + 2 : 8);
-      gfx_fill_rounded_alpha(cx + 4, body_y, side_w - 4, body_h, p_rad,
-                             0xD8EAF8, 140);
-      uint16_t pb_rad = cur_th->panel_border_radius;
+      uint32_t side_bg =
+          (wm_get_theme() == THEME_MICA_DARK) ? 0x262830 : 0xDCEAF8;
+      gfx_fill_rounded_alpha(cx + 4, body_y, side_w - 4, body_h, p_rad, side_bg,
+                             185);
+      uint16_t pb_rad =
+          cur_th->panel_border_radius > 0 ? cur_th->panel_border_radius : p_rad;
       gfx_draw_rounded_rect(cx + 4, body_y, side_w - 4, body_h, pb_rad,
-                             0xFFFFFF);
+                            cur_th->control_border_color
+                                ? cur_th->control_border_color
+                                : 0xC8D8EC);
       if (cur_th->specular_rim)
         gfx_draw_specular_rim(cx + 4, body_y, side_w - 4, body_h, p_rad);
       if (cur_th->panel_script[0] != '\0')
-        theme_mgr_render_script(cur_th->panel_script, cx + 4, body_y, side_w - 4, body_h, p_rad, 0);
+        theme_mgr_render_script(cur_th->panel_script, cx + 4, body_y,
+                                side_w - 4, body_h, p_rad, 0);
     } else {
       gfx_draw_gradient_v(cx + 2, body_y, side_w, body_h, 0xDEEAF7, 0xA8C8EC);
       gfx_draw_bevel_rect(cx + 2, body_y, side_w, body_h, true);
@@ -1581,7 +1753,7 @@ static void explorer_draw(window_t *win) {
                                  0xFFFFFF, 180);
           uint16_t gb_rad = cur_th->control_border_follows_radius ? 4 : 0;
           gfx_draw_rounded_rect(cx + 12, gauge_y + 16, bar_w, bar_h, gb_rad,
-                                 0xB0C4DE);
+                                0xB0C4DE);
         } else {
           gfx_fill_rect(cx + 12, gauge_y + 16, bar_w, bar_h, 0xFFFFFF);
           gfx_draw_bevel_rect(cx + 12, gauge_y + 16, bar_w, bar_h, true);
@@ -1616,7 +1788,8 @@ static void explorer_draw(window_t *win) {
                                 0xE02080);
           }
           if (cur_th->progress_script[0] != '\0') {
-            theme_mgr_render_script(cur_th->progress_script, cx + 14, gauge_y + 18, bar_w - 4, bar_h - 4, 0, 0);
+            theme_mgr_render_script(cur_th->progress_script, cx + 14,
+                                    gauge_y + 18, bar_w - 4, bar_h - 4, 0, 0);
           }
         } else {
           gfx_fill_rect(cx + 14, gauge_y + 18, used_w, bar_h - 4,
@@ -1830,24 +2003,42 @@ static void explorer_draw(window_t *win) {
       gfx_draw_string(cx + 12, info_y + 48, "Stato: Connesso R/W", 0x008000, 0,
                       true);
     } else if (state->mode == EXPLORER_MODE_RECYCLE_BIN) {
-      gfx_draw_string(cx + 12, info_y, "Contenuto pronto", 0x800000, 0, true);
-      gfx_draw_string(cx + 12, info_y + 16, "da eliminare.", 0x800000, 0, true);
-      gfx_draw_string(cx + 12, info_y + 36, "Elementi: 3 file", 0x404040, 0,
+      gfx_draw_string(cx + 12, info_y, "Cestino VFS Reale", 0x800000, 0, true);
+      gfx_draw_string(cx + 12, info_y + 16, "C:\\Recycle.Bin", 0x505050, 0,
                       true);
-      gfx_draw_string(cx + 12, info_y + 50, "Dimensione: 13 KB", 0x404040, 0,
-                      true);
+      char cnt_line[32];
+      mini_snprintf(cnt_line, sizeof(cnt_line), "Elementi: %d file",
+                    state->num_items);
+      gfx_draw_string(cx + 12, info_y + 34, cnt_line, 0x404040, 0, true);
+
+      uint32_t used_b = 0, limit_b = 0, fcnt = 0;
+      if (recycle_get_stats(&used_b, &limit_b, &fcnt)) {
+        char q_str[32];
+        if (limit_b >= 1024 * 1024) {
+          mini_snprintf(q_str, sizeof(q_str), "Quota: %d MB",
+                        limit_b / (1024 * 1024));
+        } else if (limit_b >= 1024) {
+          mini_snprintf(q_str, sizeof(q_str), "Quota: %d KB", limit_b / 1024);
+        } else {
+          mini_snprintf(q_str, sizeof(q_str), "Quota: %d B", limit_b);
+        }
+        gfx_draw_string(cx + 12, info_y + 48, q_str, th_acc, 0, true);
+      }
+
+      // Pulsante Ripristina Elemento
+      int32_t rest_btn_y = info_y + 64;
+      wm_draw_themed_button(cx + 12, rest_btn_y, side_w - 24, 22,
+                            "Ripristina file", false);
 
       // Pulsante Svuota Cestino
-      int32_t empty_btn_y = info_y + 74;
-      if (is_glass) {
-        wm_draw_themed_button(cx + 12, empty_btn_y, side_w - 24, 24,
-                              "Svuota Cestino", false);
-      } else {
-        gfx_fill_rect(cx + 12, empty_btn_y, side_w - 24, 24, COLOR_BTNFACE);
-        gfx_draw_bevel_rect(cx + 12, empty_btn_y, side_w - 24, 24, false);
-        gfx_draw_string(cx + 18, empty_btn_y + 4, "Svuota Cestino",
-                        COLOR_WINDOWTEXT, 0, true);
-      }
+      int32_t empty_btn_y = info_y + 92;
+      wm_draw_themed_button(cx + 12, empty_btn_y, side_w - 24, 22,
+                            "Svuota Cestino", false);
+
+      // Pulsante Impostazioni e Quota Cestino (RECYCLE.DLL)
+      int32_t cfg_btn_y = info_y + 120;
+      wm_draw_themed_button(cx + 12, cfg_btn_y, side_w - 24, 22,
+                            "Opzioni Cestino", false);
     } else if (state->mode == EXPLORER_MODE_CONTROL_PANEL) {
       if (state->selected_item >= 0 &&
           state->selected_item < state->num_items) {
@@ -1880,7 +2071,8 @@ static void explorer_draw(window_t *win) {
 
       // Link di attivazione della nuova modalità moderna (Impostazioni)
       int32_t link_box_y = body_y + body_h - 48;
-      if (link_box_y < info_y + 90) link_box_y = info_y + 90;
+      if (link_box_y < info_y + 90)
+        link_box_y = info_y + 90;
 
       if (is_glass) {
         gfx_fill_alpha(cx + 10, link_box_y - 6, side_w - 20, 1, 0xFFFFFF, 120);
@@ -1888,18 +2080,21 @@ static void explorer_draw(window_t *win) {
         gfx_draw_bevel_rect(cx + 10, link_box_y - 6, side_w - 20, 2, true);
       }
 
-      gfx_draw_string(cx + 12, link_box_y, "Visualizzazione:", 0x505050, 0, true);
+      gfx_draw_string(cx + 12, link_box_y, "Visualizzazione:", 0x505050, 0,
+                      true);
 
       int32_t link_btn_y = link_box_y + 16;
       state->sidebar_mode_link_y = link_btn_y;
       state->sidebar_mode_link_h = 22;
 
       if (is_glass) {
-        wm_draw_themed_button(cx + 10, link_btn_y, side_w - 20, 22, "Impostazioni >", false);
+        wm_draw_themed_button(cx + 10, link_btn_y, side_w - 20, 22,
+                              "Impostazioni >", false);
       } else {
         gfx_fill_rect(cx + 10, link_btn_y, side_w - 20, 22, COLOR_BTNFACE);
         gfx_draw_bevel_rect(cx + 10, link_btn_y, side_w - 20, 22, false);
-        gfx_draw_string(cx + 14, link_btn_y + 4, "Nuova modalita >", 0x0A246A, 0, true);
+        gfx_draw_string(cx + 14, link_btn_y + 4, "Nuova modalita >", 0x0A246A,
+                        0, true);
       }
     } else {
       // Modalità Unità C:, D:, A:, U: o Cartelle generiche
@@ -2075,12 +2270,19 @@ static void explorer_draw(window_t *win) {
         cur_th->panel_radius > 0
             ? cur_th->panel_radius
             : (cur_th->control_radius > 0 ? cur_th->control_radius + 2 : 8);
-    gfx_fill_rounded_alpha(main_x, body_y, content_w, body_h, p_rad, 0xFFFFFF,
-                           160);
-    uint16_t pb_rad = cur_th->panel_border_radius;
-    gfx_draw_rounded_rect(main_x, body_y, content_w, body_h, pb_rad, 0xFFFFFF);
+    gfx_fill_rounded_alpha(main_x, body_y, content_w, body_h, p_rad,
+                           cur_th->window_bg ? cur_th->window_bg : 0xFFFFFF,
+                           190);
+    uint16_t pb_rad =
+        cur_th->panel_border_radius > 0 ? cur_th->panel_border_radius : p_rad;
+    gfx_draw_rounded_rect(
+        main_x, body_y, content_w, body_h, pb_rad,
+        cur_th->control_border_color ? cur_th->control_border_color : 0xC8D8EC);
     if (cur_th->specular_rim)
       gfx_draw_specular_rim(main_x, body_y, content_w, body_h, p_rad);
+    if (cur_th->panel_script[0] != '\0')
+      theme_mgr_render_script(cur_th->panel_script, main_x, body_y, content_w,
+                              body_h, p_rad, 0);
   } else {
     gfx_fill_rect(main_x, body_y, content_w, body_h, 0xFFFFFF);
     gfx_draw_bevel_rect(main_x, body_y, content_w, body_h, true);
@@ -2108,14 +2310,16 @@ static void explorer_draw(window_t *win) {
 
       if (is_glass && is_sel) {
         uint32_t sel_color =
-            cur_th->selection_color ? cur_th->selection_color : 0xC8E0F8;
+            cur_th->selection_color ? cur_th->selection_color : 0xDCEEFF;
         gfx_fill_rounded_alpha(ix + 2, iy + 2, col_w - 4, row_h - 4, 6,
-                               sel_color, 180);
-        uint16_t it_b_rad = cur_th->button_border_radius;
+                               sel_color, 185);
+        uint16_t it_b_rad =
+            cur_th->button_border_radius > 0 ? cur_th->button_border_radius : 6;
         gfx_draw_rounded_rect(ix + 2, iy + 2, col_w - 4, row_h - 4, it_b_rad,
-                               0x0078D4);
+                              th_acc);
         if (cur_th->selection_script[0] != '\0') {
-          theme_mgr_render_script(cur_th->selection_script, ix + 2, iy + 2, col_w - 4, row_h - 4, 6, 1);
+          theme_mgr_render_script(cur_th->selection_script, ix + 2, iy + 2,
+                                  col_w - 4, row_h - 4, 6, 1);
         }
       }
 
@@ -2134,13 +2338,15 @@ static void explorer_draw(window_t *win) {
         // Riga singola centrata
         if (is_sel) {
           if (is_glass) {
-            gfx_draw_string(lx1, iy + 42, l1, 0x003A70, 0, true);
+            uint32_t st_col =
+                cur_th->selection_text ? cur_th->selection_text : 0x003A70;
+            gfx_draw_string(lx1, iy + 42, l1, st_col, 0, true);
           } else {
             gfx_fill_rect(lx1 - 3, iy + 41, lw1 + 6, 16, 0x0A246A);
             gfx_draw_string(lx1, iy + 42, l1, 0xFFFFFF, 0, true);
           }
         } else {
-          gfx_draw_string(lx1, iy + 42, l1, COLOR_WINDOWTEXT, 0, true);
+          gfx_draw_string(lx1, iy + 42, l1, th_txt, 0, true);
         }
       } else {
         // Doppia riga centrata
@@ -2151,8 +2357,10 @@ static void explorer_draw(window_t *win) {
 
         if (is_sel) {
           if (is_glass) {
-            gfx_draw_string(lx1, iy + 40, l1, 0x003A70, 0, true);
-            gfx_draw_string(lx2, iy + 55, l2, 0x003A70, 0, true);
+            uint32_t st_col =
+                cur_th->selection_text ? cur_th->selection_text : 0x003A70;
+            gfx_draw_string(lx1, iy + 40, l1, st_col, 0, true);
+            gfx_draw_string(lx2, iy + 55, l2, st_col, 0, true);
           } else {
             int32_t max_lw = (lw1 > lw2) ? lw1 : lw2;
             int32_t sel_x = center_x - (max_lw / 2);
@@ -2163,8 +2371,8 @@ static void explorer_draw(window_t *win) {
             gfx_draw_string(lx2, iy + 55, l2, 0xFFFFFF, 0, true);
           }
         } else {
-          gfx_draw_string(lx1, iy + 40, l1, COLOR_WINDOWTEXT, 0, true);
-          gfx_draw_string(lx2, iy + 55, l2, COLOR_WINDOWTEXT, 0, true);
+          gfx_draw_string(lx1, iy + 40, l1, th_txt, 0, true);
+          gfx_draw_string(lx2, iy + 55, l2, th_txt, 0, true);
         }
       }
     }
@@ -2174,21 +2382,6 @@ static void explorer_draw(window_t *win) {
   if (show_sb) {
     int32_t sb_x = main_x + content_w;
     int32_t sb_w = 16;
-    gfx_fill_rect(sb_x, body_y, sb_w, body_h, 0xE8E8E8);
-    gfx_draw_bevel_rect(sb_x, body_y, sb_w, body_h, true);
-
-    // Freccia Su [^]
-    gfx_fill_rect(sb_x, body_y, sb_w, 16, COLOR_BTNFACE);
-    gfx_draw_bevel_rect(sb_x, body_y, sb_w, 16, false);
-    gfx_draw_string(sb_x + 4, body_y + 1, "^", COLOR_WINDOWTEXT, 0, true);
-
-    // Freccia Giù [v]
-    gfx_fill_rect(sb_x, body_y + body_h - 16, sb_w, 16, COLOR_BTNFACE);
-    gfx_draw_bevel_rect(sb_x, body_y + body_h - 16, sb_w, 16, false);
-    gfx_draw_string(sb_x + 4, body_y + body_h - 15, "v", COLOR_WINDOWTEXT, 0,
-                    true);
-
-    // Cursore thumb di scorrimento
     int32_t track_h = body_h - 32;
     int32_t thumb_h = (track_h * visible_rows) / total_rows;
     if (thumb_h < 18)
@@ -2197,24 +2390,56 @@ static void explorer_draw(window_t *win) {
         body_y + 16 +
         (track_h - thumb_h) * state->scroll_row / (max_scroll ? max_scroll : 1);
 
-    gfx_fill_rect(sb_x + 1, thumb_y, sb_w - 2, thumb_h, COLOR_BTNFACE);
-    gfx_draw_bevel_rect(sb_x + 1, thumb_y, sb_w - 2, thumb_h, false);
+    if (is_glass) {
+      gfx_fill_rounded_alpha(
+          sb_x + 2, body_y, sb_w - 2, body_h, 6,
+          cur_th->surface_base ? cur_th->surface_base : 0xF0F4F8, 180);
+      gfx_draw_rounded_rect(sb_x + 2, body_y, sb_w - 2, body_h, 6,
+                            cur_th->control_border_color
+                                ? cur_th->control_border_color
+                                : 0xC8D8EC);
+      gfx_draw_string(sb_x + 5, body_y + 1, "^", th_txt, 0, true);
+      gfx_draw_string(sb_x + 5, body_y + body_h - 15, "v", th_txt, 0, true);
+      gfx_fill_rounded_alpha(sb_x + 4, thumb_y, sb_w - 6, thumb_h, 4, th_acc,
+                             180);
+    } else {
+      gfx_fill_rect(sb_x, body_y, sb_w, body_h, 0xE8E8E8);
+      gfx_draw_bevel_rect(sb_x, body_y, sb_w, body_h, true);
+
+      // Freccia Su [^]
+      gfx_fill_rect(sb_x, body_y, sb_w, 16, COLOR_BTNFACE);
+      gfx_draw_bevel_rect(sb_x, body_y, sb_w, 16, false);
+      gfx_draw_string(sb_x + 4, body_y + 1, "^", COLOR_WINDOWTEXT, 0, true);
+
+      // Freccia Giù [v]
+      gfx_fill_rect(sb_x, body_y + body_h - 16, sb_w, 16, COLOR_BTNFACE);
+      gfx_draw_bevel_rect(sb_x, body_y + body_h - 16, sb_w, 16, false);
+      gfx_draw_string(sb_x + 4, body_y + body_h - 15, "v", COLOR_WINDOWTEXT, 0,
+                      true);
+
+      gfx_fill_rect(sb_x + 1, thumb_y, sb_w - 2, thumb_h, COLOR_BTNFACE);
+      gfx_draw_bevel_rect(sb_x + 1, thumb_y, sb_w - 2, thumb_h, false);
+    }
   }
 
   // 5. Barra di Stato in Basso (Status Bar)
   if (state->show_statusbar) {
     int32_t sb_y = cy + ch - 20;
     if (is_glass) {
-      gfx_fill_rounded_alpha(cx + 2, sb_y, cw - 4, 18, 4, 0xFFFFFF, 140);
-      uint16_t sb_b_rad =
-          cur_th->control_border_follows_radius ? (cur_th->panel_border_radius / 2) : 0;
-      gfx_draw_rounded_rect(cx + 2, sb_y, cw - 4, 18, sb_b_rad, 0xD0D8E8);
+      gfx_fill_rounded_alpha(
+          cx + 4, sb_y, cw - 6, 18, 5,
+          cur_th->surface_base ? cur_th->surface_base : 0xFFFFFF, 190);
+      gfx_draw_rounded_rect(cx + 4, sb_y, cw - 6, 18, 5,
+                            cur_th->control_border_color
+                                ? cur_th->control_border_color
+                                : 0xC8D8EC);
     } else {
       gfx_fill_rect(cx + 2, sb_y, cw - 4, 18, COLOR_BTNFACE);
     }
 
-    // Riquadro sinistro con conteggio oggetti
-    int32_t sb1_w = cw - 170;
+    // Riquadro sinistro con conteggio oggetti (lasciando 196px a destra per
+    // "Risorse del computer")
+    int32_t sb1_w = cw - 196;
     if (!is_glass) {
       gfx_draw_bevel_rect(cx + 2, sb_y, sb1_w, 18, true);
     }
@@ -2235,17 +2460,22 @@ static void explorer_draw(window_t *win) {
                     "Oggetti: %d (Spazio libero: %d MB)", state->num_items,
                     free_sb);
     }
-    gfx_draw_string(cx + 8, sb_y + 2, sb_text, COLOR_WINDOWTEXT, 0, true);
+    gfx_draw_string(cx + 10, sb_y + 2, sb_text, th_txt, 0, true);
 
     // Riquadro destro con icona PC
     int32_t sb2_x = cx + sb1_w + 4;
     int32_t sb2_w = cw - sb1_w - 6;
     if (!is_glass) {
       gfx_draw_bevel_rect(sb2_x, sb_y, sb2_w, 18, true);
+    } else {
+      gfx_fill_alpha(sb2_x, sb_y + 3, 1, 12,
+                     cur_th->control_border_color ? cur_th->control_border_color
+                                                  : 0xC8D8EC,
+                     160);
     }
-    gfx_draw_icon_16(sb2_x + 4, sb_y + 1, ICON_THIS_PC);
-    gfx_draw_string(sb2_x + 24, sb_y + 2, "Risorse del computer",
-                    COLOR_WINDOWTEXT, 0, true);
+    gfx_draw_icon_16(sb2_x + 6, sb_y + 1, ICON_THIS_PC);
+    gfx_draw_string(sb2_x + 26, sb_y + 2, "Risorse del computer", th_txt, 0,
+                    true);
   }
 
   // 6. Menu a Tendina Superiore (se attivo)
@@ -2254,41 +2484,71 @@ static void explorer_draw(window_t *win) {
     int32_t m_y = cy + 18;
     int32_t m_w = 160;
     int32_t m_h = 80;
+    uint16_t m_rad =
+        (is_glass && cur_th->panel_radius > 0) ? cur_th->panel_radius : 8;
+    uint32_t m_bg =
+        (is_glass && cur_th->surface_base) ? cur_th->surface_base : 0xF8FAFC;
+    uint32_t m_bdr = (is_glass && cur_th->control_border_color)
+                         ? cur_th->control_border_color
+                         : 0xC8D4E2;
 
     if (state->active_menu == EXPLORER_MENU_FILE) {
       m_x = cx + 6;
       m_w = 165;
       m_h = 92;
-      gfx_fill_rect(m_x + 2, m_y + 2, m_w, m_h, 0x808080);
-      gfx_fill_rect(m_x, m_y, m_w, m_h, COLOR_BTNFACE);
-      gfx_draw_bevel_rect(m_x, m_y, m_w, m_h, false);
-
-      gfx_draw_string(m_x + 12, m_y + 6, "Nuova cartella", COLOR_WINDOWTEXT, 0,
-                      true);
-      gfx_draw_string(m_x + 12, m_y + 24, "Nuovo file di testo",
-                      COLOR_WINDOWTEXT, 0, true);
-      gfx_draw_string(m_x + 12, m_y + 42, "Proprieta", COLOR_WINDOWTEXT, 0,
-                      true);
-      gfx_draw_bevel_rect(m_x + 4, m_y + 60, m_w - 8, 2, true);
-      gfx_draw_string(m_x + 12, m_y + 66, "Chiudi", COLOR_WINDOWTEXT, 0, true);
     } else if (state->active_menu == EXPLORER_MENU_EDIT) {
       m_x = cx + 44;
       m_w = 205;
       m_h = 166;
+    } else if (state->active_menu == EXPLORER_MENU_VIEW) {
+      m_x = cx + 116;
+      m_w = 210;
+      m_h = 162;
+    } else if (state->active_menu == EXPLORER_MENU_TOOLS) {
+      m_x = cx + 200;
+      m_w = 230;
+      m_h = 146;
+    } else if (state->active_menu == EXPLORER_MENU_HELP) {
+      m_x = cx + 215;
+      m_w = 220;
+      m_h = 70;
+    }
+
+    if (is_glass) {
+      gfx_draw_drop_shadow(m_x, m_y, m_w, m_h, 6);
+      gfx_fill_rounded_alpha(m_x, m_y, m_w, m_h, m_rad, m_bg, 238);
+      gfx_draw_rounded_rect(m_x, m_y, m_w, m_h, m_rad, m_bdr);
+    } else {
       gfx_fill_rect(m_x + 2, m_y + 2, m_w, m_h, 0x808080);
       gfx_fill_rect(m_x, m_y, m_w, m_h, COLOR_BTNFACE);
       gfx_draw_bevel_rect(m_x, m_y, m_w, m_h, false);
+    }
 
+    if (state->active_menu == EXPLORER_MENU_FILE) {
+      gfx_draw_string(m_x + 12, m_y + 6, "Nuova cartella", th_txt, 0, true);
+      gfx_draw_string(m_x + 12, m_y + 24, "Nuovo file di testo", th_txt, 0,
+                      true);
+      gfx_draw_string(m_x + 12, m_y + 42, "Proprieta", th_txt, 0, true);
+      if (is_glass)
+        gfx_fill_alpha(m_x + 8, m_y + 60, m_w - 16, 1, m_bdr, 180);
+      else
+        gfx_draw_bevel_rect(m_x + 4, m_y + 60, m_w - 8, 2, true);
+      gfx_draw_string(m_x + 12, m_y + 66, "Chiudi", th_txt, 0, true);
+    } else if (state->active_menu == EXPLORER_MENU_EDIT) {
       bool has_sel = (state->selected_item >= 0 &&
                       state->selected_item < state->num_items);
-      uint32_t sel_col = has_sel ? (uint32_t)COLOR_WINDOWTEXT : 0x808080;
-      uint32_t paste_col = (g_explorer_clipboard.op != CLIPBOARD_NONE)
-                               ? (uint32_t)COLOR_WINDOWTEXT
+      uint32_t sel_col = has_sel ? th_txt : 0x808080;
+      uint32_t paste_col = (g_explorer_clipboard.op != CLIPBOARD_NONE ||
+                            clipboard_get_file_count() > 0)
+                               ? th_txt
                                : 0x808080;
 
       gfx_draw_string(m_x + 12, m_y + 6, "Annulla", 0x808080, 0, true);
       gfx_draw_string(m_x + 145, m_y + 6, "Ctrl+Z", 0x808080, 0, true);
-      gfx_draw_bevel_rect(m_x + 4, m_y + 24, m_w - 8, 2, true);
+      if (is_glass)
+        gfx_fill_alpha(m_x + 8, m_y + 24, m_w - 16, 1, m_bdr, 180);
+      else
+        gfx_draw_bevel_rect(m_x + 4, m_y + 24, m_w - 8, 2, true);
 
       gfx_draw_string(m_x + 12, m_y + 28, "Taglia", sel_col, 0, true);
       gfx_draw_string(m_x + 145, m_y + 28, "Ctrl+X", sel_col, 0, true);
@@ -2296,108 +2556,102 @@ static void explorer_draw(window_t *win) {
       gfx_draw_string(m_x + 145, m_y + 46, "Ctrl+C", sel_col, 0, true);
       gfx_draw_string(m_x + 12, m_y + 64, "Incolla", paste_col, 0, true);
       gfx_draw_string(m_x + 145, m_y + 64, "Ctrl+V", paste_col, 0, true);
-      gfx_draw_bevel_rect(m_x + 4, m_y + 82, m_w - 8, 2, true);
+      if (is_glass)
+        gfx_fill_alpha(m_x + 8, m_y + 82, m_w - 16, 1, m_bdr, 180);
+      else
+        gfx_draw_bevel_rect(m_x + 4, m_y + 82, m_w - 8, 2, true);
 
-      gfx_draw_string(m_x + 12, m_y + 86, "Seleziona tutto", COLOR_WINDOWTEXT,
-                      0, true);
-      gfx_draw_string(m_x + 145, m_y + 86, "Ctrl+A", COLOR_WINDOWTEXT, 0, true);
-      gfx_draw_string(m_x + 12, m_y + 104, "Inverti selezione",
-                      COLOR_WINDOWTEXT, 0, true);
-      gfx_draw_bevel_rect(m_x + 4, m_y + 122, m_w - 8, 2, true);
+      gfx_draw_string(m_x + 12, m_y + 86, "Seleziona tutto", th_txt, 0, true);
+      gfx_draw_string(m_x + 145, m_y + 86, "Ctrl+A", th_txt, 0, true);
+      gfx_draw_string(m_x + 12, m_y + 104, "Inverti selezione", th_txt, 0,
+                      true);
+      if (is_glass)
+        gfx_fill_alpha(m_x + 8, m_y + 122, m_w - 16, 1, m_bdr, 180);
+      else
+        gfx_draw_bevel_rect(m_x + 4, m_y + 122, m_w - 8, 2, true);
 
       gfx_draw_string(m_x + 12, m_y + 126, "Elimina", sel_col, 0, true);
       gfx_draw_string(m_x + 145, m_y + 126, "Canc", sel_col, 0, true);
       gfx_draw_string(m_x + 12, m_y + 144, "Rinomina", sel_col, 0, true);
       gfx_draw_string(m_x + 145, m_y + 144, "F2", sel_col, 0, true);
     } else if (state->active_menu == EXPLORER_MENU_VIEW) {
-      m_x = cx + 116;
-      m_w = 210;
-      m_h = 162;
-      gfx_fill_rect(m_x + 2, m_y + 2, m_w, m_h, 0x808080);
-      gfx_fill_rect(m_x, m_y, m_w, m_h, COLOR_BTNFACE);
-      gfx_draw_bevel_rect(m_x, m_y, m_w, m_h, false);
-
       if (state->show_toolbar)
-        gfx_draw_string(m_x + 6, m_y + 6, "v", 0x000080, 0, true);
-      gfx_draw_string(m_x + 20, m_y + 6, "Barre degli strumenti",
-                      COLOR_WINDOWTEXT, 0, true);
+        gfx_draw_string(m_x + 6, m_y + 6, "v", th_acc, 0, true);
+      gfx_draw_string(m_x + 20, m_y + 6, "Barre degli strumenti", th_txt, 0,
+                      true);
 
       if (state->show_statusbar)
-        gfx_draw_string(m_x + 6, m_y + 24, "v", 0x000080, 0, true);
-      gfx_draw_string(m_x + 20, m_y + 24, "Barra di stato", COLOR_WINDOWTEXT, 0,
-                      true);
+        gfx_draw_string(m_x + 6, m_y + 24, "v", th_acc, 0, true);
+      gfx_draw_string(m_x + 20, m_y + 24, "Barra di stato", th_txt, 0, true);
 
       if (state->search_active)
-        gfx_draw_string(m_x + 6, m_y + 42, "v", 0x000080, 0, true);
-      gfx_draw_string(m_x + 20, m_y + 42, "Barra di ricerca", COLOR_WINDOWTEXT,
-                      0, true);
+        gfx_draw_string(m_x + 6, m_y + 42, "v", th_acc, 0, true);
+      gfx_draw_string(m_x + 20, m_y + 42, "Barra di ricerca", th_txt, 0, true);
 
       if (state->show_folder_tree)
-        gfx_draw_string(m_x + 6, m_y + 60, "v", 0x000080, 0, true);
-      gfx_draw_string(m_x + 20, m_y + 60, "Albero delle cartelle",
-                      COLOR_WINDOWTEXT, 0, true);
-      gfx_draw_bevel_rect(m_x + 4, m_y + 78, m_w - 8, 2, true);
+        gfx_draw_string(m_x + 6, m_y + 60, "v", th_acc, 0, true);
+      gfx_draw_string(m_x + 20, m_y + 60, "Albero delle cartelle", th_txt, 0,
+                      true);
+      if (is_glass)
+        gfx_fill_alpha(m_x + 8, m_y + 78, m_w - 16, 1, m_bdr, 180);
+      else
+        gfx_draw_bevel_rect(m_x + 4, m_y + 78, m_w - 8, 2, true);
 
       if (state->sort_mode == 1)
-        gfx_draw_string(m_x + 6, m_y + 82, "*", 0x000080, 0, true);
-      gfx_draw_string(m_x + 20, m_y + 82, "Disponi per Nome", COLOR_WINDOWTEXT,
-                      0, true);
+        gfx_draw_string(m_x + 6, m_y + 82, "*", th_acc, 0, true);
+      gfx_draw_string(m_x + 20, m_y + 82, "Disponi per Nome", th_txt, 0, true);
 
       if (state->sort_mode == 2)
-        gfx_draw_string(m_x + 6, m_y + 100, "*", 0x000080, 0, true);
-      gfx_draw_string(m_x + 20, m_y + 100, "Disponi per Dimensione",
-                      COLOR_WINDOWTEXT, 0, true);
+        gfx_draw_string(m_x + 6, m_y + 100, "*", th_acc, 0, true);
+      gfx_draw_string(m_x + 20, m_y + 100, "Disponi per Dimensione", th_txt, 0,
+                      true);
 
       if (state->sort_mode == 3)
-        gfx_draw_string(m_x + 6, m_y + 118, "*", 0x000080, 0, true);
-      gfx_draw_string(m_x + 20, m_y + 118, "Disponi per Tipo", COLOR_WINDOWTEXT,
-                      0, true);
-      gfx_draw_bevel_rect(m_x + 4, m_y + 136, m_w - 8, 2, true);
+        gfx_draw_string(m_x + 6, m_y + 118, "*", th_acc, 0, true);
+      gfx_draw_string(m_x + 20, m_y + 118, "Disponi per Tipo", th_txt, 0, true);
+      if (is_glass)
+        gfx_fill_alpha(m_x + 8, m_y + 136, m_w - 16, 1, m_bdr, 180);
+      else
+        gfx_draw_bevel_rect(m_x + 4, m_y + 136, m_w - 8, 2, true);
 
-      gfx_draw_string(m_x + 20, m_y + 140, "Aggiorna", COLOR_WINDOWTEXT, 0,
-                      true);
-      gfx_draw_string(m_x + 160, m_y + 140, "F5", COLOR_WINDOWTEXT, 0, true);
+      gfx_draw_string(m_x + 20, m_y + 140, "Aggiorna", th_txt, 0, true);
+      gfx_draw_string(m_x + 160, m_y + 140, "F5", th_txt, 0, true);
     } else if (state->active_menu == EXPLORER_MENU_TOOLS) {
-      m_x = cx + 200;
-      m_w = 230;
-      m_h = 146;
-      gfx_fill_rect(m_x + 2, m_y + 2, m_w, m_h, 0x808080);
-      gfx_fill_rect(m_x, m_y, m_w, m_h, COLOR_BTNFACE);
-      gfx_draw_bevel_rect(m_x, m_y, m_w, m_h, false);
+      gfx_draw_string(m_x + 12, m_y + 6, "Sincronizza dischi (Flush)", th_txt,
+                      0, true);
+      gfx_draw_string(m_x + 12, m_y + 24, "Verifica file system...", th_txt, 0,
+                      true);
+      if (is_glass)
+        gfx_fill_alpha(m_x + 8, m_y + 42, m_w - 16, 1, m_bdr, 180);
+      else
+        gfx_draw_bevel_rect(m_x + 4, m_y + 42, m_w - 8, 2, true);
 
-      gfx_draw_string(m_x + 12, m_y + 6, "Sincronizza dischi (Flush)",
-                      COLOR_WINDOWTEXT, 0, true);
-      gfx_draw_string(m_x + 12, m_y + 24, "Verifica file system...",
-                      COLOR_WINDOWTEXT, 0, true);
-      gfx_draw_bevel_rect(m_x + 4, m_y + 42, m_w - 8, 2, true);
+      gfx_draw_string(m_x + 12, m_y + 46, "Gestione periferiche...", th_txt, 0,
+                      true);
+      gfx_draw_string(m_x + 12, m_y + 64, "Editor del Registro...", th_txt, 0,
+                      true);
+      gfx_draw_string(m_x + 12, m_y + 82, "Gestione attivita...", th_txt, 0,
+                      true);
+      if (is_glass)
+        gfx_fill_alpha(m_x + 8, m_y + 100, m_w - 16, 1, m_bdr, 180);
+      else
+        gfx_draw_bevel_rect(m_x + 4, m_y + 100, m_w - 8, 2, true);
 
-      gfx_draw_string(m_x + 12, m_y + 46, "Gestione periferiche...",
-                      COLOR_WINDOWTEXT, 0, true);
-      gfx_draw_string(m_x + 12, m_y + 64, "Editor del Registro...",
-                      COLOR_WINDOWTEXT, 0, true);
-      gfx_draw_string(m_x + 12, m_y + 82, "Gestione attivita...",
-                      COLOR_WINDOWTEXT, 0, true);
-      gfx_draw_bevel_rect(m_x + 4, m_y + 100, m_w - 8, 2, true);
-
-      gfx_draw_string(m_x + 12, m_y + 104, "Opzioni cartella...",
-                      COLOR_WINDOWTEXT, 0, true);
-      gfx_draw_string(m_x + 12, m_y + 122, "Proprieta unita...",
-                      COLOR_WINDOWTEXT, 0, true);
+      gfx_draw_string(m_x + 12, m_y + 104, "Opzioni cartella...", th_txt, 0,
+                      true);
+      gfx_draw_string(m_x + 12, m_y + 122, "Proprieta unita...", th_txt, 0,
+                      true);
     } else if (state->active_menu == EXPLORER_MENU_HELP) {
-      m_x = cx + 215;
-      m_w = 220;
-      m_h = 70;
-      gfx_fill_rect(m_x + 2, m_y + 2, m_w, m_h, 0x808080);
-      gfx_fill_rect(m_x, m_y, m_w, m_h, COLOR_BTNFACE);
-      gfx_draw_bevel_rect(m_x, m_y, m_w, m_h, false);
-
-      gfx_draw_string(m_x + 12, m_y + 6, "Guida in linea NewOS",
-                      COLOR_WINDOWTEXT, 0, true);
-      gfx_draw_string(m_x + 12, m_y + 24, "Regole di sistema (.NOR)...",
-                      COLOR_WINDOWTEXT, 0, true);
-      gfx_draw_bevel_rect(m_x + 4, m_y + 42, m_w - 8, 2, true);
-      gfx_draw_string(m_x + 12, m_y + 46, "Info su Esplora risorse...",
-                      COLOR_WINDOWTEXT, 0, true);
+      gfx_draw_string(m_x + 12, m_y + 6, "Guida in linea NewOS", th_txt, 0,
+                      true);
+      gfx_draw_string(m_x + 12, m_y + 24, "Regole di sistema (.NOR)...", th_txt,
+                      0, true);
+      if (is_glass)
+        gfx_fill_alpha(m_x + 8, m_y + 42, m_w - 16, 1, m_bdr, 180);
+      else
+        gfx_draw_bevel_rect(m_x + 4, m_y + 42, m_w - 8, 2, true);
+      gfx_draw_string(m_x + 12, m_y + 46, "Info su Esplora risorse...", th_txt,
+                      0, true);
     }
   }
 
@@ -2413,25 +2667,46 @@ static void explorer_draw(window_t *win) {
     int32_t dx = cx + (cw - dw) / 2;
     int32_t dy = cy + (ch - dh) / 2;
 
-    gfx_fill_rect(dx + 4, dy + 4, dw, dh, 0x606060);
-    gfx_fill_rect(dx, dy, dw, dh, COLOR_BTNFACE);
-    gfx_draw_bevel_rect(dx, dy, dw, dh, false);
+    if (is_glass) {
+      uint16_t d_rad = cur_th->corner_radius > 0 ? cur_th->corner_radius : 8;
+      gfx_draw_drop_shadow(dx, dy, dw, dh, 8);
+      gfx_fill_rounded_alpha(
+          dx, dy, dw, dh, d_rad,
+          cur_th->surface_base ? cur_th->surface_base : 0xF8FAFC, 242);
+      gfx_draw_rounded_rect(dx, dy, dw, dh, d_rad,
+                            cur_th->border_color ? cur_th->border_color
+                                                 : 0xC8D4E2);
+      gfx_draw_string(dx + 10, dy + 4, "Proprieta", th_txt, 0, true);
+      gfx_draw_string(dx + dw - 16, dy + 4, "x", th_txt, 0, true);
+      wm_draw_themed_tab(dx + 8, dy + 24, 68, 18, "Generale", true);
+      gfx_fill_rounded_alpha(dx + 6, dy + 42, dw - 12, dh - 76, 6,
+                             cur_th->window_bg ? cur_th->window_bg : 0xFFFFFF,
+                             220);
+      gfx_draw_rounded_rect(dx + 6, dy + 42, dw - 12, dh - 76, 6,
+                            cur_th->control_border_color
+                                ? cur_th->control_border_color
+                                : 0xC8D4E2);
+    } else {
+      gfx_fill_rect(dx + 4, dy + 4, dw, dh, 0x606060);
+      gfx_fill_rect(dx, dy, dw, dh, COLOR_BTNFACE);
+      gfx_draw_bevel_rect(dx, dy, dw, dh, false);
 
-    // Barra del titolo
-    gfx_draw_gradient_h(dx + 2, dy + 2, dw - 4, 18, COLOR_ACTIVECAPTION_LEFT,
-                        COLOR_ACTIVECAPTION_RIGHT);
-    gfx_draw_string(dx + 6, dy + 3, "Proprieta", COLOR_CAPTIONTEXT, 0, true);
+      // Barra del titolo
+      gfx_draw_gradient_h(dx + 2, dy + 2, dw - 4, 18, COLOR_ACTIVECAPTION_LEFT,
+                          COLOR_ACTIVECAPTION_RIGHT);
+      gfx_draw_string(dx + 6, dy + 3, "Proprieta", COLOR_CAPTIONTEXT, 0, true);
 
-    // Pulsante chiudi finestra proprietà [x]
-    gfx_fill_rect(dx + dw - 18, dy + 3, 14, 14, COLOR_BTNFACE);
-    gfx_draw_bevel_rect(dx + dw - 18, dy + 3, 14, 14, false);
-    gfx_draw_string(dx + dw - 14, dy + 1, "x", COLOR_WINDOWTEXT, 0, true);
+      // Pulsante chiudi finestra proprietà [x]
+      gfx_fill_rect(dx + dw - 18, dy + 3, 14, 14, COLOR_BTNFACE);
+      gfx_draw_bevel_rect(dx + dw - 18, dy + 3, 14, 14, false);
+      gfx_draw_string(dx + dw - 14, dy + 1, "x", COLOR_WINDOWTEXT, 0, true);
 
-    // Tab "Generale"
-    gfx_fill_rect(dx + 8, dy + 24, 60, 18, 0xFFFFFF);
-    gfx_draw_bevel_rect(dx + 8, dy + 24, 60, 18, false);
-    gfx_draw_string(dx + 12, dy + 26, "Generale", COLOR_WINDOWTEXT, 0, true);
-    gfx_draw_bevel_rect(dx + 6, dy + 41, dw - 12, dh - 74, true);
+      // Tab "Generale"
+      gfx_fill_rect(dx + 8, dy + 24, 60, 18, 0xFFFFFF);
+      gfx_draw_bevel_rect(dx + 8, dy + 24, 60, 18, false);
+      gfx_draw_string(dx + 12, dy + 26, "Generale", COLOR_WINDOWTEXT, 0, true);
+      gfx_draw_bevel_rect(dx + 6, dy + 41, dw - 12, dh - 74, true);
+    }
 
     // Icona 32x32 e Nome
     gfx_draw_icon_32(dx + 16, dy + 48,
@@ -2440,23 +2715,29 @@ static void explorer_draw(window_t *win) {
     char p_name[24];
     strncpy(p_name, state->props_item.name, 20);
     p_name[20] = '\0';
-    gfx_draw_string(dx + 56, dy + 56, p_name, 0x0A246A, 0, true);
-    gfx_draw_bevel_rect(dx + 14, dy + 88, dw - 28, 2, true);
+    gfx_draw_string(dx + 56, dy + 56, p_name, th_acc, 0, true);
+    if (is_glass)
+      gfx_fill_alpha(dx + 14, dy + 88, dw - 28, 1,
+                     cur_th->control_border_color ? cur_th->control_border_color
+                                                  : 0xC8D4E2,
+                     180);
+    else
+      gfx_draw_bevel_rect(dx + 14, dy + 88, dw - 28, 2, true);
 
     // Dettagli
-    gfx_draw_string(dx + 16, dy + 96, "Tipo:", 0x404040, 0, true);
+    gfx_draw_string(dx + 16, dy + 96, "Tipo:", 0x606875, 0, true);
     gfx_draw_string(dx + 70, dy + 96,
                     state->props_item.desc[0] ? state->props_item.desc
                                               : "Oggetto di sistema",
-                    COLOR_WINDOWTEXT, 0, true);
+                    th_txt, 0, true);
 
-    gfx_draw_string(dx + 16, dy + 114, "Posizione:", 0x404040, 0, true);
+    gfx_draw_string(dx + 16, dy + 114, "Posizione:", 0x606875, 0, true);
     char pos_txt[24];
     strncpy(pos_txt, state->current_path, 20);
     pos_txt[20] = '\0';
-    gfx_draw_string(dx + 70, dy + 114, pos_txt, COLOR_WINDOWTEXT, 0, true);
+    gfx_draw_string(dx + 70, dy + 114, pos_txt, th_txt, 0, true);
 
-    gfx_draw_string(dx + 16, dy + 132, "Dimensioni:", 0x404040, 0, true);
+    gfx_draw_string(dx + 16, dy + 132, "Dimensioni:", 0x606875, 0, true);
     char sz_txt[32];
     if (state->props_item.size_bytes >= 1024 * 1024) {
       mini_snprintf(sz_txt, sizeof(sz_txt), "%d MB (%d byte)",
@@ -2470,13 +2751,19 @@ static void explorer_draw(window_t *win) {
       mini_snprintf(sz_txt, sizeof(sz_txt), "%d byte",
                     state->props_item.size_bytes);
     }
-    gfx_draw_string(dx + 70, dy + 132, sz_txt, COLOR_WINDOWTEXT, 0, true);
+    gfx_draw_string(dx + 70, dy + 132, sz_txt, th_txt, 0, true);
 
-    gfx_draw_bevel_rect(dx + 14, dy + 152, dw - 28, 2, true);
+    if (is_glass)
+      gfx_fill_alpha(dx + 14, dy + 152, dw - 28, 1,
+                     cur_th->control_border_color ? cur_th->control_border_color
+                                                  : 0xC8D4E2,
+                     180);
+    else
+      gfx_draw_bevel_rect(dx + 14, dy + 152, dw - 28, 2, true);
 
     // Attributi
     gfx_draw_string(dx + 16, dy + 160,
-                    "Attributi: [X] Archivio   [ ] Sola lettura", 0x404040, 0,
+                    "Attributi: [X] Archivio   [ ] Sola lettura", 0x606875, 0,
                     true);
 
     // Pulsante [ OK ]
@@ -2484,9 +2771,13 @@ static void explorer_draw(window_t *win) {
     int32_t ok_h = 22;
     int32_t ok_x = dx + (dw - ok_w) / 2;
     int32_t ok_y = dy + dh - 28;
-    gfx_fill_rect(ok_x, ok_y, ok_w, ok_h, COLOR_BTNFACE);
-    gfx_draw_bevel_rect(ok_x, ok_y, ok_w, ok_h, false);
-    gfx_draw_string(ok_x + 22, ok_y + 4, "OK", COLOR_WINDOWTEXT, 0, true);
+    if (is_glass) {
+      wm_draw_themed_button(ok_x, ok_y, ok_w, ok_h, "OK", false);
+    } else {
+      gfx_fill_rect(ok_x, ok_y, ok_w, ok_h, COLOR_BTNFACE);
+      gfx_draw_bevel_rect(ok_x, ok_y, ok_w, ok_h, false);
+      gfx_draw_string(ok_x + 22, ok_y + 4, "OK", COLOR_WINDOWTEXT, 0, true);
+    }
   }
 }
 
@@ -2509,6 +2800,8 @@ static void explorer_execute_selected(explorer_state_t *state) {
       explorer_navigate_to(state, EXPLORER_MODE_DRIVE_U, "");
     } else if (strstr(it->name, "Pannello")) {
       explorer_navigate_to(state, EXPLORER_MODE_CONTROL_PANEL, "");
+    } else if (strstr(it->name, "Stack") || strstr(it->name, "FTP")) {
+      app_comdlg_ftp_stack_launch();
     } else {
       // Controlla se e' un'altra unita' disco secondaria montata es. "(E:)",
       // "(F:)", ecc.
@@ -2600,8 +2893,19 @@ static void explorer_execute_selected(explorer_state_t *state) {
             app_display_props_launch();
           else if (strcasecmp(it->name, "SOUND.CPL") == 0)
             app_sound_props_launch();
-          else if (strcasecmp(it->name, "MAIN.CPL") == 0 || strcasecmp(it->name, "MOUSE.CPL") == 0)
+          else if (strcasecmp(it->name, "MAIN.CPL") == 0 ||
+                   strcasecmp(it->name, "MOUSE.CPL") == 0)
             app_mouse_props_launch();
+          else if (strcasecmp(it->name, "USERACCT.CPL") == 0)
+            app_user_accounts_launch();
+          else if (strcasecmp(it->name, "TIMEDATE.CPL") == 0)
+            app_timedate_props_launch();
+          else if (strcasecmp(it->name, "NCPA.CPL") == 0 ||
+                   strcasecmp(it->name, "NETCPL.CPL") == 0)
+            app_net_props_launch();
+          else if (strcasecmp(it->name, "KEYBOARD.CPL") == 0 ||
+                   strcasecmp(it->name, "KEYBCPL.CPL") == 0)
+            app_keyboard_props_launch();
           else if (strcasecmp(it->name, "POWER.CPL") == 0)
             app_power_props_launch();
           else if (strcasecmp(it->name, "DEVMGMT.CPL") == 0)
@@ -2707,8 +3011,17 @@ static void explorer_execute_selected(explorer_state_t *state) {
       app_power_props_launch();
     } else if (strcmp(it->name, "Gestione periferiche") == 0) {
       app_devmgmt_launch();
-    } else if (strcmp(it->name, "Mouse") == 0 || strcmp(it->name, "Proprieta mouse") == 0) {
+    } else if (strcmp(it->name, "Mouse") == 0 ||
+               strcmp(it->name, "Proprieta mouse") == 0) {
       app_mouse_props_launch();
+    } else if (strcmp(it->name, "Tastiera") == 0) {
+      app_keyboard_props_launch();
+    } else if (strcmp(it->name, "Account utente") == 0) {
+      app_user_accounts_launch();
+    } else if (strcmp(it->name, "Data, ora e lingua") == 0) {
+      app_timedate_props_launch();
+    } else if (strcmp(it->name, "Connessioni di rete") == 0) {
+      app_net_props_launch();
     } else if (strcmp(it->name, "Editor del Registro") == 0) {
       app_regedit_launch();
     } else {
@@ -2727,7 +3040,16 @@ static void explorer_execute_selected(explorer_state_t *state) {
 
 static void explorer_mouse(window_t *win, int32_t mx, int32_t my,
                            bool clicked) {
-  outb(0x3F8, 'E'); outb(0x3F8, 'X'); outb(0x3F8, 'P'); outb(0x3F8, '_'); outb(0x3F8, 'M'); outb(0x3F8, 'O'); outb(0x3F8, 'U'); outb(0x3F8, 'S'); outb(0x3F8, 'E'); outb(0x3F8, '\n');
+  outb(0x3F8, 'E');
+  outb(0x3F8, 'X');
+  outb(0x3F8, 'P');
+  outb(0x3F8, '_');
+  outb(0x3F8, 'M');
+  outb(0x3F8, 'O');
+  outb(0x3F8, 'U');
+  outb(0x3F8, 'S');
+  outb(0x3F8, 'E');
+  outb(0x3F8, '\n');
   if (!clicked)
     return;
   explorer_state_t *state = (explorer_state_t *)win->app_data;
@@ -2948,12 +3270,19 @@ static void explorer_mouse(window_t *win, int32_t mx, int32_t my,
         }
         break;
       case CTX_ACTION_CUT:
-        if (state->ctx_target_idx >= 0)
-          explorer_cut_item(state, state->ctx_target_idx);
+        explorer_cut_item(state, state->ctx_target_idx >= 0
+                                     ? state->ctx_target_idx
+                                     : state->selected_item);
         break;
       case CTX_ACTION_COPY:
-        if (state->ctx_target_idx >= 0)
-          explorer_copy_item(state, state->ctx_target_idx);
+        explorer_copy_item(state, state->ctx_target_idx >= 0
+                                      ? state->ctx_target_idx
+                                      : state->selected_item);
+        break;
+      case CTX_ACTION_MOVE:
+        explorer_move_item(state, state->ctx_target_idx >= 0
+                                      ? state->ctx_target_idx
+                                      : state->selected_item);
         break;
       case CTX_ACTION_PASTE:
         explorer_paste_item(state);
@@ -3113,8 +3442,8 @@ static void explorer_mouse(window_t *win, int32_t mx, int32_t my,
 
     // 5. Clic sulla Barra degli Indirizzi
     int32_t addr_y = cy + 50;
-    int32_t box_addr_x = cx + 76;
-    int32_t box_addr_w = cw - 124;
+    int32_t box_addr_x = cx + 90;
+    int32_t box_addr_w = cw - 138;
     if (mx >= box_addr_x && mx <= box_addr_x + box_addr_w && my >= addr_y + 2 &&
         my <= addr_y + 22) {
       state->address_editing = true;
@@ -3144,8 +3473,8 @@ static void explorer_mouse(window_t *win, int32_t mx, int32_t my,
   if (state->mode == EXPLORER_MODE_SETTINGS) {
     if (my >= body_y && my <= body_y + body_h) {
       settings_action_t action = settings_handle_mouse(
-          screen_mgr_get_api(), cx + 2, body_y, cw - 4, body_h, mx, my,
-          clicked, &state->settings_state);
+          screen_mgr_get_api(), cx + 2, body_y, cw - 4, body_h, mx, my, clicked,
+          &state->settings_state);
       if (action == SETTINGS_ACTION_CLASSIC_MODE) {
         explorer_navigate_to(state, EXPLORER_MODE_CONTROL_PANEL, NULL);
         return;
@@ -3170,10 +3499,42 @@ static void explorer_mouse(window_t *win, int32_t mx, int32_t my,
       } else if (action == SETTINGS_ACTION_LAUNCH_REGEDIT) {
         app_regedit_launch();
         return;
+      } else if (action == SETTINGS_ACTION_LAUNCH_USERACCT) {
+        app_user_accounts_launch();
+        return;
+      } else if (action == SETTINGS_ACTION_LAUNCH_TIMEDATE) {
+        app_timedate_props_launch();
+        return;
+      } else if (action == SETTINGS_ACTION_LAUNCH_NETCPL) {
+        app_net_props_launch();
+        return;
+      } else if (action == SETTINGS_ACTION_LAUNCH_KEYBCPL) {
+        app_keyboard_props_launch();
+        return;
       } else if (action >= SETTINGS_ACTION_APPLY_THEME_0 &&
                  action <= SETTINGS_ACTION_APPLY_THEME_3) {
         int th_idx = action - SETTINGS_ACTION_APPLY_THEME_0;
         theme_mgr_apply(th_idx);
+        return;
+      } else if (action == SETTINGS_ACTION_APPLY_UISTYLE_0) {
+        uistyle_set_active(UISTYLE_STANDARD);
+        state->settings_state.active_ui_style = UISTYLE_STANDARD;
+        return;
+      } else if (action == SETTINGS_ACTION_APPLY_UISTYLE_1) {
+        uistyle_set_active(UISTYLE_COPENHAGEN);
+        state->settings_state.active_ui_style = UISTYLE_COPENHAGEN;
+        return;
+      } else if (action == SETTINGS_ACTION_SET_SCALE_AUTO) {
+        hwaccel_set_scale(0, 100);
+        return;
+      } else if (action == SETTINGS_ACTION_SET_SCALE_100) {
+        hwaccel_set_scale(1, 100);
+        return;
+      } else if (action == SETTINGS_ACTION_SET_SCALE_125) {
+        hwaccel_set_scale(1, 125);
+        return;
+      } else if (action == SETTINGS_ACTION_SET_SCALE_150) {
+        hwaccel_set_scale(1, 150);
         return;
       }
       return;
@@ -3208,15 +3569,21 @@ static void explorer_mouse(window_t *win, int32_t mx, int32_t my,
       }
     } else {
       // Clic su link per abilitare la Nuova Modalita Moderna (Impostazioni)
-      if (state->mode == EXPLORER_MODE_CONTROL_PANEL && state->sidebar_mode_link_y > 0) {
+      if (state->mode == EXPLORER_MODE_CONTROL_PANEL &&
+          state->sidebar_mode_link_y > 0) {
         int32_t link_rel_y = state->sidebar_mode_link_y;
         if (link_rel_y > win->height) {
           link_rel_y -= win->y;
         }
-        if (mx >= cx + 2 && mx <= cx + side_w - 2 &&
-            my >= link_rel_y - 25 &&
+        if (mx >= cx + 2 && mx <= cx + side_w - 2 && my >= link_rel_y - 25 &&
             my <= link_rel_y + state->sidebar_mode_link_h + 20) {
-          outb(0x3F8, 'S'); outb(0x3F8, 'W'); outb(0x3F8, 'I'); outb(0x3F8, 'T'); outb(0x3F8, 'C'); outb(0x3F8, 'H'); outb(0x3F8, '\n');
+          outb(0x3F8, 'S');
+          outb(0x3F8, 'W');
+          outb(0x3F8, 'I');
+          outb(0x3F8, 'T');
+          outb(0x3F8, 'C');
+          outb(0x3F8, 'H');
+          outb(0x3F8, '\n');
           explorer_navigate_to(state, EXPLORER_MODE_SETTINGS, NULL);
           return;
         }
@@ -3225,9 +3592,24 @@ static void explorer_mouse(window_t *win, int32_t mx, int32_t my,
       // Web View: Clic sul pulsante di azione
       if (mx >= cx + 12 && mx <= cx + 12 + side_w - 24) {
         if (state->mode == EXPLORER_MODE_RECYCLE_BIN) {
-          int32_t empty_btn_y = body_y + 148;
+          int32_t rest_btn_y = body_y + 138;
+          int32_t empty_btn_y = body_y + 166;
+          int32_t cfg_btn_y = body_y + 194;
+          if (my >= rest_btn_y && my <= rest_btn_y + 24) {
+            if (state->selected_item >= 0 &&
+                state->selected_item < state->num_items) {
+              recycle_restore_file(state->items[state->selected_item].name);
+              explorer_load_items(state);
+            }
+            return;
+          }
           if (my >= empty_btn_y && my <= empty_btn_y + 24) {
-            state->num_items = 0;
+            recycle_empty_bin();
+            explorer_load_items(state);
+            return;
+          }
+          if (my >= cfg_btn_y && my <= cfg_btn_y + 24) {
+            app_recycle_settings_launch();
             return;
           }
         } else if (state->mode == EXPLORER_MODE_THIS_PC) {
@@ -3374,7 +3756,8 @@ static void explorer_right_click(window_t *win, int32_t mx, int32_t my,
         break;
     }
 
-    bool can_paste = (g_explorer_clipboard.op != CLIPBOARD_NONE);
+    bool can_paste = (g_explorer_clipboard.op != CLIPBOARD_NONE) ||
+                     (clipboard_get_file_count() > 0);
     if (found_item && state->ctx_target_idx >= 0 &&
         state->ctx_target_idx < state->num_items) {
       char full_path[160] = {0};
@@ -3402,7 +3785,16 @@ static void explorer_right_click(window_t *win, int32_t mx, int32_t my,
 }
 
 static void explorer_key(window_t *win, char c) {
-  outb(0x3F8, 'E'); outb(0x3F8, 'X'); outb(0x3F8, 'P'); outb(0x3F8, '_'); outb(0x3F8, 'K'); outb(0x3F8, 'E'); outb(0x3F8, 'Y'); outb(0x3F8, ':'); outb(0x3F8, c); outb(0x3F8, '\n');
+  outb(0x3F8, 'E');
+  outb(0x3F8, 'X');
+  outb(0x3F8, 'P');
+  outb(0x3F8, '_');
+  outb(0x3F8, 'K');
+  outb(0x3F8, 'E');
+  outb(0x3F8, 'Y');
+  outb(0x3F8, ':');
+  outb(0x3F8, c);
+  outb(0x3F8, '\n');
   explorer_state_t *state = (explorer_state_t *)win->app_data;
   if (!state)
     return;
@@ -3516,17 +3908,15 @@ static void explorer_key(window_t *win, char c) {
     if (state->num_items > 0) {
       state->selected_item = (state->selected_item + 1) % state->num_items;
     }
-  } else if (c == 127 || c == 0x7F) { // Delete -> Elimina file
+  } else if (c == 127 || c == 0x7F ||
+             (uint8_t)c == KEY_DEL) { // Delete -> Elimina file
     explorer_delete_item(state, state->selected_item);
-  } else if (c == 0x18) { // Ctrl+X -> Taglia
-    if (state->selected_item >= 0 && state->selected_item < state->num_items) {
-      explorer_cut_item(state, state->selected_item);
-    }
-  } else if (c == 0x03) { // Ctrl+C -> Copia
-    if (state->selected_item >= 0 && state->selected_item < state->num_items) {
-      explorer_copy_item(state, state->selected_item);
-    }
-  } else if (c == 0x16) { // Ctrl+V -> Incolla
+  } else if (c == 0x18 ||
+             (uint8_t)c == KEY_CTRL_X) { // Ctrl+X -> Taglia / Sposta
+    explorer_cut_item(state, state->selected_item);
+  } else if (c == 0x03 || (uint8_t)c == KEY_CTRL_C) { // Ctrl+C -> Copia
+    explorer_copy_item(state, state->selected_item);
+  } else if (c == 0x16 || (uint8_t)c == KEY_CTRL_V) { // Ctrl+V -> Incolla
     explorer_paste_item(state);
   } else if (c == 0x01) { // Ctrl+A -> Seleziona tutto
     if (state->num_items > 0)
@@ -3619,7 +4009,8 @@ static window_t *explorer_create_base(const char *title, explorer_mode_t mode,
   char *ini_buf = (char *)vfs_read_entire_file(
       "C:\\NewOS\\SystemProgram\\EXPLORER.INI", &ini_sz);
   if (!ini_buf)
-    ini_buf = (char *)vfs_read_entire_file("/NewOS/SystemProgram/EXPLORER.INI", &ini_sz);
+    ini_buf = (char *)vfs_read_entire_file("/NewOS/SystemProgram/EXPLORER.INI",
+                                           &ini_sz);
   if (ini_buf) {
     if (strstr(ini_buf, "ShowFolderTree=1"))
       state->show_folder_tree = true;

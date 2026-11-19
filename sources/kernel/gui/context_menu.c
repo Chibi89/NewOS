@@ -207,7 +207,6 @@ static void add_menu_item(context_menu_t* menu, const char* label, context_menu_
 
 void context_menu_build_for_item(context_menu_t* menu, const char* name, const char* full_path,
                                  bool is_folder, bool can_paste) {
-    (void)can_paste;
     if (!menu) return;
     memset(menu, 0, sizeof(context_menu_t));
     menu->is_item = true;
@@ -230,8 +229,10 @@ void context_menu_build_for_item(context_menu_t* menu, const char* name, const c
     }
 
     add_menu_item(menu, "", CTX_ACTION_NONE, true, false, false, NULL);
-    add_menu_item(menu, "Taglia", CTX_ACTION_CUT, false, false, false, NULL);
-    add_menu_item(menu, "Copia", CTX_ACTION_COPY, false, false, false, NULL);
+    add_menu_item(menu, "Taglia (Ctrl+X)", CTX_ACTION_CUT, false, false, false, NULL);
+    add_menu_item(menu, "Copia (Ctrl+C)", CTX_ACTION_COPY, false, false, false, NULL);
+    add_menu_item(menu, "Sposta...", CTX_ACTION_MOVE, false, false, false, NULL);
+    add_menu_item(menu, "Incolla (Ctrl+V)", CTX_ACTION_PASTE, false, !can_paste, false, NULL);
     add_menu_item(menu, "", CTX_ACTION_NONE, true, false, false, NULL);
     add_menu_item(menu, "Elimina", CTX_ACTION_DELETE, false, false, false, NULL);
     add_menu_item(menu, "Rinomina", CTX_ACTION_RENAME, false, false, false, NULL);
@@ -249,7 +250,9 @@ void context_menu_build_for_empty(context_menu_t* menu, const char* current_dir,
     add_menu_item(menu, "Nuova cartella", CTX_ACTION_NEW_FOLDER, false, false, false, NULL);
     add_menu_item(menu, "Nuovo testo", CTX_ACTION_NEW_FILE, false, false, false, NULL);
     add_menu_item(menu, "", CTX_ACTION_NONE, true, false, false, NULL);
-    add_menu_item(menu, "Incolla", CTX_ACTION_PASTE, false, !can_paste, false, NULL);
+    add_menu_item(menu, "Copia (Ctrl+C)", CTX_ACTION_COPY, false, false, false, NULL);
+    add_menu_item(menu, "Sposta...", CTX_ACTION_MOVE, false, false, false, NULL);
+    add_menu_item(menu, "Incolla (Ctrl+V)", CTX_ACTION_PASTE, false, !can_paste, false, NULL);
     add_menu_item(menu, "", CTX_ACTION_NONE, true, false, false, NULL);
     add_menu_item(menu, "Aggiorna", CTX_ACTION_REFRESH, false, false, false, NULL);
     add_menu_item(menu, "", CTX_ACTION_NONE, true, false, false, NULL);
@@ -299,6 +302,42 @@ void context_menu_hide(context_menu_t* menu) {
 
 void context_menu_draw(const context_menu_t* menu) {
     if (!menu || !menu->is_open) return;
+
+    const theme_info_t* th = wm_get_current_theme_props();
+    bool is_modern = (th && (th->modern_controls || wm_get_theme() != THEME_CLASSIC));
+
+    if (is_modern) {
+        uint16_t rad = th->panel_radius > 0 ? th->panel_radius : 8;
+        uint32_t bg_col = th->surface_base ? th->surface_base : 0xF8FAFC;
+        uint32_t border_col = th->control_border_color ? th->control_border_color : 0xC8D4E2;
+        uint32_t txt_col = th->window_text ? th->window_text : 0x1A1A1A;
+        uint32_t acc_col = th->accent_color ? th->accent_color : 0x0078D4;
+
+        gfx_draw_drop_shadow(menu->x, menu->y, menu->width, menu->height, 6);
+        gfx_fill_rounded_alpha(menu->x, menu->y, menu->width, menu->height, rad, bg_col, 238);
+        gfx_draw_rounded_rect(menu->x, menu->y, menu->width, menu->height, rad, border_col);
+
+        int32_t cur_y = menu->y + 4;
+        for (int i = 0; i < menu->num_items; i++) {
+            const context_menu_item_t* it = &menu->items[i];
+            if (it->is_separator) {
+                gfx_fill_alpha(menu->x + 8, cur_y + 2, menu->width - 16, 1, border_col, 180);
+                cur_y += 6;
+            } else {
+                uint32_t col = it->is_disabled ? 0x8892A0 : txt_col;
+                if (it->is_default && !it->is_disabled) {
+                    uint32_t pill_bg = th->selection_color ? th->selection_color : 0xE2F0FE;
+                    gfx_fill_rounded_rect(menu->x + 4, cur_y, menu->width - 8, 18, 4, pill_bg);
+                    gfx_draw_string(menu->x + 12, cur_y + 2, it->label, acc_col, 0, true);
+                    gfx_draw_string(menu->x + 13, cur_y + 2, it->label, acc_col, 0, true);
+                } else {
+                    gfx_draw_string(menu->x + 12, cur_y + 2, it->label, col, 0, true);
+                }
+                cur_y += 18;
+            }
+        }
+        return;
+    }
 
     // 1. Ombra proiettata grigia (stile Windows 2000)
     gfx_fill_rect(menu->x + 3, menu->y + 3, menu->width, menu->height, 0x808080);

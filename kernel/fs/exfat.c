@@ -87,6 +87,40 @@ void exfat_set_bitmap_bit(uint32_t cluster, bool allocated) {
     vfs_cache_write_sector(0, sec_lba, sec_buf);
 }
 
+uint32_t exfat_find_free_cluster(void) {
+    if (!g_mounted || g_bm_cluster < 2 || g_bm_length == 0) return 0;
+
+    uint32_t total_cl = g_vbr.cluster_count;
+    uint32_t spc = g_sectors_per_cluster;
+    uint32_t bm_cl = g_bm_cluster;
+    uint64_t byte_pos = 0;
+    uint8_t sec_buf[512];
+
+    while (bm_cl >= 2 && bm_cl < 0xFFFFFFF8 && byte_pos < g_bm_length) {
+        uint32_t cl_lba = exfat_cluster_to_lba(bm_cl);
+        for (uint32_t s = 0; s < spc && byte_pos < g_bm_length; s++) {
+            if (!vfs_cache_read_sector(0, cl_lba + s, sec_buf)) {
+                if (!exfat_read_sec(cl_lba + s, 1, sec_buf)) break;
+            }
+            for (uint32_t b = 0; b < 512 && byte_pos < g_bm_length; b++, byte_pos++) {
+                uint8_t val = sec_buf[b];
+                if (val != 0xFF) {
+                    for (int bit = 0; bit < 8; bit++) {
+                        if ((val & (uint8_t)(1 << bit)) == 0) {
+                            uint32_t cand = 2U + (uint32_t)(byte_pos * 8ULL) + (uint32_t)bit;
+                            if (cand < total_cl + 2U) {
+                                return cand;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        bm_cl = exfat_get_next_cluster(bm_cl, false);
+    }
+    return 0;
+}
+
 bool exfat_mount_device(const ata_device_t* dev, uint64_t partition_lba) {
     const ata_device_t* old_dev = g_exfat_dev;
     uint64_t old_lba = g_partition_lba;

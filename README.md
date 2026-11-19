@@ -2,7 +2,7 @@
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 [![Arch](https://img.shields.io/badge/architecture-x86__64%20(Long%20Mode)-blue.svg)]()
-[![Kernel Size](https://img.shields.io/badge/kernel%20size-326%20KB%20%2F%20480%20KB-brightgreen.svg)]()
+[![Kernel Size](https://img.shields.io/badge/kernel%20size-170%20KB%20%2F%20480%20KB-brightgreen.svg)]()
 [![Dual Boot](https://img.shields.io/badge/boot-BIOS%20MBR%20%2B%20UEFI%2064--bit-blueviolet.svg)]()
 [![Filesystem](https://img.shields.io/badge/filesystems-exFAT%20%7C%20NTFS--3G%20%7C%20ISO%209660%20%7C%20UDF%20%7C%20RamFS-purple.svg)]()
 [![UI](https://img.shields.io/badge/GUI-Liquid%20Glass%20%7C%20Mica%20%7C%20Classic%202000-lightgrey.svg)]()
@@ -39,8 +39,8 @@
 
 ---
 
-### 2. Kernel Core Protetto (~326 KB / 480 KB)
-- **Budget Kernel Rispettato**: Dimensione di `kernel.bin` contenuta a **333.568 byte (~325,7 KB)** grazie allo scorporo delle librerie dinamiche in `C:\NewOS\SystemLibrary\`, ampiamente inferiore al vincolo di 480 KB (491.520 byte).
+### 2. Kernel Core Protetto (~170 KB / 480 KB)
+- **Budget Kernel Rispettato**: Dimensione di `kernel.bin` ridotta a **173.996 byte (~170 KB)** grazie allo scorporo sistematico dei sottosistemi, driver avanzati, browser e librerie dinamiche in `C:\NewOS\SystemLibrary\`, ben al di sotto del vincolo di 480 KB (491.520 byte).
 - **Separazione Privilegi Ring 0 / Ring 3**:
   - Istruzioni native `SYSCALL` e `SYSRET` per le chiamate di sistema (`kernel/arch/x86_64/syscall.c`).
   - Protezione della memoria virtuale con Supervisor bit nelle tabelle PML4 (`kernel/mm/paging.c`).
@@ -71,12 +71,13 @@
 
 ---
 
-### 4. Driver Hardware & Periferiche Bare-Metal
-- **Storage**: Controller AHCI SATA (DMA/Interrupt) e ATA/IDE PIO 28-bit + ATAPI per lettori ottici CD/DVD.
+### 4. Driver Hardware, Accelerazione 3D & Periferiche Bare-Metal
+- **ACPI & Bus PCI/PCIe Esteso**: Parsing tabelle ACPI (`RSDP`, `XSDT`, `FADT`, `MADT`, `MCFG`), scansione PCI/PCIe completa fino a **256 bus** con decodifica **BAR a 64-bit**, mapping MMIO (`paging_map_mmio`) e allocatore DMA allineato.
+- **Storage**: Controller **NVMe** (`nvme.c` + `NVME.DLL`), **AHCI SATA** (DMA/Interrupt) e **ATA/IDE** PIO 28-bit + ATAPI per lettori ottici CD/DVD.
 - **USB Stack**: Controller xHCI (USB 3.x/USB4), UHCI (USB 1.1), OHCI, periferiche HID (mouse e tastiera) e USB Mass Storage BOT con AutoPlay automatico e handoff BIOS/OS.
-- **Audio**: Codec stereo AC97 a 44.1 kHz con mixer di sistema e riproduzione di file PCM `.WAV`.
-- **Grafica**: Driver VESA VBE e Bochs/QEMU BGA fino a 1920x1080 @ 32bpp.
-- **Network**: Driver Intel PRO/1000 MT (E1000 Gigabit), Realtek RTL8139 e Wi-Fi con stack Ethernet, ARP, IPv4, ICMP Ping, UDP, TCP, DHCP e DNS nativo RFC 1035.
+- **Audio**: Supporto **Intel HDA** (`hda.c`) e codec stereo **AC97** a 44.1 kHz, con sottosistema mixer e riproduzione `.WAV` scorporati in `AUDIO.DLL`.
+- **Grafica & Accelerazione 3D**: Driver **VMware SVGA II**, **VirtIO-GPU**, **Intel GPU**, VESA VBE / Bochs BGA fino a 1920x1080 @ 32bpp, rasterizzatore 3D fallback (`soft3d.c`), accelerazione 2D/DPI (`HWACCEL.DLL`) e pipeline 3D out-of-kernel (`GPU3D.DLL`).
+- **Network**: Driver **Intel PRO/1000 MT (E1000)**, **Realtek RTL8169/8168 Gigabit**, **Realtek RTL8139**, **VirtIO-Net** e Wi-Fi con stack Ethernet, ARP, IPv4, ICMP Ping, UDP, TCP, DHCP, DNS nativo RFC 1035 (`NETSTACK.DLL`) e supporto **TLS/HTTPS** (`NETTLS.DLL`).
 
 ---
 
@@ -94,7 +95,7 @@
 ### 6. Applicazioni, Pannello di Controllo e Sottosistemi Scorporati
 Tutte le applicazioni accessorie e i tool di sistema sono organizzati come moduli indipendenti:
 - [`explorer/`](file:///c:/Users/morga/Desktop/MyOS/explorer/): **Esplora Risorse** con Web View preview, Tree View laterale, barra indirizzi, dialoghi di proprietà e modalità Impostazioni Moderne.
-- [`control_panel/`](file:///c:/Users/morga/Desktop/MyOS/control_panel/): **Pannello di Controllo** con supporto dual-mode (Vista Classica Windows 2000 e Vista Moderna Impostazioni) e applet per Proprietà Schermo (`DESK.CPL`), Mouse (`MAIN.CPL`), Audio (`MMSYS.CPL`), Alimentazione (`POWERCFG.CPL`), Gestione Periferiche (`DEVMGMT.CPL`) e Sistema (`SYSDM.CPL`).
+- [`control_panel/`](file:///c:/Users/morga/Desktop/MyOS/control_panel/): **Pannello di Controllo** con supporto dual-mode (Vista Classica Windows 2000 e Vista Moderna Impostazioni/Copenhagen) e applet per Proprietà Schermo (`DESK.CPL`), Mouse (`MAIN.CPL`), Audio (`MMSYS.CPL`), Alimentazione (`POWERCFG.CPL`), Gestione Periferiche ad albero categorizzato (`DEVMGMT.CPL`) e Sistema (`SYSDM.CPL`).
 - [`oobe/`](file:///c:/Users/morga/Desktop/MyOS/oobe/): **Procedura Guidata OOBE** in 6 passi (Benvenuto, Schermo, Test Audio, Rete, Account, Conclusione).
 - [`notepad/`](file:///c:/Users/morga/Desktop/MyOS/notepad/): **Blocco Note** con supporto editing testo, salvataggio e apertura file.
 - [`calculator/`](file:///c:/Users/morga/Desktop/MyOS/calculator/): **Calcolatrice Digitale** con display numerico ed operazioni standard.
@@ -103,7 +104,7 @@ Tutte le applicazioni accessorie e i tool di sistema sono organizzati come modul
 - [`whatsnew/`](file:///c:/Users/morga/Desktop/MyOS/whatsnew/): **Novità del Sistema** con storico release e funzionalità per gli utenti (tramite `WHATSNEW.DLL`).
 - [`autoplay/`](file:///c:/Users/morga/Desktop/MyOS/autoplay/): **Gestione AutoPlay** per rilevamento e apertura automatica di chiavette USB e dischi.
 - [`taskmgr/`](file:///c:/Users/morga/Desktop/MyOS/taskmgr/): **Gestione Attività** con grafici di utilizzo CPU e memoria, tabella processi e canali IPC.
-- [`WebBrowser/`](file:///c:/Users/morga/Desktop/MyOS/WebBrowser/): **NewSoft Web Browser** con motore di rendering HTML integrato e navigazione web.
+- [`WebBrowser/`](file:///c:/Users/morga/Desktop/MyOS/WebBrowser/): **NewSoft Web Browser** out-of-kernel (`WEBBROWSER.DLL`) con motore HTML/DOM NetSurf/Hubbub (`NETSURF_CORE.DLL`), motore CSS (`CSSENGINE.DLL`), motore JavaScript QuickJS (`JSENGINE.DLL`), decodifica immagini PNG/JPEG/WebP (`IMGCODEC.DLL`) e supporto HTTPS/TLS (`NETTLS.DLL`).
 
 | Impostazioni Moderne (`SETTINGS.DLL`) | Proprietà Mouse e Schemi (`MAIN.CPL` / `CURSORMGR.DLL`) |
 | :---: | :---: |
@@ -118,12 +119,11 @@ Tutte le applicazioni accessorie e i tool di sistema sono organizzati come modul
 ---
 
 ### 7. Librerie Dinamiche Out-of-Kernel (`C:\NewOS\SystemLibrary\`)
-In base alla Direttiva Architetturale (Regola 9), i sottosistemi grafici e applicativi avanzati risiedono fuori dal Kernel Mode come librerie dinamiche `.DLL` firmate (`NOSM` + CRC32) affiancate dai rispettivi descrittori `.INI`:
-- **`THEMEMGR.DLL` & `THEMEMGR.INI`**: Scansione autonoma, decodifica file `.THEMES` / `.THM`, parsing INI e motore di scripting procedurale `[RenderScripts]`.
-- **`CURSORMGR.DLL` & `CURSORMGR.INI`**: Gestione schemi di puntatori del mouse, decodifica `.CUR`/`.ANI` e ombre alpha.
-- **`SETTINGS.DLL` & `SETTINGS.INI`**: Interfaccia grafica moderna delle Impostazioni di Sistema con navigazione per categorie e barra di scorrimento.
-- **`WHATSNEW.DLL` & `WHATSNEW.INI`**: Finestra dinamica delle novità post-aggiornamento.
-- **`RULES.DLL` & `RULES.INI`**: Decodifica e visualizzazione protetta delle direttive ufficiali `.NOR`.
+In base alla Direttiva Architetturale (Regola 9), i sottosistemi grafici, driver avanzati, browser e applicativi risiedono fuori dal Kernel Mode come **28 librerie dinamiche `.DLL`** firmate (`NOSM` + CRC32) affiancate dai rispettivi descrittori `.INI`:
+- **Temi, UI & Grafica**: `THEMEMGR.DLL` (motore temi e `[RenderScripts]`), `CURSORMGR.DLL` (schemi cursori `.CUR`/`.ANI`), `COPENHAGEN.DLL` (stili UI moderni Copenhagen), `SETTINGS.DLL` (Impostazioni Moderne), `HWACCEL.DLL` (accelerazione 2D e DPI scaling), `GPU3D.DLL` (accelerazione grafica 3D), `FONTMGR.DLL` (font TrueType/Unicode `SANS.TTF`/`UNICODE.FNT`), `IMGCODEC.DLL` (decodifica PNG/JPEG/WebP/BMP), `COMDLG.DLL` (dialoghi comuni Apertura/Salvataggio/Sfoglia).
+- **Applicazioni, Shell & Pannello di Controllo**: `EXPLORER.DLL`, `SYSAPPS.DLL`, `CPLEXT2.DLL`, `RECYCLE.DLL`, `KEYBCPL.DLL`, `NETCPL.DLL`, `TIMEDATE.DLL`, `USERACCT.DLL`, `WHATSNEW.DLL`, `RULES.DLL`.
+- **Browser Web & Rete TLS**: `WEBBROWSER.DLL`, `NETSURF_CORE.DLL` (HTML/DOM NetSurf/Hubbub), `CSSENGINE.DLL` (`libcss`), `JSENGINE.DLL` (QuickJS), `NETTLS.DLL` (TLS/HTTPS).
+- **Driver & Estensioni Hardware/FS**: `NVME.DLL` (driver NVMe), `AUDIO.DLL` (mixer audio AC97/Intel HDA e `.WAV`), `NETSTACK.DLL` (stack TCP/IP/DHCP/DNS), `FS_EXT.DLL` (estensioni filesystem NTFS-3G / ISO 9660 / UDF).
 
 #### Gestione Avanzata dei File Tema (`.THEMES` e `.THM`)
 Il sistema di personalizzazione visiva di NewOS è **interamente pilotato dal file del tema**:
@@ -151,12 +151,12 @@ Il sistema di personalizzazione visiva di NewOS è **interamente pilotato dal fi
 ├── kernel/                  # Codice sorgente del Kernel 64-bit
 │   ├── apps/                # Shell CMD, Regedit, Boot Menu e header bridge
 │   ├── arch/x86_64/         # Syscall, SMP, Scheduler, IDT, PIC, AP trampoline, entry asm
-│   ├── drivers/             # Driver AC97, AHCI, ATA, PCI, VGA, Power, Timer, USB (xHCI/UHCI/OHCI), Net
+│   ├── drivers/             # Driver ACPI, PCI/PCIe (256 bus/BAR64), NVMe, Intel HDA, AC97, AHCI, ATA, GPU (VMware/VirtIO/Intel/Soft3D), USB (xHCI/UHCI/OHCI), Net (E1000/RTL8169/RTL8139/VirtIO)
 │   ├── fs/                  # exFAT, NTFS-3G, ISO 9660, UDF, RamFS, VFS e Registry cifrato AES-256
-│   ├── gui/                 # Window Manager, griglia desktop, menu contestuale, loader DLL (theme/cursor/settings)
+│   ├── gui/                 # Window Manager, griglia desktop, menu contestuale, client loader DLL (theme/cursor/settings/hwaccel/gpu3d/comdlg/font)
 │   ├── ipc/                 # Meccanismi di comunicazione inter-processo (IPC)
 │   ├── lib/                 # Librerie freestanding, AES-256, gestione e migrazione profili utente
-│   ├── mm/                  # Gestione memoria, heap manager e paging PML4 a 4 livelli
+│   ├── mm/                  # Gestione memoria, heap manager, paging PML4, mapping MMIO e allocatore DMA
 │   └── net/                 # Network stack (Ethernet, ARP, IPv4, ICMP, UDP, TCP, DHCP, DNS, TLS)
 ├── loginscreen/             # Schermata di autenticazione utente (LOGIN.MOD)
 ├── logoutscreen/            # Schermata di disconnessione e spegnimento (LOGOUT.MOD)
@@ -165,12 +165,13 @@ Il sistema di personalizzazione visiva di NewOS è **interamente pilotato dal fi
 ├── oobe/                    # Sottosistema procedura guidata OOBE (oobe.c, oobe.ini, LEGGIMI.TXT)
 ├── player/                  # Sottosistema NewOS Media Player (player.c, player.ini, LEGGIMI.TXT)
 ├── Release/                 # Cartella di rilascio ufficiale (BOOTX64.EFI, SYSTEM.PAK, moduli .MOD)
-├── resources/               # Icone 32/16 bit, sfondi, schemi cursori, suoni PCM .WAV e font bitmap
+├── resources/               # Icone 32/16 bit, sfondi, schemi cursori, suoni PCM .WAV e font (SANS.TTF, UNICODE.FNT)
 ├── rules/                   # Regole di comportamento e sviluppo (comportamenti.md)
 ├── rules_viewer/            # Loader visualizzatore regole .NOR (rules_viewer.c, LEGGIMI.TXT)
 ├── sources/                 # Snapshot portabile dei sorgenti distribuito nell'immagine ISO
-├── SystemLibrary/           # Librerie dinamiche out-of-kernel (.DLL e .INI: THEMEMGR, CURSORMGR, SETTINGS, WHATSNEW, RULES)
+├── SystemLibrary/           # 28 librerie dinamiche out-of-kernel (.DLL e .INI: browser, JS/CSS, TLS, UI, driver hardware, app)
 ├── taskmgr/                 # Sottosistema Gestione Attività (taskmgr.c, taskmgr.ini, LEGGIMI.TXT)
+├── third_party/             # Librerie esterne integrate out-of-kernel (QuickJS, NetSurf libcss/libdom/libhubbub, stb, libwebp)
 ├── tools/                   # Toolchain Node.js/PowerShell (build.js, mkexfat.js, mkiso.js, suite di test QEMU)
 ├── WebBrowser/              # NewSoft Web Browser nativo
 ├── whatsnew/                # Loader Novità del Sistema (whatsnew.c, whatsnew.ini, LEGGIMI.TXT)

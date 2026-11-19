@@ -1,5 +1,9 @@
 #include <fs/vfs_mount.h>
 #include <drivers/ata.h>
+#include <drivers/ahci.h>
+#include <drivers/usb/xhci.h>
+#include <drivers/usb/uhci.h>
+#include <drivers/usb/ohci.h>
 #include <fs/exfat.h>
 #include <string.h>
 
@@ -286,4 +290,77 @@ int vfs_list_drives(char* out_letters, int max_drives) {
         }
     }
     return count;
+}
+
+bool vfs_get_drive_bus_info(char drive_letter, vfs_bus_info_t* out_info) {
+    if (!out_info) return false;
+    memset(out_info, 0, sizeof(vfs_bus_info_t));
+    char letter = normalize_drive_letter(drive_letter);
+    out_info->drive_letter = (uint8_t)letter;
+
+    const vfs_mount_t* mnt = NULL;
+    for (int i = 0; i < g_num_mounts; i++) {
+        if (g_mounts[i].is_mounted && g_mounts[i].drive_letter == letter) {
+            mnt = &g_mounts[i];
+            break;
+        }
+    }
+
+    if (letter == 'A' || letter == 'B') {
+        out_info->bus_type = VFS_BUS_FDC;
+        out_info->bus_max_kbps = 64;
+        strncpy(out_info->controller, "Floppy FDC", sizeof(out_info->controller) - 1);
+        return true;
+    }
+
+    if (mnt && mnt->driver && strcasecmp(mnt->driver->name, "RamFS") == 0) {
+        out_info->bus_type = VFS_BUS_RAMFS;
+        out_info->bus_max_kbps = 6400000;
+        strncpy(out_info->controller, "RAM Memory Bus", sizeof(out_info->controller) - 1);
+        return true;
+    }
+
+    if (letter == 'R') {
+        out_info->bus_type = VFS_BUS_RAMFS;
+        out_info->bus_max_kbps = 6400000;
+        strncpy(out_info->controller, "RAM Memory Bus", sizeof(out_info->controller) - 1);
+        return true;
+    }
+
+    if (letter == 'U') {
+        if (xhci_is_active()) {
+            out_info->bus_type = VFS_BUS_USB_XHCI;
+            out_info->bus_max_kbps = 500000;
+            strncpy(out_info->controller, "USB 3.0 xHCI", sizeof(out_info->controller) - 1);
+        } else if (uhci_is_active() || ohci_is_active()) {
+            out_info->bus_type = VFS_BUS_USB_UHCI;
+            out_info->bus_max_kbps = 1500;
+            strncpy(out_info->controller, "USB 1.1 UHCI/OHCI", sizeof(out_info->controller) - 1);
+        } else {
+            out_info->bus_type = VFS_BUS_USB_EHCI;
+            out_info->bus_max_kbps = 60000;
+            strncpy(out_info->controller, "USB 2.0 EHCI", sizeof(out_info->controller) - 1);
+        }
+        return true;
+    }
+
+    const ata_device_t* dev = mnt ? (const ata_device_t*)mnt->priv_data : NULL;
+    if ((mnt && mnt->driver && (strcasecmp(mnt->driver->name, "ISO9660") == 0 || strcasecmp(mnt->driver->name, "UDF") == 0)) ||
+        (dev && dev->is_atapi) || letter == 'D') {
+        out_info->bus_type = VFS_BUS_ATAPI_CD;
+        out_info->bus_max_kbps = 33000;
+        strncpy(out_info->controller, "ATAPI CD/DVD", sizeof(out_info->controller) - 1);
+        return true;
+    }
+
+    if (ahci_is_active()) {
+        out_info->bus_type = VFS_BUS_SATA_AHCI;
+        out_info->bus_max_kbps = 600000;
+        strncpy(out_info->controller, "SATA AHCI", sizeof(out_info->controller) - 1);
+    } else {
+        out_info->bus_type = VFS_BUS_ATA_IDE;
+        out_info->bus_max_kbps = 133000;
+        strncpy(out_info->controller, "ATA/IDE UDMA", sizeof(out_info->controller) - 1);
+    }
+    return true;
 }

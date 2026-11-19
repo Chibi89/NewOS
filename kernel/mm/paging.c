@@ -175,3 +175,46 @@ uint64_t paging_get_phys(uint64_t* pml4, uint64_t virt) {
 
     return (pt[pt_idx] & ~0xFFFULL) | (virt & 0xFFFULL);
 }
+
+volatile void* paging_map_mmio(uint64_t phys_addr, uint64_t size) {
+    if (phys_addr == 0 || size == 0) return NULL;
+    uint64_t start = phys_addr & ~0xFFFULL;
+    uint64_t end = (phys_addr + size + 0xFFFULL) & ~0xFFFULL;
+    uint64_t* pml4 = (uint64_t*)g_kernel_cr3;
+
+    for (uint64_t addr = start; addr < end; addr += PAGE_SIZE) {
+        if (pml4) {
+            uint64_t pml4_idx = (addr >> 39) & 0x1FF;
+            uint64_t pdpt_idx = (addr >> 30) & 0x1FF;
+            uint64_t pd_idx   = (addr >> 21) & 0x1FF;
+            if (pml4[pml4_idx] & PAGE_PRESENT) {
+                uint64_t* pdpt = (uint64_t*)(pml4[pml4_idx] & ~0xFFFULL);
+                if (pdpt[pdpt_idx] & PAGE_PRESENT) {
+                    uint64_t* pd = (uint64_t*)(pdpt[pdpt_idx] & ~0xFFFULL);
+                    if ((pd[pd_idx] & (PAGE_PRESENT | PAGE_HUGE)) == (PAGE_PRESENT | PAGE_HUGE)) {
+                        pd[pd_idx] |= (PAGE_WRITABLE | PAGE_NO_CACHE | PAGE_WRITETHROUGH);
+                        paging_invalidate_page(addr);
+                        continue;
+                    }
+                }
+            }
+        }
+        paging_map_page(NULL, addr, addr, PAGE_PRESENT | PAGE_WRITABLE | PAGE_NO_CACHE | PAGE_WRITETHROUGH);
+    }
+    return (volatile void*)phys_addr;
+}
+
+void* dma_alloc(size_t size, size_t align, uint64_t* out_phys) {
+    if (align < 16) align = 16;
+    void* virt = kmalloc_aligned(size, align);
+    if (!virt) {
+        if (out_phys) *out_phys = 0;
+        return NULL;
+    }
+    memset(virt, 0, size);
+    if (out_phys) {
+        uint64_t phys = paging_get_phys(NULL, (uint64_t)virt);
+        *out_phys = phys ? phys : (uint64_t)virt;
+    }
+    return virt;
+}

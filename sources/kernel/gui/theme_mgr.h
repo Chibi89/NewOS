@@ -136,7 +136,7 @@ typedef struct {
     bool (*render_script)(const char* script, int32_t x, int32_t y, int32_t w, int32_t h, int32_t radius, uint32_t flags);
 } theme_mgr_exports_t;
 
-// Inizializza il gestore temi e scansiona la cartella specificata (se NULL, usa "C:/NewOS/Resource/Themes")
+// Inizializza il gestore temi e scansiona la cartella specificata (se NULL, usa "C:/NewOS/Resources/Themes")
 int theme_mgr_init(const char* custom_dir);
 
 // Scansiona la directory e popola dinamicamente tutti i file .THEMES e .THM

@@ -66,6 +66,7 @@ uint32_t exfat_get_root_cluster(void);
 uint32_t exfat_cluster_size(void);
 uint64_t exfat_cluster_to_lba(uint32_t cluster);
 uint32_t exfat_get_next_cluster(uint32_t cluster, bool no_fat_chain);
+uint32_t exfat_find_free_cluster(void);
 
 // Ricerca un elemento all'interno di una directory (tramite il cluster di inizio della dir)
 bool exfat_find_in_dir(uint32_t dir_cluster, const char* name, exfat_item_info_t* out_info);

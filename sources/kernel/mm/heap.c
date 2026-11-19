@@ -5,6 +5,7 @@ typedef struct block_header {
     size_t size;
     bool is_free;
     struct block_header* next;
+    uint64_t reserved_align; // Garantisce sizeof(block_header_t) == 32 (allineato a 16 byte per SSE2)
 } block_header_t;
 
 static uint8_t* heap_start = NULL;
@@ -12,13 +13,17 @@ static size_t   heap_total_size = 0;
 static block_header_t* free_list = NULL;
 
 void heap_init(uint64_t start_address, size_t size) {
-    heap_start = (uint8_t*)start_address;
-    heap_total_size = size;
+    uint64_t aligned = (start_address + 15ULL) & ~15ULL;
+    size_t diff = (size_t)(aligned - start_address);
+    if (size <= diff + sizeof(block_header_t)) return;
+    heap_start = (uint8_t*)aligned;
+    heap_total_size = size - diff;
 
     free_list = (block_header_t*)heap_start;
-    free_list->size = size - sizeof(block_header_t);
+    free_list->size = heap_total_size - sizeof(block_header_t);
     free_list->is_free = true;
     free_list->next = NULL;
+    free_list->reserved_align = 0;
 }
 
 void* kmalloc(size_t size) {

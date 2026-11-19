@@ -152,6 +152,10 @@ bool vfs_init(void) {
     // R: -> Disco RAM in memoria ad altissima velocità
     vfs_mount_drive('R', "RamFS", "Disco RAM (R:)", 0, 0, false, NULL);
 
+    // Carica dinamicamente FS_EXT.DLL (NTFS/UDF) ora che C: e' montato
+    ntfs_init();
+    udf_init();
+
     // 3. Montaggio di tutti gli altri Hard Disk / SSD secondari rilevati sulla scheda madre:
     // Il disco C: e' SEMPRE e RIGOROSAMENTE il sistema operativo in esecuzione.
     // Se altri dischi hanno partizioni con lettera C:, vengono riassegnati alla prima lettera non allocata.

@@ -1,0 +1,36 @@
+CompileFlags:
+  Add:
+    - -target
+    - x86_64-unknown-none-elf
+    - -ffreestanding
+    - -fno-builtin
+    - -nostdlib
+    - -Wno-unused-function
+    - -Wno-unused-parameter
+    - -Ikernel
+    - -Ikernel/include
+    - -ISystemLibrary
+    - -ISystemLibrary/quickjs_shim
+    - -ISystemLibrary/netsurf_shim
+    - -IWebBrowser
+    - -IBootSetup
+    - -IMultimediaCodec
+    - -Iexplorer
+    - -Ioobe
+    - -Inotepad
+    - -Icalculator
+    - -Iplayer
+    - -Irules_viewer
+    - -Iwhatsnew
+    - -Iautoplay
+    - -Itaskmgr
+    - -Icontrol_panel
+    - -Ithird_party/stb
+    - -Ithird_party/quickjs/quickjs-0.8.0
+    - -Ithird_party/netsurf/netsurf-all-3.11/libcss/include
+    - -Ithird_party/netsurf/netsurf-all-3.11/libcss/src
+    - -Ithird_party/netsurf/netsurf-all-3.11/libdom/include
+    - -Ithird_party/netsurf/netsurf-all-3.11/libhubbub/include
+    - -Ithird_party/netsurf/netsurf-all-3.11/libhubbub/src
+    - -Ithird_party/netsurf/netsurf-all-3.11/libparserutils/include
+    - -Ithird_party/netsurf/netsurf-all-3.11/libwapcaplet/include

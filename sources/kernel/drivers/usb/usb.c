@@ -5,7 +5,6 @@
 #include <drivers/usb/usb_hid.h>
 #include <drivers/usb/usb_msc.h>
 #include <drivers/usb/usb_hub.h>
-#include <drivers/usb/usb_net.h>
 #include <string.h>
 
 static usb_device_t g_usb_devices[USB_MAX_DEVICES];
@@ -31,7 +30,6 @@ void usb_subsystem_init(void) {
     usb_hid_init();
     usb_msc_init();
     usb_hub_init();
-    usb_net_init();
 }
 
 int usb_get_device_count(void) {

@@ -97,7 +97,13 @@ void gfx_draw_mini_monitor(int32_t x, int32_t y, int bg_type);
 uint32_t gfx_get_width(void);
 uint32_t gfx_get_height(void);
 uint32_t gfx_get_pitch_bytes(void);
+uint64_t gfx_get_lfb_phys(void);
 bool     gfx_set_resolution(uint32_t width, uint32_t height);
+void     gfx_set_ui_scale(uint32_t scale_percent);
+uint32_t gfx_get_ui_scale(void);
+int32_t  gfx_scale(int32_t val);
+uint32_t gfx_get_font_w(void);
+uint32_t gfx_get_font_h(void);
 void     gfx_draw_image(int32_t x, int32_t y, const image_t* img);
 
 // ─── Primitives Liquid Glass ─────────────────────────────────────────────

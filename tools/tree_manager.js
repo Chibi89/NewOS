@@ -52,8 +52,8 @@ function createWavSample(durationSec = 2.0, freq = 440) {
         const t = i / sampleRate;
         const envelope = Math.exp(-t * 1.2);
         const sampleVal = Math.sin(2 * Math.PI * freq * t) * 0.6 +
-                          Math.sin(2 * Math.PI * (freq * 1.25) * t) * 0.25 +
-                          Math.sin(2 * Math.PI * (freq * 1.5) * t) * 0.15;
+            Math.sin(2 * Math.PI * (freq * 1.25) * t) * 0.25 +
+            Math.sin(2 * Math.PI * (freq * 1.5) * t) * 0.15;
         const val16 = Math.max(-32767, Math.min(32767, Math.floor(sampleVal * envelope * 22000)));
         buf.writeInt16LE(val16, offset);
         buf.writeInt16LE(val16, offset + 2);
@@ -195,9 +195,10 @@ function organizeBuildBin(rootDir, binDir) {
         'NewOS/Resources/Screens',
         'NewOS/Resources/Icons',
         'NewOS/Resources/Web',
-        'NewOS/Resource/cursor',
-        'NewOS/Resource/wallpapers',
-        'NewOS/Resource/Themes',
+        'NewOS/Resources/Cursor',
+        'NewOS/Resources/Themes',
+        'NewOS/Resources/UIStyle',
+        'NewOS/Resources/Fonts',
         'NewOS/Font',
         'NewOS/Help',
         'NewOS/Diagnostic',
@@ -261,19 +262,17 @@ function organizeBuildBin(rootDir, binDir) {
     // 2. Popola Wallpapers e Risorse
     const wpDir = path.join(rootDir, 'resources', 'wallpaper');
     const dstWp1 = path.join(binDir, 'NewOS', 'Resources', 'Wallpapers');
-    const dstWp2 = path.join(binDir, 'NewOS', 'Resource', 'wallpapers');
     const wpFiles = ['HERO.BMP', 'HERO.JPG', 'FLOW.BMP', 'FLOW.JPG', 'BLISS.BMP', 'BLISS.JPG', 'THEME_A.BMP', 'THEME_A.JPG'];
     for (const wf of wpFiles) {
         const src = path.join(wpDir, wf);
         if (fs.existsSync(src)) {
             fs.copyFileSync(src, path.join(dstWp1, wf));
-            fs.copyFileSync(src, path.join(dstWp2, wf));
         }
     }
 
-    // Cursori del mouse (C:\NewOS\Resource\cursor\)
+    // Cursori del mouse (C:\NewOS\Resources\Cursor\)
     const curSrc = path.join(rootDir, 'resources', 'cursor');
-    const curDst = path.join(binDir, 'NewOS', 'Resource', 'cursor');
+    const curDst = path.join(binDir, 'NewOS', 'Resources', 'Cursor');
     if (fs.existsSync(curSrc)) {
         fs.cpSync(curSrc, curDst, { recursive: true });
     }
@@ -321,6 +320,14 @@ function organizeBuildBin(rootDir, binDir) {
         fs.copyFileSync(iconSrc, path.join(dstIcons, 'ICONS.BIN'));
     }
 
+    // Font Unicode + TrueType Roboto (C:\NewOS\Resources\Fonts\UNICODE.FNT & SANS.TTF)
+    const dstFonts = path.join(binDir, 'NewOS', 'Resources', 'Fonts');
+    if (!fs.existsSync(dstFonts)) fs.mkdirSync(dstFonts, { recursive: true });
+    const ufntSrc = path.join(rootDir, 'Resources', 'Fonts', 'UNICODE.FNT');
+    if (fs.existsSync(ufntSrc)) fs.copyFileSync(ufntSrc, path.join(dstFonts, 'UNICODE.FNT'));
+    const ttfSrc = path.join(rootDir, 'Resources', 'Fonts', 'SANS.TTF');
+    if (fs.existsSync(ttfSrc)) fs.copyFileSync(ttfSrc, path.join(dstFonts, 'SANS.TTF'));
+
     // Risorse Web per il Web Browser (C:\NewOS\Resources\Web\)
     const webDst = path.join(binDir, 'NewOS', 'Resources', 'Web');
     if (!fs.existsSync(webDst)) fs.mkdirSync(webDst, { recursive: true });
@@ -347,7 +354,7 @@ function organizeBuildBin(rootDir, binDir) {
     // 4. Popola Help (C:\NewOS\Help\)
     const helpDir = path.join(binDir, 'NewOS', 'Help');
     const manualeContent =
-`================================================================
+        `================================================================
 Manuale Utente Ufficiale - NewOS V1 (64-bit Edition)
 (C) Newspoint Software - NewSoft - NewOS V1
 ================================================================
@@ -387,12 +394,19 @@ Manuale Utente Ufficiale - NewOS V1 (64-bit Edition)
     fs.writeFileSync(path.join(diagDir, 'SYSINFO.TXT'), "NewOS V1 System Telemetry: CPU x86_64, VBE 1024x768x32bpp, RAM 256MB+, exFAT C:\\.\n");
     fs.writeFileSync(path.join(diagDir, 'DIAG.LOG'), "[DIAGNOSTIC] Verifica hardware e integrita' kernel completata con successo.\n");
 
-    // 6. Popola Themes (esclusivamente C:\NewOS\Resource\Themes\)
-    const resThemeDir = path.join(binDir, 'NewOS', 'Resource', 'Themes');
-    if (!fs.existsSync(resThemeDir)) fs.mkdirSync(resThemeDir, { recursive: true });
+    // 6. Popola Themes (unificato in C:\NewOS\Resources\Themes\ ed elimina eventuale vecchia NewOS\Resource\)
+    const oldResDir = path.join(binDir, 'NewOS', 'Resource');
+    if (fs.existsSync(oldResDir)) {
+        fs.rmSync(oldResDir, { recursive: true, force: true });
+    }
+    const resThemeDir = path.join(binDir, 'NewOS', 'Resources', 'Themes');
+    if (fs.existsSync(resThemeDir)) {
+        fs.rmSync(resThemeDir, { recursive: true, force: true });
+    }
+    fs.mkdirSync(resThemeDir, { recursive: true });
 
-    // Sincronizza i file di tema unicamente da SystemPackFileWach/NewOS/Resource/Themes
-    const syspackResThemes = path.join(__dirname, '..', 'SystemPackFileWach', 'NewOS', 'Resource', 'Themes');
+    // Sincronizza i file di tema da SystemPackFileWach/NewOS/Resources/Themes
+    const syspackResThemes = path.join(__dirname, '..', 'SystemPackFileWach', 'NewOS', 'Resources', 'Themes');
     if (fs.existsSync(syspackResThemes)) {
         const themeFiles = fs.readdirSync(syspackResThemes);
         for (const tf of themeFiles) {
@@ -410,7 +424,7 @@ Manuale Utente Ufficiale - NewOS V1 (64-bit Edition)
     // 8. Popola SystemProgram (C:\NewOS\SystemProgram\)
     const sysProgDir = path.join(binDir, 'NewOS', 'SystemProgram');
     for (const prog of ['PLAYER.EXE', 'REGEDIT.EXE', 'TASKMGR.EXE', 'EXPLORER.EXE', 'CMD.EXE', 'CALC.EXE', 'NOTEPAD.EXE', 'RULES.EXE', 'WEBBROWSER.EXE', 'OOBE.EXE', 'SETUP.EXE', 'DISKMGMT.EXE', 'CHKDSK.EXE', 'EVENTVWR.EXE',
-                       'DISPLAY.CPL', 'POWER.CPL', 'NETWORK.CPL', 'DEVMGMT.CPL', 'SOUND.CPL', 'DATEANDTIME.CPL', 'PROGRAMS.CPL', 'ACCESSIBILITY.CPL', 'REGEDIT.CPL']) {
+        'DISPLAY.CPL', 'POWER.CPL', 'NETWORK.CPL', 'DEVMGMT.CPL', 'SOUND.CPL', 'DATEANDTIME.CPL', 'PROGRAMS.CPL', 'ACCESSIBILITY.CPL', 'REGEDIT.CPL']) {
         fs.writeFileSync(path.join(sysProgDir, prog), peStub);
     }
     const appInis = [
@@ -441,8 +455,8 @@ Manuale Utente Ufficiale - NewOS V1 (64-bit Edition)
         let srcMod = path.join(newosBootDir, mod);
         if (!fs.existsSync(srcMod)) srcMod = path.join(binDir, mod);
         if (fs.existsSync(srcMod)) {
-            try { fs.copyFileSync(srcMod, path.join(sysProgDir, mod)); } catch (e) {}
-            try { fs.copyFileSync(srcMod, path.join(newosBootDir, mod)); } catch (e) {}
+            try { fs.copyFileSync(srcMod, path.join(sysProgDir, mod)); } catch (e) { }
+            try { fs.copyFileSync(srcMod, path.join(newosBootDir, mod)); } catch (e) { }
         }
     }
     const bootSetupDir = path.join(binDir, 'BootSetup');
@@ -450,7 +464,7 @@ Manuale Utente Ufficiale - NewOS V1 (64-bit Edition)
         let srcMod = path.join(newosBootDir, mod);
         if (!fs.existsSync(srcMod)) srcMod = path.join(binDir, mod);
         if (fs.existsSync(srcMod)) {
-            try { fs.copyFileSync(srcMod, path.join(bootSetupDir, mod)); } catch (e) {}
+            try { fs.copyFileSync(srcMod, path.join(bootSetupDir, mod)); } catch (e) { }
         }
     }
 
@@ -460,7 +474,7 @@ Manuale Utente Ufficiale - NewOS V1 (64-bit Edition)
     for (const mod of ['OOBE.MOD', 'OOBE.INI']) {
         const srcMod = path.join(binDir, mod);
         if (fs.existsSync(srcMod)) {
-            try { fs.copyFileSync(srcMod, path.join(oobeDir, mod)); } catch (e) {}
+            try { fs.copyFileSync(srcMod, path.join(oobeDir, mod)); } catch (e) { }
         }
     }
     const oobeIniSrc = path.join(rootDir, 'oobe', 'oobe.ini');
@@ -483,8 +497,8 @@ Manuale Utente Ufficiale - NewOS V1 (64-bit Edition)
         let enc = cipher.update(plainIniText, 'utf8');
         enc = Buffer.concat([enc, cipher.final()]);
 
-        const banner = 
-`[NEWOS-V1-ENCRYPTED-REGISTRY]
+        const banner =
+            `[NEWOS-V1-ENCRYPTED-REGISTRY]
 AVVISO=Accesso in chiaro vincolato all'applicazione di sistema Registry (REGEDIT.EXE).
 Algoritmo=AES-256-CBC-PKCS7
 Status=Encrypted
@@ -610,8 +624,8 @@ HomePage=REG_SZ:about:home
     if (!fs.existsSync(registryDir)) fs.mkdirSync(registryDir, { recursive: true });
 
     fs.writeFileSync(path.join(registryDir, 'REGISTRY.DAT'), encryptedRegistryDat);
-    fs.writeFileSync(path.join(registryDir, 'REGISTRY.LOG'), 
-`[2026-10-18 12:00:00] [AUDIT] Inizializzazione registro NewOS V1 (C:\\NewOS\\Registry\\REGISTRY.DAT) completata.
+    fs.writeFileSync(path.join(registryDir, 'REGISTRY.LOG'),
+        `[2026-10-18 12:00:00] [AUDIT] Inizializzazione registro NewOS V1 (C:\\NewOS\\Registry\\REGISTRY.DAT) completata.
 [2026-10-18 12:00:00] [SICUREZZA] Crittografia AES-256 CBC attiva. Accesso in chiaro vincolato all'app REGEDIT.EXE.
 [2026-10-18 12:00:00] [SICUREZZA] Permessi Logon pre-desktop: SOLA LETTURA. Modifiche consentite solo in ambiente Desktop.
 `);
@@ -619,8 +633,8 @@ HomePage=REG_SZ:about:home
     // Pulizia file legacy posizionati nella radice di NewOS/
     const oldRegDat = path.join(binDir, 'NewOS', 'REGISTRY.DAT');
     const oldRegLog = path.join(binDir, 'NewOS', 'REGISTRY.LOG');
-    if (fs.existsSync(oldRegDat)) { try { fs.unlinkSync(oldRegDat); } catch (e) {} }
-    if (fs.existsSync(oldRegLog)) { try { fs.unlinkSync(oldRegLog); } catch (e) {} }
+    if (fs.existsSync(oldRegDat)) { try { fs.unlinkSync(oldRegDat); } catch (e) { } }
+    if (fs.existsSync(oldRegLog)) { try { fs.unlinkSync(oldRegLog); } catch (e) { } }
 
     // 9c. Popola Rules (C:\NewOS\Rules\) - Regole Architetturali e di Sicurezza di NewOS V1
     const rulesDir = path.join(binDir, 'NewOS', 'Rules');
@@ -741,7 +755,7 @@ REGOLE DI SISTEMA NEWOS V1 - 05: RETE, DIAGNOSTICA E PRIORITA' SERVER
     // Rimozione eventuali file .TXT legacy in Rules
     for (const txtName of ['01_SYSTEM_HIERARCHY.TXT', '02_REGISTRY_SECURITY.TXT', '03_INSTALL_POLICY.TXT', '04_USER_PRIVILEGES.TXT', '05_NETWORK_AND_DEVICES.TXT']) {
         const p = path.join(rulesDir, txtName);
-        if (fs.existsSync(p)) { try { fs.unlinkSync(p); } catch (e) {} }
+        if (fs.existsSync(p)) { try { fs.unlinkSync(p); } catch (e) { } }
     }
 
     // Generazione file proprietari .NOR (NewOS Official Rule)
@@ -853,7 +867,7 @@ void sys_exit(int code);
     if (fs.existsSync(oldTccProg)) {
         try {
             fs.rmSync(oldTccProg, { recursive: true, force: true });
-        } catch (e) {}
+        } catch (e) { }
     }
 
     // Rimuovi eventuale cartella Accessories da ProgramFile
@@ -861,7 +875,7 @@ void sys_exit(int code);
     if (fs.existsSync(oldAccProg)) {
         try {
             fs.rmSync(oldAccProg, { recursive: true, force: true });
-        } catch (e) {}
+        } catch (e) { }
     }
 
     const installPolicy = `================================================================================
@@ -923,7 +937,7 @@ STRUTTURA E REGOLE DI SISTEMA:
             try {
                 fs.copyFileSync(rootCandidate, bootDst);
                 fs.unlinkSync(rootCandidate);
-            } catch (e) {}
+            } catch (e) { }
         }
     }
 
@@ -1063,7 +1077,24 @@ STRUTTURA E REGOLE DI SISTEMA:
         }
     }
 
-    console.log('[OK] Struttura delle cartelle NewOS V1 in build/bin/ popolata con successo (NewOS/Boot centralizzata, MultimediaCodec, SystemLibrary e Catalogo integrati).');
+    // Cartella C:\Recycle.Bin (Cestino reale VFS gestito da COMDLG.DLL)
+    const recycleDir = path.join(binDir, 'Recycle.Bin');
+    if (!fs.existsSync(recycleDir)) fs.mkdirSync(recycleDir, { recursive: true });
+    fs.writeFileSync(path.join(recycleDir, 'VECCHIO_LOG.TXT'), "Log diagnostico di sessione precedente spostato nel Cestino.\r\nPuoi ripristinarlo in C:\\Docs con il pulsante 'Ripristina file'.\r\n");
+    fs.writeFileSync(path.join(recycleDir, 'BOZZA_APPUNTI.TXT'), "Bozza temporanea eliminata dall'utente.\r\n");
+    const idxBuf = Buffer.alloc(1024, 0);
+    idxBuf.write("VECCHIO_LOG.TXT|C:\\Docs\\VECCHIO_LOG.TXT\r\nBOZZA_APPUNTI.TXT|C:\\User\\Morgan\\Desktop\\BOZZA_APPUNTI.TXT\r\n", 0, 'utf8');
+    fs.writeFileSync(path.join(recycleDir, 'RECYCLE.IDX'), idxBuf);
+    fs.writeFileSync(path.join(recycleDir, 'RECYCLE.CFG'), "[RecycleBin]\r\nLimitPreset=0\r\nSuggest=1\r\nBypass=0\r\nConfirm=1\r\nAutoCln=0\r\n");
+
+    // Cartella di sincronizzazione Spazio FTP Remoto (C:\NewOS\FtpCache per COMDLG.DLL)
+    const ftpCacheDir = path.join(binDir, 'NewOS', 'FtpCache');
+    if (!fs.existsSync(ftpCacheDir)) fs.mkdirSync(ftpCacheDir, { recursive: true });
+    fs.writeFileSync(path.join(ftpCacheDir, 'README_FTP.TXT'), "Benvenuto nello spazio FTP remoto NewOS V1 (ftp://10.0.2.2:21/pub)\r\n");
+    fs.writeFileSync(path.join(ftpCacheDir, 'PATCH_V1.INI'), "[RemotePatch]\r\nVersion=1.0.4\r\nChannel=Stable\r\n");
+    fs.writeFileSync(path.join(ftpCacheDir, 'NET_REPORT.TXT'), "Report Telemetria Server FTP Remoto - Stato OK\r\n");
+
+    console.log('[OK] Struttura delle cartelle NewOS V1 in build/bin/ popolata con successo (NewOS/Boot centralizzata, MultimediaCodec, SystemLibrary, Recycle.Bin e Catalogo integrati).');
 }
 
 module.exports = { organizeBuildBin, createDriverSys, createPeStub, DRIVERS_SPEC };

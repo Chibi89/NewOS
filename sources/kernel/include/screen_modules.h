@@ -2,6 +2,7 @@
 #define SCREEN_MODULES_H
 
 #include <drivers/mouse.h>
+#include <fs/vfs.h>
 #include <types.h>
 #include <user.h>
 
@@ -152,6 +153,69 @@ typedef struct {
   bool (*dhcp_discover)(void);
   void (*net_nic_poll)(void);
   bool (*icmp_ping_ip)(uint32_t ip, uint32_t count, void *stats, void *on_reply);
+
+  // Estensioni Sistema, Orologio RTC, Migrazione Profilo e UI Temizzata per Applet .DLL
+  void (*rtc_get_time)(void *out_rtc_time);
+  bool (*user_create_or_migrate)(const char *new_username, const char *password);
+  bool (*registry_get_value_sz)(const char *path, const char *val_name, char *out_buf, size_t max_len);
+  bool (*registry_get_value_dword)(const char *path, const char *val_name, uint32_t *out_val);
+  const void *(*wm_get_current_theme_props)(void);
+  int (*wm_get_theme)(void);
+  void (*wm_draw_themed_button)(int32_t x, int32_t y, int32_t w, int32_t h, const char *label, bool pressed);
+  void (*wm_draw_themed_tab)(int32_t x, int32_t y, int32_t w, int32_t h, const char *label, bool active);
+  void (*gfx_fill_rounded_alpha)(int32_t x, int32_t y, int32_t w, int32_t h, int32_t radius, uint32_t color, uint8_t alpha);
+
+  // VFS Avanzato, Appunti Globali (Clipboard) e Socket TCP per COMDLG.DLL & FTP Stack
+  bool (*vfs_unlink)(const char *path);
+  bool (*vfs_rename)(const char *old_path, const char *new_path);
+  bool (*vfs_mkdir)(const char *path);
+  void (*clipboard_set_text)(const char *text);
+  const char *(*clipboard_get_text)(void);
+  bool (*clipboard_push_file)(const char *filepath, bool is_cut);
+  int (*clipboard_get_file_count)(void);
+  const char *(*clipboard_get_file)(int index, bool *out_is_cut);
+  void (*clipboard_clear_files)(void);
+  void *(*tcp_create_conn)(void);
+  bool (*tcp_connect)(void *conn, uint32_t remote_ip, uint16_t remote_port);
+  int (*tcp_send)(void *conn, const void *data, uint16_t len);
+  int (*tcp_recv)(void *conn, void *buf, uint16_t max_len);
+  void (*tcp_close)(void *conn);
+  void (*tcp_destroy_conn)(void *conn);
+
+  // Streaming VFS a blocchi e telemetria bus hardware reale per misurazione live
+  void *(*vfs_open)(const char *path);
+  int32_t (*vfs_read)(void *file, void *buf, uint32_t count);
+  int32_t (*vfs_write)(void *file, const void *buf, uint32_t count);
+  void (*vfs_close)(void *file);
+  uint32_t (*vfs_file_size)(const char *path);
+  void (*vfs_flush)(void);
+  bool (*vfs_get_drive_bus_info)(char drive_letter, vfs_bus_info_t *out_info);
+
+  // Creazione finestre autonome e lancio impostazioni per moduli UI Style (.DLL)
+  void *(*wm_create_window)(const char *title, int32_t x, int32_t y, int32_t w, int32_t h, int app_type);
+  void (*app_control_panel_open)(void);
+
+  // Socket TCP/IP & DNS per moduli di rete/TLS/Web out-of-kernel (NETTLS.DLL)
+  int (*net_socket)(int domain, int type, int protocol);
+  int (*net_connect)(int sockfd, const void *addr);
+  int (*net_send)(int sockfd, const void *buf, size_t len, int flags);
+  int (*net_recv)(int sockfd, void *buf, size_t len, int flags);
+  int (*net_close)(int sockfd);
+  void (*net_poll)(void);
+  uint32_t (*dns_resolve)(const char *hostname);
+
+  // Caricamento moduli secondari, Font TrueType e HTTP/TLS per app out-of-kernel
+  bool (*screen_mgr_verify_module)(const void *buffer, uint32_t size,
+                                   uint32_t expected_type,
+                                   const char *expected_name);
+  bool (*fontmgr_get_ttf_glyph)(uint32_t codepoint, int pixel_height,
+                                uint8_t *out_alpha, int max_bytes,
+                                int *w, int *h, int *xoff, int *yoff,
+                                int *advance);
+  bool (*nettls_http_get)(const char *url, uint32_t max_body_bytes,
+                          void *out_resp);
+  void (*nettls_free_response)(void *resp);
+  const void *ext_api;
 } kernel_api_t;
 
 // Parametri e risultati Bootscreen

@@ -11,6 +11,7 @@ typedef enum {
     CTX_ACTION_OPEN_PRIMARY,   // Azione determinata dal Registro (es. Riproduci audio, Modifica config, Imposta sfondo, ecc.)
     CTX_ACTION_CUT,
     CTX_ACTION_COPY,
+    CTX_ACTION_MOVE,
     CTX_ACTION_PASTE,
     CTX_ACTION_DELETE,
     CTX_ACTION_RENAME,

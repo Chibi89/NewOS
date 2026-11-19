@@ -23,6 +23,28 @@ typedef struct {
     bool     is_directory;
 } vfs_dirent_t;
 
+// Nomenclatura standard del bus fisico sottostante un'unita' montata
+typedef enum {
+    VFS_BUS_UNKNOWN   = 0,
+    VFS_BUS_SATA_AHCI = 1,
+    VFS_BUS_ATA_IDE   = 2,
+    VFS_BUS_ATAPI_CD  = 3,
+    VFS_BUS_USB_XHCI  = 4,
+    VFS_BUS_USB_EHCI  = 5,
+    VFS_BUS_USB_UHCI  = 6,
+    VFS_BUS_FDC       = 7,
+    VFS_BUS_RAMFS     = 8,
+    VFS_BUS_NET_ETH   = 9
+} vfs_bus_type_t;
+
+typedef struct {
+    uint8_t  drive_letter;
+    uint8_t  bus_type;       // vfs_bus_type_t
+    uint16_t reserved;
+    uint32_t bus_max_kbps;   // Banda nominale max del bus in KB/s
+    char     controller[32]; // Es. "SATA AHCI", "USB xHCI", "ATAPI", "RAMFS"
+} vfs_bus_info_t;
+
 typedef struct {
     char     name[VFS_MAX_FILENAME];
     uint32_t size;

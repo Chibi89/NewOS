@@ -4,6 +4,7 @@
 #include <apps/power_props.h>
 #include <apps/taskmgr.h>
 #include <arch/x86_64/io.h>
+#include <drivers/keyboard.h>
 #include <drivers/power.h>
 #include <drivers/rtc.h>
 #include <fs/vfs.h>
@@ -12,6 +13,9 @@
 #include <gui/image.h>
 #include <gui/wm.h>
 #include <gui/cursor_loader.h>
+#include <gui/uistyle_loader.h>
+#include <include/comdlg.h>
+#include <include/clipboard.h>
 #include <mm/heap.h>
 #include <string.h>
 #include <user.h>
@@ -538,6 +542,20 @@ static icon_id_t wm_get_app_icon(window_t *win) {
     return ICON_SOUND;
   if (win->app_type == APP_MOUSE)
     return ICON_MOUSE;
+  if (win->app_type == APP_USERACCT)
+    return ICON_ACCESSIBILITY;
+  if (win->app_type == APP_TIMEDATE)
+    return ICON_INFO;
+  if (win->app_type == APP_NETCPL)
+    return ICON_NET;
+  if (win->app_type == APP_KEYBCPL)
+    return ICON_KEYBOARD;
+  if (win->app_type == APP_COMDLG) {
+    if (strstr(win->title, "%") || strstr(win->title, "complete") ||
+        strstr(win->title, "completato"))
+      return ICON_INFO;
+    return ICON_FOLDER;
+  }
   if (win->app_type == APP_RULES)
     return ICON_DOCUMENT;
   if (win->app_type == APP_BROWSER)
@@ -775,6 +793,16 @@ static void draw_window_frame(window_t *win) {
     w_icon = ICON_SOUND;
   else if (win->app_type == APP_MOUSE)
     w_icon = ICON_MOUSE;
+  else if (win->app_type == APP_USERACCT)
+    w_icon = ICON_ACCESSIBILITY;
+  else if (win->app_type == APP_TIMEDATE)
+    w_icon = ICON_INFO;
+  else if (win->app_type == APP_NETCPL)
+    w_icon = ICON_NET;
+  else if (win->app_type == APP_KEYBCPL)
+    w_icon = ICON_KEYBOARD;
+  else if (win->app_type == APP_COMDLG)
+    w_icon = ICON_FOLDER;
   else if (win->app_type == APP_RULES)
     w_icon = ICON_DOCUMENT;
   else if (win->app_type == APP_BROWSER)
@@ -902,66 +930,113 @@ static void draw_context_menu(int32_t mx, int32_t my) {
   if (!ctx_menu_open)
     return;
 
-  int32_t mw = 160;
-  int32_t mh = 98;
+  int32_t mw = 176;
+  int32_t mh = 166;
+  bool is_modern = (current_theme != THEME_CLASSIC || g_active_theme_props.modern_controls);
+  uint16_t rad = g_active_theme_props.panel_radius > 0 ? g_active_theme_props.panel_radius : 8;
+  uint32_t bg_col = g_active_theme_props.surface_base ? g_active_theme_props.surface_base : 0xF8FAFC;
+  uint32_t b_col = g_active_theme_props.control_border_color ? g_active_theme_props.control_border_color : 0xC8D4E2;
+  uint32_t txt_col = is_modern ? (g_active_theme_props.window_text ? g_active_theme_props.window_text : 0x1A1A1A) : COLOR_WINDOWTEXT;
+  uint32_t acc_col = is_modern ? (g_active_theme_props.accent_color ? g_active_theme_props.accent_color : 0x0078D4) : 0x0A246A;
 
-  // Sfondo menu contestuale con rilievo 3D
-  gfx_fill_rect(ctx_x, ctx_y, mw, mh, COLOR_BTNFACE);
-  gfx_draw_bevel_rect(ctx_x, ctx_y, mw, mh, false);
+  if (is_modern) {
+    gfx_draw_drop_shadow(ctx_x, ctx_y, mw, mh, 6);
+    gfx_fill_rounded_alpha(ctx_x, ctx_y, mw, mh, rad, bg_col, 238);
+    gfx_draw_rounded_rect(ctx_x, ctx_y, mw, mh, rad, b_col);
+  } else {
+    gfx_fill_rect(ctx_x, ctx_y, mw, mh, COLOR_BTNFACE);
+    gfx_draw_bevel_rect(ctx_x, ctx_y, mw, mh, false);
+  }
 
   bool hov_nuovo =
       (mx >= ctx_x && mx <= ctx_x + mw && my >= ctx_y + 3 && my < ctx_y + 25) ||
       ctx_submenu_open;
+  bool hov_copia = (!hov_nuovo && mx >= ctx_x && mx <= ctx_x + mw &&
+                    my >= ctx_y + 28 && my < ctx_y + 48);
+  bool hov_sposta = (!hov_nuovo && mx >= ctx_x && mx <= ctx_x + mw &&
+                     my >= ctx_y + 48 && my < ctx_y + 68);
+  bool hov_incolla = (!hov_nuovo && mx >= ctx_x && mx <= ctx_x + mw &&
+                      my >= ctx_y + 68 && my < ctx_y + 88);
   bool hov_disponi = (!hov_nuovo && mx >= ctx_x && mx <= ctx_x + mw &&
-                      my >= ctx_y + 28 && my < ctx_y + 49);
+                      my >= ctx_y + 92 && my < ctx_y + 112);
   bool hov_personalizza = (!hov_nuovo && mx >= ctx_x && mx <= ctx_x + mw &&
-                           my >= ctx_y + 49 && my < ctx_y + 71);
+                           my >= ctx_y + 114 && my < ctx_y + 136);
   bool hov_prop = (!hov_nuovo && mx >= ctx_x && mx <= ctx_x + mw &&
-                   my >= ctx_y + 71 && my <= ctx_y + 95);
+                   my >= ctx_y + 136 && my <= ctx_y + 162);
 
   // Voce 0: Nuovo ▶
   if (hov_nuovo) {
-    gfx_fill_rect(ctx_x + 3, ctx_y + 3, mw - 6, 22, 0x0A246A);
+    if (is_modern) gfx_fill_rounded_rect(ctx_x + 4, ctx_y + 3, mw - 8, 22, 4, acc_col);
+    else gfx_fill_rect(ctx_x + 3, ctx_y + 3, mw - 6, 22, acc_col);
     gfx_draw_string(ctx_x + 12, ctx_y + 6, "Nuovo", 0xFFFFFF, 0, true);
     gfx_draw_string(ctx_x + mw - 18, ctx_y + 6, ">", 0xFFFFFF, 0, true);
   } else {
-    gfx_draw_string(ctx_x + 12, ctx_y + 6, "Nuovo", COLOR_WINDOWTEXT, 0, true);
+    gfx_draw_string(ctx_x + 12, ctx_y + 6, "Nuovo", txt_col, 0, true);
     gfx_draw_string(ctx_x + mw - 18, ctx_y + 6, ">", 0x808080, 0, true);
   }
 
-  // Separatore scavato
-  gfx_draw_bevel_rect(ctx_x + 4, ctx_y + 26, mw - 8, 2, true);
+  // Separatore
+  if (is_modern) gfx_fill_alpha(ctx_x + 8, ctx_y + 26, mw - 16, 1, b_col, 180);
+  else gfx_draw_bevel_rect(ctx_x + 4, ctx_y + 26, mw - 8, 2, true);
 
-  // Voce 1: Disponi icone
+  // Blocco collegato: Copia / Sposta / Incolla
+  if (hov_copia) {
+    if (is_modern) gfx_fill_rounded_rect(ctx_x + 4, ctx_y + 28, mw - 8, 20, 4, acc_col);
+    else gfx_fill_rect(ctx_x + 3, ctx_y + 28, mw - 6, 20, acc_col);
+    gfx_draw_string(ctx_x + 12, ctx_y + 30, "Copia (Ctrl+C)", 0xFFFFFF, 0, true);
+  } else {
+    gfx_draw_string(ctx_x + 12, ctx_y + 30, "Copia (Ctrl+C)", txt_col, 0, true);
+  }
+
+  if (hov_sposta) {
+    if (is_modern) gfx_fill_rounded_rect(ctx_x + 4, ctx_y + 48, mw - 8, 20, 4, acc_col);
+    else gfx_fill_rect(ctx_x + 3, ctx_y + 48, mw - 6, 20, acc_col);
+    gfx_draw_string(ctx_x + 12, ctx_y + 50, "Sposta...", 0xFFFFFF, 0, true);
+  } else {
+    gfx_draw_string(ctx_x + 12, ctx_y + 50, "Sposta...", txt_col, 0, true);
+  }
+
+  if (hov_incolla) {
+    if (is_modern) gfx_fill_rounded_rect(ctx_x + 4, ctx_y + 68, mw - 8, 20, 4, acc_col);
+    else gfx_fill_rect(ctx_x + 3, ctx_y + 68, mw - 6, 20, acc_col);
+    gfx_draw_string(ctx_x + 12, ctx_y + 70, "Incolla (Ctrl+V)", 0xFFFFFF, 0, true);
+  } else {
+    gfx_draw_string(ctx_x + 12, ctx_y + 70, "Incolla (Ctrl+V)", txt_col, 0, true);
+  }
+
+  // Separatore
+  if (is_modern) gfx_fill_alpha(ctx_x + 8, ctx_y + 90, mw - 16, 1, b_col, 180);
+  else gfx_draw_bevel_rect(ctx_x + 4, ctx_y + 90, mw - 8, 2, true);
+
+  // Voce: Disponi icone
   if (hov_disponi) {
-    gfx_fill_rect(ctx_x + 3, ctx_y + 28, mw - 6, 20, 0x0A246A);
-    gfx_draw_string(ctx_x + 12, ctx_y + 30, "Disponi icone", 0xFFFFFF, 0, true);
+    if (is_modern) gfx_fill_rounded_rect(ctx_x + 4, ctx_y + 92, mw - 8, 20, 4, acc_col);
+    else gfx_fill_rect(ctx_x + 3, ctx_y + 92, mw - 6, 20, acc_col);
+    gfx_draw_string(ctx_x + 12, ctx_y + 94, "Disponi icone", 0xFFFFFF, 0, true);
   } else {
-    gfx_draw_string(ctx_x + 12, ctx_y + 30, "Disponi icone", COLOR_WINDOWTEXT,
-                    0, true);
+    gfx_draw_string(ctx_x + 12, ctx_y + 94, "Disponi icone", txt_col, 0, true);
   }
 
-  // Voce 2: Personalizza...
+  // Voce: Personalizza...
   if (hov_personalizza) {
-    gfx_fill_rect(ctx_x + 3, ctx_y + 49, mw - 6, 21, 0x0A246A);
-    gfx_draw_icon_16(ctx_x + 8, ctx_y + 51, ICON_DESKTOP);
-    gfx_draw_string(ctx_x + 30, ctx_y + 52, "Personalizza...", 0xFFFFFF, 0,
-                    true);
+    if (is_modern) gfx_fill_rounded_rect(ctx_x + 4, ctx_y + 114, mw - 8, 21, 4, acc_col);
+    else gfx_fill_rect(ctx_x + 3, ctx_y + 114, mw - 6, 21, acc_col);
+    gfx_draw_icon_16(ctx_x + 8, ctx_y + 116, ICON_DESKTOP);
+    gfx_draw_string(ctx_x + 30, ctx_y + 117, "Personalizza...", 0xFFFFFF, 0, true);
   } else {
-    gfx_draw_icon_16(ctx_x + 8, ctx_y + 51, ICON_DESKTOP);
-    gfx_draw_string(ctx_x + 30, ctx_y + 52, "Personalizza...", COLOR_WINDOWTEXT,
-                    0, true);
+    gfx_draw_icon_16(ctx_x + 8, ctx_y + 116, ICON_DESKTOP);
+    gfx_draw_string(ctx_x + 30, ctx_y + 117, "Personalizza...", txt_col, 0, true);
   }
 
-  // Voce 3: Proprietà
+  // Voce: Proprietà
   if (hov_prop) {
-    gfx_fill_rect(ctx_x + 3, ctx_y + 71, mw - 6, 22, 0x0A246A);
-    gfx_draw_icon_16(ctx_x + 8, ctx_y + 73, ICON_INFO);
-    gfx_draw_string(ctx_x + 30, ctx_y + 74, "Proprieta", 0xFFFFFF, 0, true);
+    if (is_modern) gfx_fill_rounded_rect(ctx_x + 4, ctx_y + 136, mw - 8, 22, 4, acc_col);
+    else gfx_fill_rect(ctx_x + 3, ctx_y + 136, mw - 6, 22, acc_col);
+    gfx_draw_icon_16(ctx_x + 8, ctx_y + 138, ICON_INFO);
+    gfx_draw_string(ctx_x + 30, ctx_y + 139, "Proprieta", 0xFFFFFF, 0, true);
   } else {
-    gfx_draw_icon_16(ctx_x + 8, ctx_y + 73, ICON_INFO);
-    gfx_draw_string(ctx_x + 30, ctx_y + 74, "Proprieta", COLOR_WINDOWTEXT, 0,
-                    true);
+    gfx_draw_icon_16(ctx_x + 8, ctx_y + 138, ICON_INFO);
+    gfx_draw_string(ctx_x + 30, ctx_y + 139, "Proprieta", txt_col, 0, true);
   }
 
   // Sottomenu "Nuovo" se aperto
@@ -976,8 +1051,14 @@ static void draw_context_menu(int32_t mx, int32_t my) {
       sm_x = ctx_x - sm_w + 4;
     }
 
-    gfx_fill_rect(sm_x, sm_y, sm_w, sm_h, COLOR_BTNFACE);
-    gfx_draw_bevel_rect(sm_x, sm_y, sm_w, sm_h, false);
+    if (is_modern) {
+      gfx_draw_drop_shadow(sm_x, sm_y, sm_w, sm_h, 6);
+      gfx_fill_rounded_alpha(sm_x, sm_y, sm_w, sm_h, rad, bg_col, 238);
+      gfx_draw_rounded_rect(sm_x, sm_y, sm_w, sm_h, rad, b_col);
+    } else {
+      gfx_fill_rect(sm_x, sm_y, sm_w, sm_h, COLOR_BTNFACE);
+      gfx_draw_bevel_rect(sm_x, sm_y, sm_w, sm_h, false);
+    }
 
     bool hov_sub_folder =
         (mx >= sm_x && mx <= sm_x + sm_w && my >= sm_y + 3 && my < sm_y + 28);
@@ -986,24 +1067,24 @@ static void draw_context_menu(int32_t mx, int32_t my) {
 
     // Sub 0: Cartella
     if (hov_sub_folder) {
-      gfx_fill_rect(sm_x + 3, sm_y + 3, sm_w - 6, 24, 0x0A246A);
+      if (is_modern) gfx_fill_rounded_rect(sm_x + 4, sm_y + 3, sm_w - 8, 24, 4, acc_col);
+      else gfx_fill_rect(sm_x + 3, sm_y + 3, sm_w - 6, 24, acc_col);
       gfx_draw_icon_16(sm_x + 8, sm_y + 6, ICON_FOLDER);
       gfx_draw_string(sm_x + 30, sm_y + 8, "Cartella", 0xFFFFFF, 0, true);
     } else {
       gfx_draw_icon_16(sm_x + 8, sm_y + 6, ICON_FOLDER);
-      gfx_draw_string(sm_x + 30, sm_y + 8, "Cartella", COLOR_WINDOWTEXT, 0,
-                      true);
+      gfx_draw_string(sm_x + 30, sm_y + 8, "Cartella", txt_col, 0, true);
     }
 
     // Sub 1: Documento di testo
     if (hov_sub_doc) {
-      gfx_fill_rect(sm_x + 3, sm_y + 29, sm_w - 6, 25, 0x0A246A);
+      if (is_modern) gfx_fill_rounded_rect(sm_x + 4, sm_y + 29, sm_w - 8, 25, 4, acc_col);
+      else gfx_fill_rect(sm_x + 3, sm_y + 29, sm_w - 6, 25, acc_col);
       gfx_draw_icon_16(sm_x + 8, sm_y + 32, ICON_DOCUMENT);
       gfx_draw_string(sm_x + 30, sm_y + 34, "Doc. di testo", 0xFFFFFF, 0, true);
     } else {
       gfx_draw_icon_16(sm_x + 8, sm_y + 32, ICON_DOCUMENT);
-      gfx_draw_string(sm_x + 30, sm_y + 34, "Doc. di testo", COLOR_WINDOWTEXT,
-                      0, true);
+      gfx_draw_string(sm_x + 30, sm_y + 34, "Doc. di testo", txt_col, 0, true);
     }
   }
 }
@@ -1342,6 +1423,11 @@ void wm_render(void) {
     draw_start_menu(sw, sh);
   }
 
+  // 5.5 Overlay UI Style modulare (es. Copenhagen Glass UI da NewOS\Resources\UIStyle)
+  if (uistyle_get_active() == UISTYLE_COPENHAGEN) {
+    uistyle_draw_desktop(gfx_get_width(), gfx_get_height());
+  }
+
   // 6. Menu Contestuale Tasto Destro (se aperto)
   if (ctx_menu_open) {
     draw_context_menu(last_mouse_x, last_mouse_y);
@@ -1385,6 +1471,14 @@ void wm_update(mouse_state_t *mouse, char key) {
   bool mouse_clicked = mouse->left_button && !prev_mouse_left;
   bool mouse_released = !mouse->left_button && prev_mouse_left;
   bool right_clicked = mouse->right_button && !prev_mouse_right;
+
+  if (uistyle_get_active() == UISTYLE_COPENHAGEN) {
+    if (uistyle_handle_desktop_mouse(mouse->x, mouse->y, mouse_clicked) && mouse_clicked) {
+      prev_mouse_left = mouse->left_button;
+      prev_mouse_right = mouse->right_button;
+      return;
+    }
+  }
 
   // Trascinamento o ridimensionamento con tasto sinistro (finestre o icone del desktop)
   if (mouse->left_button) {
@@ -1516,8 +1610,10 @@ void wm_update(mouse_state_t *mouse, char key) {
     if (dragging_icon_idx >= 0 && dragging_icon_idx < num_desktop_icons) {
       if (!icon_was_dragged) {
         int idx = dragging_icon_idx;
-        if (desktop_icons[idx].type == 0)
-          app_explorer_open_this_pc();
+        if (desktop_icons[idx].type == 0) {
+          if (!(uistyle_get_active() == UISTYLE_COPENHAGEN && uistyle_open_explorer(NULL)))
+            app_explorer_open_this_pc();
+        }
         else if (desktop_icons[idx].type == 1)
           app_cmd_launch();
         else if (desktop_icons[idx].type == 2)
@@ -1595,10 +1691,10 @@ void wm_update(mouse_state_t *mouse, char key) {
       ctx_menu_open = true;
       ctx_x = mouse->x;
       ctx_y = mouse->y;
-      if (ctx_x + 160 > (int32_t)sw)
-        ctx_x = sw - 165;
-      if (ctx_y + 102 > ty)
-        ctx_y = ty - 105;
+      if (ctx_x + 176 > (int32_t)sw)
+        ctx_x = sw - 180;
+      if (ctx_y + 168 > ty)
+        ctx_y = ty - 170;
       ctx_submenu_open = false;
       start_menu_open = false;
 
@@ -1662,29 +1758,50 @@ void wm_update(mouse_state_t *mouse, char key) {
         return;
       }
 
-      // Click su voce del menu contestuale principale (altezza 98px)
-      if (mouse->x >= ctx_x && mouse->x <= ctx_x + 160 && mouse->y >= ctx_y &&
-          mouse->y <= ctx_y + 98) {
+      // Click su voce del menu contestuale principale (altezza 166px)
+      if (mouse->x >= ctx_x && mouse->x <= ctx_x + 176 && mouse->y >= ctx_y &&
+          mouse->y <= ctx_y + 166) {
         if (mouse->y >= ctx_y + 3 && mouse->y < ctx_y + 25) {
           ctx_submenu_open = !ctx_submenu_open;
           prev_mouse_left = mouse->left_button;
           prev_mouse_right = mouse->right_button;
           return;
-        } else if (mouse->y >= ctx_y + 28 && mouse->y < ctx_y + 49) {
+        } else if (mouse->y >= ctx_y + 28 && mouse->y < ctx_y + 48) {
+          app_comdlg_copy_move_launch(COMDLG_OP_COPY, "C:\\User\\Morgan\\Desktop\\BENVENUTO.TXT", "C:\\User\\Morgan\\Desktop");
+          ctx_menu_open = false;
+          ctx_submenu_open = false;
+          prev_mouse_left = mouse->left_button;
+          prev_mouse_right = mouse->right_button;
+          return;
+        } else if (mouse->y >= ctx_y + 48 && mouse->y < ctx_y + 68) {
+          app_comdlg_copy_move_launch(COMDLG_OP_MOVE, "C:\\User\\Morgan\\Desktop\\BENVENUTO.TXT", "C:\\User\\Morgan\\Desktop");
+          ctx_menu_open = false;
+          ctx_submenu_open = false;
+          prev_mouse_left = mouse->left_button;
+          prev_mouse_right = mouse->right_button;
+          return;
+        } else if (mouse->y >= ctx_y + 68 && mouse->y < ctx_y + 88) {
+          app_comdlg_copy_move_launch(COMDLG_OP_PASTE, NULL, "C:\\User\\Morgan\\Desktop");
+          ctx_menu_open = false;
+          ctx_submenu_open = false;
+          prev_mouse_left = mouse->left_button;
+          prev_mouse_right = mouse->right_button;
+          return;
+        } else if (mouse->y >= ctx_y + 92 && mouse->y < ctx_y + 112) {
           wm_rearrange_desktop_icons();
           ctx_menu_open = false;
           ctx_submenu_open = false;
           prev_mouse_left = mouse->left_button;
           prev_mouse_right = mouse->right_button;
           return;
-        } else if (mouse->y >= ctx_y + 49 && mouse->y < ctx_y + 71) {
+        } else if (mouse->y >= ctx_y + 114 && mouse->y < ctx_y + 136) {
           app_display_props_launch();
           ctx_menu_open = false;
           ctx_submenu_open = false;
           prev_mouse_left = mouse->left_button;
           prev_mouse_right = mouse->right_button;
           return;
-        } else if (mouse->y >= ctx_y + 71 && mouse->y <= ctx_y + 96) {
+        } else if (mouse->y >= ctx_y + 136 && mouse->y <= ctx_y + 162) {
           app_about_launch();
           ctx_menu_open = false;
           ctx_submenu_open = false;
@@ -1888,7 +2005,41 @@ void wm_update(mouse_state_t *mouse, char key) {
     }
   }
 
-  // Inoltro tasti della tastiera alla finestra attiva
+  // Scorciatoie globali di sistema (Win/Ctrl+Esc, Alt+Tab, Alt+F4)
+  if (key == KEY_WIN_START) {
+    start_menu_open = !start_menu_open;
+    prev_mouse_left = mouse->left_button;
+    prev_mouse_right = mouse->right_button;
+    return;
+  } else if (key == KEY_ALT_F4) {
+    if (active_window_id != -1) {
+      wm_destroy_window(active_window_id);
+    }
+    prev_mouse_left = mouse->left_button;
+    prev_mouse_right = mouse->right_button;
+    return;
+  } else if (key == KEY_ALT_TAB) {
+    int cur_slot = -1;
+    for (int i = 0; i < MAX_WINDOWS; i++) {
+      if (windows[i] && windows[i]->id == active_window_id) {
+        cur_slot = i;
+        break;
+      }
+    }
+    for (int step = 1; step <= MAX_WINDOWS; step++) {
+      int idx = (cur_slot + step) % MAX_WINDOWS;
+      if (windows[idx]) {
+        windows[idx]->is_minimized = false;
+        wm_focus_window(windows[idx]->id);
+        break;
+      }
+    }
+    prev_mouse_left = mouse->left_button;
+    prev_mouse_right = mouse->right_button;
+    return;
+  }
+
+  // Inoltro tasti della tastiera alla finestra attiva (o gestione Desktop Ctrl+C / Ctrl+X / Ctrl+V)
   if (key != 0 && active_window_id != -1) {
     for (int i = 0; i < MAX_WINDOWS; i++) {
       if (windows[i] && windows[i]->id == active_window_id &&
@@ -1898,6 +2049,16 @@ void wm_update(mouse_state_t *mouse, char key) {
         }
         break;
       }
+    }
+  } else if (key != 0 && active_window_id == -1) {
+    if ((uint8_t)key == KEY_CTRL_C || key == 0x03) {
+      clipboard_push_file("C:\\User\\Morgan\\Desktop\\BENVENUTO.TXT", false);
+      app_comdlg_copy_move_launch(COMDLG_OP_COPY, "C:\\User\\Morgan\\Desktop\\BENVENUTO.TXT", "C:\\User\\Morgan\\Desktop");
+    } else if ((uint8_t)key == KEY_CTRL_X || key == 0x18) {
+      clipboard_push_file("C:\\User\\Morgan\\Desktop\\BENVENUTO.TXT", true);
+      app_comdlg_copy_move_launch(COMDLG_OP_MOVE, "C:\\User\\Morgan\\Desktop\\BENVENUTO.TXT", "C:\\User\\Morgan\\Desktop");
+    } else if ((uint8_t)key == KEY_CTRL_V || key == 0x16) {
+      app_comdlg_copy_move_launch(COMDLG_OP_PASTE, NULL, "C:\\User\\Morgan\\Desktop");
     }
   }
 

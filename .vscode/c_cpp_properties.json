@@ -1,0 +1,50 @@
+{
+  "configurations": [
+    {
+      "name": "NewOS V1 x86_64",
+      "includePath": [
+        "${workspaceFolder}/kernel",
+        "${workspaceFolder}/kernel/include",
+        "${workspaceFolder}/SystemLibrary",
+        "${workspaceFolder}/SystemLibrary/quickjs_shim",
+        "${workspaceFolder}/SystemLibrary/netsurf_shim",
+        "${workspaceFolder}/WebBrowser",
+        "${workspaceFolder}/BootSetup",
+        "${workspaceFolder}/MultimediaCodec",
+        "${workspaceFolder}/explorer",
+        "${workspaceFolder}/oobe",
+        "${workspaceFolder}/notepad",
+        "${workspaceFolder}/calculator",
+        "${workspaceFolder}/player",
+        "${workspaceFolder}/rules_viewer",
+        "${workspaceFolder}/whatsnew",
+        "${workspaceFolder}/autoplay",
+        "${workspaceFolder}/taskmgr",
+        "${workspaceFolder}/control_panel",
+        "${workspaceFolder}/third_party/stb",
+        "${workspaceFolder}/third_party/quickjs/quickjs-0.8.0",
+        "${workspaceFolder}/third_party/netsurf/netsurf-all-3.11/libcss/include",
+        "${workspaceFolder}/third_party/netsurf/netsurf-all-3.11/libcss/src",
+        "${workspaceFolder}/third_party/netsurf/netsurf-all-3.11/libdom/include",
+        "${workspaceFolder}/third_party/netsurf/netsurf-all-3.11/libhubbub/include",
+        "${workspaceFolder}/third_party/netsurf/netsurf-all-3.11/libhubbub/src",
+        "${workspaceFolder}/third_party/netsurf/netsurf-all-3.11/libparserutils/include",
+        "${workspaceFolder}/third_party/netsurf/netsurf-all-3.11/libwapcaplet/include"
+      ],
+      "defines": [
+        "__x86_64__"
+      ],
+      "compilerPath": "${workspaceFolder}/tools/llvm-mingw/llvm-mingw-20260616-ucrt-x86_64/bin/clang.exe",
+      "compilerArgs": [
+        "-target",
+        "x86_64-unknown-none-elf",
+        "-ffreestanding",
+        "-fno-builtin",
+        "-nostdlib"
+      ],
+      "cStandard": "c11",
+      "intelliSenseMode": "linux-clang-x64"
+    }
+  ],
+  "version": 4
+}

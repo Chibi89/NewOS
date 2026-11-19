@@ -169,6 +169,7 @@ for (const a of asmFiles) {
 console.log('\n--> Compilazione moduli C (target: x86_64-unknown-none-elf)...');
 const cFiles = [
     'kernel/lib/string.c',
+    'kernel/lib/clipboard.c',
     'kernel/lib/aes256.c',
     'kernel/arch/x86_64/idt.c',
     'kernel/arch/x86_64/pic.c',
@@ -178,11 +179,10 @@ const cFiles = [
     'kernel/arch/x86_64/sched.c',
     'kernel/ipc/ipc.c',
     'kernel/drivers/pci.c',
+    'kernel/drivers/acpi.c',
     'kernel/drivers/ahci.c',
-    'kernel/drivers/speaker.c',
-    'kernel/drivers/ac97.c',
-    'kernel/drivers/sound_data.c',
-    'kernel/drivers/sound.c',
+    'kernel/drivers/nvme_loader.c',
+    'kernel/drivers/sound_loader.c',
     'kernel/drivers/ata.c',
     'kernel/drivers/timer.c',
     'kernel/drivers/rtc.c',
@@ -191,24 +191,19 @@ const cFiles = [
     'kernel/mm/heap.c',
     'kernel/mm/paging.c',
     'kernel/gui/font.c',
+    'kernel/gui/font_loader.c',
     'kernel/gui/graphics.c',
     'kernel/gui/icons.c',
     'kernel/gui/wm.c',
-    'kernel/gui/context_menu.c',
     'kernel/gui/theme_loader.c',
     'kernel/gui/settings_loader.c',
-    'kernel/apps/cmd.c',
-    'notepad/notepad.c',
-    'calculator/calculator.c',
-    'control_panel/about.c',
-    'control_panel/display.c',
-    'control_panel/sound_props.c',
-    'control_panel/power_props.c',
-    'control_panel/mouse_props.c',
-    'explorer/explorer.c',
-    'taskmgr/taskmgr.c',
-    'autoplay/autoplay.c',
-    'player/player.c',
+    'kernel/gui/comdlg_loader.c',
+    'kernel/gui/uistyle_loader.c',
+    'kernel/gui/hwaccel_loader.c',
+    'kernel/gui/gpu3d_loader.c',
+    'kernel/apps/sysapps_loader.c',
+    'control_panel/cpl_ext_loader.c',
+    'explorer/explorer_loader.c',
     'kernel/drivers/power.c',
     'kernel/apps/boot_menu.c',
     'kernel/lib/user.c',
@@ -217,15 +212,12 @@ const cFiles = [
     'kernel/fs/vfs_mount.c',
     'kernel/fs/vfs_cache.c',
     'kernel/fs/iso9660.c',
-    'kernel/fs/udf.c',
-    'kernel/fs/ntfs.c',
+    'kernel/fs/fs_ext_loader.c',
     'kernel/fs/fs_probe.c',
     'kernel/fs/ramfs.c',
     'kernel/fs/vfs.c',
     'kernel/gui/image.c',
-    'kernel/drivers/sound_wav.c',
     'kernel/drivers/driver_mgr.c',
-    'control_panel/devmgmt.c',
     'kernel/drivers/vga.c',
     'kernel/drivers/usb/usb.c',
     'kernel/drivers/usb/uhci.c',
@@ -234,26 +226,10 @@ const cFiles = [
     'kernel/drivers/usb/usb_hid.c',
     'kernel/drivers/usb/usb_msc.c',
     'kernel/drivers/usb/usb_hub.c',
-    'kernel/drivers/usb/usb_net.c',
-    'kernel/drivers/net/net_nic.c',
-    'kernel/drivers/net/e1000.c',
-    'kernel/drivers/net/rtl8139.c',
-    'kernel/drivers/net/wifi.c',
-    'kernel/net/eth.c',
-    'kernel/net/arp.c',
-    'kernel/net/ipv4.c',
-    'kernel/net/icmp.c',
-    'kernel/net/udp.c',
-    'kernel/net/tcp.c',
-    'kernel/net/dhcp.c',
-    'kernel/net/dns.c',
-    'kernel/net/tls.c',
-    'kernel/net/socket.c',
+    'kernel/net/net_loader.c',
+    'kernel/net/nettls_loader.c',
     'kernel/fs/registry.c',
-    'kernel/apps/regedit.c',
-    'rules_viewer/rules_viewer.c',
-    'whatsnew/whatsnew.c',
-    'WebBrowser/webbrowser.c',
+    'WebBrowser/webbrowser_loader.c',
     'kernel/gui/cursor_loader.c',
     'kernel/gui/screen_mgr.c',
     'kernel/kernel.c'
@@ -379,18 +355,18 @@ for (const sm of screenModules) {
     }
 
     // Distribuzione ordinata in SystemProgram e BootSetup senza sporcare la radice
-    try { fs.copyFileSync(binPath, path.join(sysProgModDir, sm.out)); } catch (e) {}
+    try { fs.copyFileSync(binPath, path.join(sysProgModDir, sm.out)); } catch (e) { }
     if (sm.out.startsWith('BOOTSETUP')) {
-        try { fs.copyFileSync(binPath, path.join(bootSetupModDir, sm.out)); } catch (e) {}
+        try { fs.copyFileSync(binPath, path.join(bootSetupModDir, sm.out)); } catch (e) { }
     }
 
     // Copia file .INI associato
     const iniSrc = path.join(ROOT, sm.ini);
     if (fs.existsSync(iniSrc)) {
         fs.copyFileSync(iniSrc, path.join(bootModDir, sm.iniOut));
-        try { fs.copyFileSync(iniSrc, path.join(sysProgModDir, sm.iniOut)); } catch (e) {}
+        try { fs.copyFileSync(iniSrc, path.join(sysProgModDir, sm.iniOut)); } catch (e) { }
         if (sm.out.startsWith('BOOTSETUP')) {
-            try { fs.copyFileSync(iniSrc, path.join(bootSetupModDir, sm.iniOut)); } catch (e) {}
+            try { fs.copyFileSync(iniSrc, path.join(bootSetupModDir, sm.iniOut)); } catch (e) { }
         }
     }
 }
@@ -433,26 +409,173 @@ for (const cm of codecModules) {
 
 // 6b3. Compilazione e Firma Librerie Dinamiche di Sistema (.DLL in NewOS/SystemLibrary/)
 console.log('\n--> Compilazione e Firma Librerie Dinamiche (.DLL in NewOS/SystemLibrary/)...');
+function walkCFiles(dir, out = []) {
+    if (!fs.existsSync(dir)) return out;
+    for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, ent.name);
+        if (ent.isDirectory()) walkCFiles(full, out);
+        else if (ent.isFile() && ent.name.endsWith('.c')) out.push(full);
+    }
+    return out;
+}
+
+const nsBase = path.join(ROOT, 'third_party', 'netsurf', 'netsurf-all-3.11');
+const nsExtraSrcs = [
+    ...walkCFiles(path.join(nsBase, 'libwapcaplet', 'src')),
+    ...walkCFiles(path.join(nsBase, 'libparserutils', 'src')),
+    ...walkCFiles(path.join(nsBase, 'libhubbub', 'src')),
+    ...walkCFiles(path.join(nsBase, 'libcss', 'src')).filter(f => !f.endsWith('css_property_parser_gen.c'))
+];
+const nsExtraFlags = [
+    `-I"${path.join(ROOT, 'SystemLibrary', 'netsurf_shim')}"`,
+    `-I"${path.join(nsBase, 'libwapcaplet', 'include')}"`,
+    `-I"${path.join(nsBase, 'libwapcaplet', 'src')}"`,
+    `-I"${path.join(nsBase, 'libparserutils', 'include')}"`,
+    `-I"${path.join(nsBase, 'libparserutils', 'src')}"`,
+    `-I"${path.join(nsBase, 'libhubbub', 'include')}"`,
+    `-I"${path.join(nsBase, 'libcss', 'include')}"`,
+    '-DWITHOUT_ICONV_FILTER',
+    '-D"_ALIGNED=__attribute__((aligned(4)))"',
+    '-Wno-unused-parameter',
+    '-Wno-sign-compare',
+    '-Wno-implicit-fallthrough'
+].join(' ');
+
+const webpBase = path.join(ROOT, 'third_party', 'libwebp', 'libwebp-1.4.0');
+const webpExtraSrcs = [
+    ...walkCFiles(path.join(webpBase, 'src', 'dec')),
+    ...walkCFiles(path.join(webpBase, 'src', 'dsp')),
+    ...walkCFiles(path.join(webpBase, 'src', 'utils'))
+].filter(f => !/(sse|avx|neon|mips|msa|_enc\.c$|^ssim\.c$|^quant_levels_utils\.c$|^cost\.c$|^random_utils\.c$)/.test(path.basename(f)));
+const webpExtraFlags = `-I"${path.join(ROOT, 'SystemLibrary', 'netsurf_shim')}" -I"${path.join(ROOT, 'third_party', 'stb')}" -I"${webpBase}" -I"${path.join(webpBase, 'src')}" -DWEBP_DISABLE_STATS -Wno-unused-function -Wno-unused-parameter -Wno-sign-compare`;
+
+const qjsBase = path.join(ROOT, 'third_party', 'quickjs', 'quickjs-0.8.0');
+const qjsExtraSrcs = [
+    path.join(qjsBase, 'quickjs.c'),
+    path.join(qjsBase, 'libregexp.c'),
+    path.join(qjsBase, 'libunicode.c'),
+    path.join(qjsBase, 'cutils.c'),
+    path.join(qjsBase, 'libbf.c'),
+    path.join(ROOT, 'SystemLibrary', 'quickjs_shim', 'qjs_libm.c')
+];
+const qjsExtraFlags = `-mstackrealign -I"${path.join(ROOT, 'SystemLibrary', 'quickjs_shim')}" -I"${path.join(ROOT, 'SystemLibrary', 'netsurf_shim')}" -I"${qjsBase}" -D__STDC_NO_ATOMICS__ -D__NEWLIB__ -DCONFIG_VERSION=\\"0.8.0\\" -Wno-unused-parameter -Wno-sign-compare -Wno-unused-function -Wno-implicit-function-declaration`;
+
 const systemLibraries = [
     { src: 'SystemLibrary/theme_mgr.c', ini: 'SystemLibrary/THEMEMGR.INI', out: 'THEMEMGR.DLL', iniOut: 'THEMEMGR.INI' },
     { src: 'SystemLibrary/cursor_mgr.c', ini: 'SystemLibrary/CURSORMGR.INI', out: 'CURSORMGR.DLL', iniOut: 'CURSORMGR.INI' },
     { src: 'SystemLibrary/settings.c', ini: 'SystemLibrary/SETTINGS.INI', out: 'SETTINGS.DLL', iniOut: 'SETTINGS.INI' },
     { src: 'SystemLibrary/whatsnew.c', ini: 'SystemLibrary/WHATSNEW.INI', out: 'WHATSNEW.DLL', iniOut: 'WHATSNEW.INI' },
-    { src: 'SystemLibrary/rules.c', ini: 'SystemLibrary/RULES.INI', out: 'RULES.DLL', iniOut: 'RULES.INI' }
+    { src: 'SystemLibrary/rules.c', ini: 'SystemLibrary/RULES.INI', out: 'RULES.DLL', iniOut: 'RULES.INI' },
+    { src: 'SystemLibrary/useracct.c', ini: 'SystemLibrary/USERACCT.INI', out: 'USERACCT.DLL', iniOut: 'USERACCT.INI' },
+    { src: 'SystemLibrary/timedate.c', ini: 'SystemLibrary/TIMEDATE.INI', out: 'TIMEDATE.DLL', iniOut: 'TIMEDATE.INI' },
+    { src: 'SystemLibrary/netcpl.c', ini: 'SystemLibrary/NETCPL.INI', out: 'NETCPL.DLL', iniOut: 'NETCPL.INI' },
+    { src: 'SystemLibrary/keybcpl.c', ini: 'SystemLibrary/KEYBCPL.INI', out: 'KEYBCPL.DLL', iniOut: 'KEYBCPL.INI' },
+    { src: 'SystemLibrary/comdlg.c', ini: 'SystemLibrary/COMDLG.INI', out: 'COMDLG.DLL', iniOut: 'COMDLG.INI' },
+    { src: 'SystemLibrary/recycle.c', ini: 'SystemLibrary/RECYCLE.INI', out: 'RECYCLE.DLL', iniOut: 'RECYCLE.INI' },
+    { src: 'SystemLibrary/uistyle_copenhagen.c', ini: 'SystemLibrary/COPENHAGEN.INI', out: 'COPENHAGEN.DLL', iniOut: 'COPENHAGEN.INI', destSubDir: ['NewOS', 'Resources', 'UIStyle'] },
+    { src: 'SystemLibrary/hwaccel.c', ini: 'SystemLibrary/HWACCEL.INI', out: 'HWACCEL.DLL', iniOut: 'HWACCEL.INI', allowSse2: true },
+    { src: 'SystemLibrary/nettls.c', ini: 'SystemLibrary/NETTLS.INI', out: 'NETTLS.DLL', iniOut: 'NETTLS.INI' },
+    { src: 'SystemLibrary/cssengine.c', ini: 'SystemLibrary/CSSENGINE.INI', out: 'CSSENGINE.DLL', iniOut: 'CSSENGINE.INI' },
+    { src: 'SystemLibrary/jsengine.c', ini: 'SystemLibrary/JSENGINE.INI', out: 'JSENGINE.DLL', iniOut: 'JSENGINE.INI', allowSse2: true, needsReloc: true, extraSrcs: qjsExtraSrcs, extraFlags: qjsExtraFlags },
+    { src: 'SystemLibrary/fontmgr.c', ini: 'SystemLibrary/FONTMGR.INI', out: 'FONTMGR.DLL', iniOut: 'FONTMGR.INI', allowSse2: true, extraFlags: `-mstackrealign -I"${path.join(ROOT, 'SystemLibrary', 'quickjs_shim')}" -I"${path.join(ROOT, 'SystemLibrary', 'netsurf_shim')}" -I"${path.join(ROOT, 'third_party', 'stb')}" -Wno-unused-function -Wno-unused-parameter` },
+    { src: 'SystemLibrary/imgcodec.c', ini: 'SystemLibrary/IMGCODEC.INI', out: 'IMGCODEC.DLL', iniOut: 'IMGCODEC.INI', extraSrcs: webpExtraSrcs, extraFlags: webpExtraFlags },
+    { src: 'SystemLibrary/netsurf_core.c', ini: 'SystemLibrary/NETSURF_CORE.INI', out: 'NETSURF_CORE.DLL', iniOut: 'NETSURF_CORE.INI', extraSrcs: nsExtraSrcs, extraFlags: nsExtraFlags },
+    { src: 'SystemLibrary/webbrowser_dll.c', ini: 'SystemLibrary/WEBBROWSER.INI', out: 'WEBBROWSER.DLL', iniOut: 'WEBBROWSER.INI', needsReloc: true, extraFlags: `-I"${path.join(ROOT, 'WebBrowser')}" -Wno-unused-function -Wno-unused-parameter` },
+    { src: 'SystemLibrary/sysapps_dll.c', ini: 'SystemLibrary/SYSAPPS.INI', out: 'SYSAPPS.DLL', iniOut: 'SYSAPPS.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
+    { src: 'SystemLibrary/cplext2_dll.c', ini: 'SystemLibrary/CPLEXT2.INI', out: 'CPLEXT2.DLL', iniOut: 'CPLEXT2.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
+    { src: 'SystemLibrary/explorer_dll.c', ini: 'SystemLibrary/EXPLORER.INI', out: 'EXPLORER.DLL', iniOut: 'EXPLORER.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
+    { src: 'SystemLibrary/audio_dll.c', ini: 'SystemLibrary/AUDIO.INI', out: 'AUDIO.DLL', iniOut: 'AUDIO.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
+    { src: 'SystemLibrary/fs_ext_dll.c', ini: 'SystemLibrary/FS_EXT.INI', out: 'FS_EXT.DLL', iniOut: 'FS_EXT.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
+    { src: 'SystemLibrary/netstack_dll.c', ini: 'SystemLibrary/NETSTACK.INI', out: 'NETSTACK.DLL', iniOut: 'NETSTACK.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
+    { src: 'SystemLibrary/nvme_dll.c', ini: 'SystemLibrary/NVME.INI', out: 'NVME.DLL', iniOut: 'NVME.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
+    { src: 'SystemLibrary/gpu3d_dll.c', ini: 'SystemLibrary/GPU3D.INI', out: 'GPU3D.DLL', iniOut: 'GPU3D.INI', allowSse2: true, needsReloc: true, extraFlags: `-mstackrealign -Wno-unused-function -Wno-unused-parameter` }
 ];
 
 const targetLibDir = path.join(BIN_DIR, 'NewOS', 'SystemLibrary');
 if (!fs.existsSync(targetLibDir)) fs.mkdirSync(targetLibDir, { recursive: true });
 
 for (const sl of systemLibraries) {
+    const outDir = sl.destSubDir ? path.join(BIN_DIR, ...sl.destSubDir) : targetLibDir;
+    if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+
     const srcPath = path.join(ROOT, sl.src);
     const objPath = path.join(OBJ_DIR, `${path.basename(sl.src, '.c')}_dll.o`);
-    const compileCmd = `${llvm.clang} ${cFlags} -fPIC -c "${srcPath}" -o "${objPath}"`;
+    const baseFlags = sl.allowSse2 ? cFlags.replace('-mgeneral-regs-only', '-msse2') : cFlags;
+    const dllFlags = sl.extraFlags ? `${sl.extraFlags} ${baseFlags}` : baseFlags;
+    const compileCmd = `${llvm.clang} ${dllFlags} -fPIC -c "${srcPath}" -o "${objPath}"`;
     execSync(compileCmd, { stdio: 'inherit' });
 
-    const binPath = path.join(targetLibDir, sl.out);
-    const linkModCmd = `${llvm.lld} -m elf_x86_64 -T "${modLdScript}" --oformat binary "${objPath}" -o "${binPath}"`;
-    execSync(linkModCmd, { stdio: 'inherit' });
+    const allObjs = [objPath];
+    if (sl.extraSrcs && sl.extraSrcs.length > 0) {
+        for (let ei = 0; ei < sl.extraSrcs.length; ei++) {
+            const esrc = sl.extraSrcs[ei];
+            const eobj = path.join(OBJ_DIR, `${path.basename(sl.src, '.c')}_ext_${ei}_${path.basename(esrc, '.c')}.o`);
+            let localInc = '';
+            if (esrc.includes('libcss')) localInc = `-I"${path.join(nsBase, 'libcss', 'src')}" `;
+            else if (esrc.includes('libhubbub')) localInc = `-I"${path.join(nsBase, 'libhubbub', 'src')}" `;
+            execSync(`${llvm.clang} ${localInc}${dllFlags} -fPIC -c "${esrc}" -o "${eobj}"`, { stdio: 'inherit' });
+            allObjs.push(eobj);
+        }
+    }
+
+    const binPath = path.join(outDir, sl.out);
+    const rspPath = path.join(OBJ_DIR, `${path.basename(sl.src, '.c')}_objs.rsp`);
+    fs.writeFileSync(rspPath, allObjs.map(o => `"${o.replace(/\\/g, '/')}"`).join('\n'), 'utf8');
+    if (sl.needsReloc) {
+        const relocLd = path.join(ROOT, 'tools', 'module_reloc.ld');
+        const elfPath = path.join(OBJ_DIR, `${path.basename(sl.src, '.c')}_dll.elf`);
+        execSync(`${llvm.lld} -m elf_x86_64 -shared -Bsymbolic --no-undefined -z notext -T "${relocLd}" @"${rspPath}" -o "${elfPath}"`, { stdio: 'inherit' });
+        execSync(`${llvm.objcopy} -O binary -R .bss -R .rela.dyn "${elfPath}" "${binPath}"`, { stdio: 'inherit' });
+        const elfBuf = fs.readFileSync(elfPath);
+        const eShoff = Number(elfBuf.readBigUInt64LE(40));
+        const eShentsize = elfBuf.readUInt16LE(58);
+        const eShnum = elfBuf.readUInt16LE(60);
+        const eShstrndx = elfBuf.readUInt16LE(62);
+        const strOff = Number(elfBuf.readBigUInt64LE(eShoff + eShstrndx * eShentsize + 24));
+        const readStr = (o) => {
+            let end = o;
+            while (end < elfBuf.length && elfBuf[end] !== 0) end++;
+            return elfBuf.toString('utf8', o, end);
+        };
+        let bssEnd = 0;
+        const relocs = [];
+        for (let si = 0; si < eShnum; si++) {
+            const sh = eShoff + si * eShentsize;
+            const shName = readStr(strOff + elfBuf.readUInt32LE(sh));
+            const shType = elfBuf.readUInt32LE(sh + 4);
+            const shAddr = Number(elfBuf.readBigUInt64LE(sh + 16));
+            const shOffset = Number(elfBuf.readBigUInt64LE(sh + 24));
+            const shSize = Number(elfBuf.readBigUInt64LE(sh + 32));
+            if (shName === '.bss') bssEnd = shAddr + shSize;
+            if (shType === 4) { // SHT_RELA
+                for (let ro = 0; ro + 24 <= shSize; ro += 24) {
+                    const rOff = Number(elfBuf.readBigUInt64LE(shOffset + ro));
+                    const rInfo = elfBuf.readBigUInt64LE(shOffset + ro + 8);
+                    const rAddend = elfBuf.readBigUInt64LE(shOffset + ro + 16);
+                    const rType = Number(rInfo & 0xFFFFFFFFn);
+                    if (rType === 8) relocs.push({ off: rOff, add: rAddend }); // R_X86_64_RELATIVE
+                    else if (rType !== 0) console.log(`  [RELOC WARN] tipo ${rType} non gestito a 0x${rOff.toString(16)}`);
+                }
+            }
+        }
+        const rawBuf = fs.readFileSync(binPath);
+        const tableOff = Math.ceil(Math.max(rawBuf.length, bssEnd) / 4) * 4;
+        const finalBuf = Buffer.alloc(tableOff + (1 + relocs.length) * 4, 0);
+        rawBuf.copy(finalBuf, 0);
+        finalBuf.writeUInt32LE(relocs.length, tableOff);
+        for (let ri = 0; ri < relocs.length; ri++) {
+            finalBuf.writeBigUInt64LE(relocs[ri].add, relocs[ri].off);
+            finalBuf.writeUInt32LE(relocs[ri].off, tableOff + 4 + ri * 4);
+        }
+        const marker = Buffer.from([0x4F, 0x4C, 0x45, 0x52, 0xBE, 0xBA, 0xFE, 0xCA]);
+        const mIdx = finalBuf.indexOf(marker);
+        if (mIdx >= 0) finalBuf.writeUInt32LE(tableOff, mIdx + 4);
+        fs.writeFileSync(binPath, finalBuf);
+        console.log(`  [RELOC] ${sl.out}: ${relocs.length} rilocazioni R_X86_64_RELATIVE incorporate (bssEnd=${bssEnd}, tableOff=${tableOff})`);
+    } else {
+        const linkModCmd = `${llvm.lld} -m elf_x86_64 -T "${modLdScript}" --oformat binary @"${rspPath}" -o "${binPath}"`;
+        execSync(linkModCmd, { stdio: 'inherit' });
+    }
 
     // Firma crittografica e checksum CRC32 del payload
     const modBuf = fs.readFileSync(binPath);
@@ -464,18 +587,21 @@ for (const sl of systemLibraries) {
         fs.writeFileSync(binPath, modBuf);
         console.log(`  [OK] Libreria Dinamica generata e firmata: ${sl.out} (${modBuf.length} byte, CRC32: 0x${checksum.toString(16).toUpperCase()})`);
 
-        // Copia nelle cartelle ufficiali di sistema per garantire risoluzione rapida
-        const bootLibPath = path.join(BIN_DIR, 'NewOS', 'Boot', sl.out);
-        try { fs.copyFileSync(binPath, bootLibPath); } catch (e) {}
+        if (!sl.destSubDir) {
+            const bootLibPath = path.join(BIN_DIR, 'NewOS', 'Boot', sl.out);
+            try { fs.copyFileSync(binPath, bootLibPath); } catch (e) { }
+        }
     }
 
     if (sl.ini) {
         const iniSrc = path.join(ROOT, sl.ini);
         if (fs.existsSync(iniSrc)) {
-            const iniDst = path.join(targetLibDir, sl.iniOut || path.basename(sl.ini));
+            const iniDst = path.join(outDir, sl.iniOut || path.basename(sl.ini));
             fs.copyFileSync(iniSrc, iniDst);
             console.log(`  [OK] Descrittore INI sincronizzato: ${sl.iniOut || path.basename(sl.ini)}`);
-            try { fs.copyFileSync(iniSrc, path.join(BIN_DIR, 'NewOS', 'Boot', sl.iniOut || path.basename(sl.ini))); } catch (e) {}
+            if (!sl.destSubDir) {
+                try { fs.copyFileSync(iniSrc, path.join(BIN_DIR, 'NewOS', 'Boot', sl.iniOut || path.basename(sl.ini))); } catch (e) { }
+            }
         }
     }
 }
@@ -490,7 +616,7 @@ if (fs.existsSync(legacySys)) fs.rmSync(legacySys, { recursive: true, force: tru
 for (const f of fs.readdirSync(BIN_DIR)) {
     const full = path.join(BIN_DIR, f);
     if (fs.statSync(full).isFile() && (f.endsWith('.MOD') || f.endsWith('.INI') || f.endsWith('.DLL') || f.endsWith('.TXT'))) {
-        try { fs.unlinkSync(full); } catch (e) {}
+        try { fs.unlinkSync(full); } catch (e) { }
     }
 }
 
@@ -569,15 +695,15 @@ if (fs.existsSync(vboxManage)) {
     try {
         const buildVdi = path.join(BUILD_DIR, 'NewOS_V1.vdi');
         const rootVdi = path.join(ROOT, 'NewOS_V1.vdi');
-        try { execSync(`"${vboxManage}" closemedium disk "${buildVdi}" --delete`, { stdio: 'ignore' }); } catch(e) {}
-        try { execSync(`"${vboxManage}" closemedium disk "${rootVdi}" --delete`, { stdio: 'ignore' }); } catch(e) {}
+        try { execSync(`"${vboxManage}" closemedium disk "${buildVdi}" --delete`, { stdio: 'ignore' }); } catch (e) { }
+        try { execSync(`"${vboxManage}" closemedium disk "${rootVdi}" --delete`, { stdio: 'ignore' }); } catch (e) { }
         if (fs.existsSync(buildVdi)) fs.unlinkSync(buildVdi);
         execSync(`"${vboxManage}" convertfromraw "${buildImg}" "${buildVdi}" --format VDI`, { stdio: 'ignore' });
         fs.copyFileSync(buildVdi, rootVdi);
         fs.copyFileSync(buildVdi, path.join(BUILD_DIR, 'myos.vdi'));
         fs.copyFileSync(buildVdi, path.join(ROOT, 'myos.vdi'));
         console.log(`[OK] Immagine VirtualBox: ${rootVdi} sincronizzata`);
-    } catch (e) {}
+    } catch (e) { }
 }
 
 // 10. Generazione Immagine ISO Avviabile (El Torito CD-ROM + Hybrid MBR)
@@ -587,8 +713,8 @@ const buildIso = path.join(BUILD_DIR, 'NewOS_V1.iso');
 const rootIso = path.join(ROOT, 'NewOS_V1.iso');
 
 if (fs.existsSync(vboxManage)) {
-    try { execSync(`"${vboxManage}" closemedium dvd "${buildIso}"`, { stdio: 'ignore' }); } catch(e) {}
-    try { execSync(`"${vboxManage}" closemedium dvd "${rootIso}"`, { stdio: 'ignore' }); } catch(e) {}
+    try { execSync(`"${vboxManage}" closemedium dvd "${buildIso}"`, { stdio: 'ignore' }); } catch (e) { }
+    try { execSync(`"${vboxManage}" closemedium dvd "${rootIso}"`, { stdio: 'ignore' }); } catch (e) { }
 }
 
 createIsoFromDiskImage(buildImg, buildIso, BIN_DIR);
@@ -596,7 +722,7 @@ createIsoFromDiskImage(buildImg, buildIso, BIN_DIR);
 function safeCopy(src, dst) {
     try {
         if (fs.existsSync(dst)) fs.unlinkSync(dst);
-    } catch(e) {}
+    } catch (e) { }
     fs.copyFileSync(src, dst);
 }
 

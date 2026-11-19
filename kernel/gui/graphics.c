@@ -3,7 +3,9 @@
 #include <drivers/mouse.h>
 #include <fs/vfs.h>
 #include <gui/font.h>
+#include <gui/fontmgr.h>
 #include <gui/graphics.h>
+#include <gui/hwaccel_loader.h>
 #include <gui/image.h>
 #include <gui/wm.h>
 #include <mm/heap.h>
@@ -22,6 +24,7 @@ static uint32_t scr_height = 768;
 static uint32_t scr_pitch_pixels = 1024;
 static uint32_t scr_pitch_bytes = 4096;
 static uint32_t scr_bpp = 32;
+static uint32_t g_ui_scale = 100;
 
 // Bitmap Cursore Mouse Windows 2000 (12x19)
 // 0: trasparente, 1: nero (0x000000), 2: bianco (0xFFFFFF)
@@ -72,6 +75,8 @@ void gfx_flip(void) {
 
   if (scr_bpp == 32) {
     if (scr_pitch_bytes == scr_width * 4) {
+      if (hwaccel_blit_32(lfb_front, lfb_back, scr_width * scr_height))
+        return;
       size_t qwords = ((size_t)scr_width * scr_height * 4) / sizeof(uint64_t);
       uint64_t *dst = (uint64_t *)lfb_front;
       uint64_t *src = (uint64_t *)lfb_back;
@@ -102,6 +107,8 @@ void gfx_flip(void) {
 
 void gfx_clear(uint32_t color) {
   size_t total = (size_t)scr_pitch_pixels * scr_height;
+  if (hwaccel_fill_32(lfb_back, color, (uint32_t)total))
+    return;
   for (size_t i = 0; i < total; i++) {
     lfb_back[i] = color;
   }
@@ -211,38 +218,94 @@ void gfx_draw_gradient_h(int32_t x, int32_t y, int32_t w, int32_t h,
   }
 }
 
+static void gfx_draw_glyph_rows(int32_t x, int32_t y, const uint8_t rows[16],
+                                uint32_t fg, uint32_t bg, bool transparent) {
+  if (g_ui_scale <= 100) {
+    for (int cy = 0; cy < FONT_HEIGHT; cy++) {
+      uint8_t line = rows[cy];
+      for (int cx = 0; cx < FONT_WIDTH; cx++) {
+        if (line & (0x80 >> cx)) {
+          gfx_draw_pixel(x + cx, y + cy, fg);
+        } else if (!transparent) {
+          gfx_draw_pixel(x + cx, y + cy, bg);
+        }
+      }
+    }
+    return;
+  }
+
+  // Scaling DPI nitido (nearest-neighbor senza sfocatura)
+  for (int cy = 0; cy < FONT_HEIGHT; cy++) {
+    uint8_t line = rows[cy];
+    int32_t py0 = (cy * (int32_t)g_ui_scale) / 100;
+    int32_t py1 = ((cy + 1) * (int32_t)g_ui_scale) / 100;
+    if (py1 <= py0) py1 = py0 + 1;
+
+    for (int cx = 0; cx < FONT_WIDTH; cx++) {
+      bool on = ((line & (0x80 >> cx)) != 0);
+      if (!on && transparent)
+        continue;
+      int32_t px0 = (cx * (int32_t)g_ui_scale) / 100;
+      int32_t px1 = ((cx + 1) * (int32_t)g_ui_scale) / 100;
+      if (px1 <= px0) px1 = px0 + 1;
+      uint32_t col = on ? fg : bg;
+      for (int32_t sy = py0; sy < py1; sy++) {
+        for (int32_t sx = px0; sx < px1; sx++) {
+          gfx_draw_pixel(x + sx, y + sy, col);
+        }
+      }
+    }
+  }
+}
+
 void gfx_draw_char(int32_t x, int32_t y, char c, uint32_t fg, uint32_t bg,
                    bool transparent) {
   uint8_t uc = (uint8_t)c;
   if (uc >= 128)
     uc = '?';
-
-  for (int cy = 0; cy < FONT_HEIGHT; cy++) {
-    uint8_t line = font8x16_basic[uc][cy];
-    for (int cx = 0; cx < FONT_WIDTH; cx++) {
-      if (line & (0x80 >> cx)) {
-        gfx_draw_pixel(x + cx, y + cy, fg);
-      } else if (!transparent) {
-        gfx_draw_pixel(x + cx, y + cy, bg);
-      }
-    }
-  }
+  gfx_draw_glyph_rows(x, y, font8x16_basic[uc], fg, bg, transparent);
 }
 
 void gfx_draw_string(int32_t x, int32_t y, const char *str, uint32_t fg,
                      uint32_t bg, bool transparent) {
   if (!str)
     return;
+  int32_t cw = (int32_t)gfx_get_font_w();
+  int32_t ch = (int32_t)gfx_get_font_h();
   int32_t cx = x;
-  while (*str) {
-    if (*str == '\n') {
-      y += FONT_HEIGHT;
+  const uint8_t *p = (const uint8_t *)str;
+  while (*p) {
+    if (*p == '\n') {
+      y += ch;
       cx = x;
-    } else {
-      gfx_draw_char(cx, y, *str, fg, bg, transparent);
-      cx += FONT_WIDTH;
+      p++;
+      continue;
     }
-    str++;
+    uint32_t cp = *p++;
+    if ((cp & 0xE0) == 0xC0 && (p[0] & 0xC0) == 0x80) {
+      cp = ((cp & 0x1F) << 6) | (p[0] & 0x3F);
+      p += 1;
+    } else if ((cp & 0xF0) == 0xE0 && (p[0] & 0xC0) == 0x80 && (p[1] & 0xC0) == 0x80) {
+      cp = ((cp & 0x0F) << 12) | ((p[0] & 0x3F) << 6) | (p[1] & 0x3F);
+      p += 2;
+    } else if ((cp & 0xF8) == 0xF0 && (p[0] & 0xC0) == 0x80 && (p[1] & 0xC0) == 0x80 && (p[2] & 0xC0) == 0x80) {
+      cp = ((cp & 0x07) << 18) | ((p[0] & 0x3F) << 12) | ((p[1] & 0x3F) << 6) | (p[2] & 0x3F);
+      p += 3;
+    } else if (cp >= 0x80) {
+      cp = 0xFFFD;
+    }
+
+    if (cp < 128) {
+      gfx_draw_glyph_rows(cx, y, font8x16_basic[cp], fg, bg, transparent);
+    } else {
+      uint8_t urows[16];
+      if (fontmgr_get_glyph(cp, urows)) {
+        gfx_draw_glyph_rows(cx, y, urows, fg, bg, transparent);
+      } else {
+        gfx_draw_glyph_rows(cx, y, font8x16_basic['?'], fg, bg, transparent);
+      }
+    }
+    cx += cw;
   }
 }
 
@@ -510,7 +573,7 @@ void gfx_draw_background(int bg_type) {
       img = image_load_from_file(path_buf);
       if (!img) {
         mini_snprintf(path_buf, sizeof(path_buf),
-                      "C:\\NewOS\\Resource\\wallpapers\\%s.BMP", fn);
+                      "C:\\NewOS\\Resources\\Wallpapers\\%s.JPG", fn);
         img = image_load_from_file(path_buf);
       }
       if (!img) {
@@ -724,6 +787,31 @@ uint32_t gfx_get_width(void) { return scr_width; }
 uint32_t gfx_get_height(void) { return scr_height; }
 uint32_t gfx_get_pitch_bytes(void) { return scr_pitch_bytes; }
 
+uint64_t gfx_get_lfb_phys(void) { return (uint64_t)(uintptr_t)lfb_front; }
+
+void gfx_set_ui_scale(uint32_t scale_percent) {
+  if (scale_percent < 100) scale_percent = 100;
+  if (scale_percent > 200) scale_percent = 200;
+  g_ui_scale = scale_percent;
+}
+
+uint32_t gfx_get_ui_scale(void) { return g_ui_scale; }
+
+int32_t gfx_scale(int32_t val) {
+  if (g_ui_scale <= 100) return val;
+  return (val * (int32_t)g_ui_scale + 50) / 100;
+}
+
+uint32_t gfx_get_font_w(void) {
+  if (g_ui_scale <= 100) return FONT_WIDTH;
+  return (FONT_WIDTH * g_ui_scale + 50) / 100;
+}
+
+uint32_t gfx_get_font_h(void) {
+  if (g_ui_scale <= 100) return FONT_HEIGHT;
+  return (FONT_HEIGHT * g_ui_scale + 50) / 100;
+}
+
 bool gfx_set_resolution(uint32_t width, uint32_t height) {
   if (!lfb_front || width == 0 || height == 0)
     return false;
@@ -763,6 +851,7 @@ bool gfx_set_resolution(uint32_t width, uint32_t height) {
 
   // Limiti coordinate mouse
   mouse_set_bounds(width, height);
+  hwaccel_on_resolution_changed(width, height);
 
   // Notifica Window Manager per riallineare finestre e menu
   wm_on_resolution_changed(old_w, old_h, width, height);
@@ -801,17 +890,17 @@ static inline bool inside_rounded(int32_t px, int32_t py, int32_t x, int32_t y,
   }
   // Angolo top-right
   if (px >= x + w - r && py < y + r) {
-    int32_t dx = px - (x + w - r), dy = py - (y + r);
+    int32_t dx = px - (x + w - 1 - r), dy = py - (y + r);
     return (dx * dx + dy * dy) <= r * r;
   }
   // Angolo bottom-left
   if (px < x + r && py >= y + h - r) {
-    int32_t dx = px - (x + r), dy = py - (y + h - r);
+    int32_t dx = px - (x + r), dy = py - (y + h - 1 - r);
     return (dx * dx + dy * dy) <= r * r;
   }
   // Angolo bottom-right
   if (px >= x + w - r && py >= y + h - r) {
-    int32_t dx = px - (x + w - r), dy = py - (y + h - r);
+    int32_t dx = px - (x + w - 1 - r), dy = py - (y + h - 1 - r);
     return (dx * dx + dy * dy) <= r * r;
   }
   return true;

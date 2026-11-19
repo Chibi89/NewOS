@@ -48,4 +48,10 @@ uint64_t paging_get_phys(uint64_t* pml4, uint64_t virt);
 // Invalida TLB per un singolo indirizzo virtuale (invlpg)
 void     paging_invalidate_page(uint64_t virt);
 
+// Mappa un'area MMIO hardware (uncacheable PCD|PWT, anche oltre i 4 GB)
+volatile void* paging_map_mmio(uint64_t phys_addr, uint64_t size);
+
+// Alloca un buffer DMA contiguo allineato e azzerato restituendone anche l'indirizzo fisico
+void*          dma_alloc(size_t size, size_t align, uint64_t* out_phys);
+
 #endif // MM_PAGING_H

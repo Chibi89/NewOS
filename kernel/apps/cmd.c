@@ -27,6 +27,7 @@
 #include <apps/rules_viewer.h>
 #include <fs/vfs.h>
 #include <fs/vfs_mount.h>
+#include <include/comdlg.h>
 #include <drivers/net/wifi.h>
 #include <drivers/usb/usb.h>
 #include <drivers/usb/xhci.h>
@@ -875,6 +876,36 @@ static void cmd_execute_internal(cmd_state_t* state, const char* cmd) {
     } else if (strcmp(cmd, "mouse") == 0 || strcmp(cmd, "main.cpl") == 0 || strcmp(cmd, "mouse.cpl") == 0) {
         cmd_print(state, "Apertura Proprietà Mouse...");
         app_mouse_props_launch();
+    } else if (strcmp(cmd, "useracct") == 0 || strcmp(cmd, "useracct.cpl") == 0) {
+        cmd_print(state, "Apertura Account Utente (USERACCT.DLL)...");
+        app_user_accounts_launch();
+    } else if (strcmp(cmd, "timedate") == 0 || strcmp(cmd, "timedate.cpl") == 0) {
+        cmd_print(state, "Apertura Data, Ora e Lingua (TIMEDATE.DLL)...");
+        app_timedate_props_launch();
+    } else if (strcmp(cmd, "ncpa") == 0 || strcmp(cmd, "ncpa.cpl") == 0 || strcmp(cmd, "netcpl") == 0) {
+        cmd_print(state, "Apertura Connessioni di Rete (NETCPL.DLL)...");
+        app_net_props_launch();
+    } else if (strcmp(cmd, "keyboard") == 0 || strcmp(cmd, "keyboard.cpl") == 0 || strcmp(cmd, "keybcpl") == 0) {
+        cmd_print(state, "Apertura Proprieta' Tastiera (KEYBCPL.DLL)...");
+        app_keyboard_props_launch();
+    } else if (strcmp(cmd, "comdlg") == 0) {
+        cmd_print(state, "Apertura Dialogo Comune Apri File (COMDLG.DLL)...");
+        comdlg_open_file_dialog("C:\\User\\Morgan\\Desktop", NULL, NULL);
+    } else if (strcmp(cmd, "copydlg") == 0) {
+        cmd_print(state, "Apertura Finestra Copia Win11 (COMDLG.DLL)...");
+        app_comdlg_copy_move_launch(COMDLG_OP_COPY, "C:\\User\\Morgan\\Downloads\\Win11_English_x64v1.iso", "C:\\User\\Morgan\\Desktop");
+    } else if (strcmp(cmd, "ftpstack") == 0 || strcmp(cmd, "ftpmgr") == 0) {
+        cmd_print(state, "Apertura Gestore Stack & Rete FTP (COMDLG.DLL)...");
+        app_comdlg_ftp_stack_launch();
+    } else if (strcmp(cmd, "recycle") == 0 || strcmp(cmd, "cestino") == 0) {
+        cmd_print(state, "Apertura Cestino di Sistema (C:\\Recycle.Bin)...");
+        app_explorer_open_recycle_bin();
+    } else if (strcmp(cmd, "recyclecfg") == 0 || strcmp(cmd, "recycle.cpl") == 0) {
+        cmd_print(state, "Apertura Proprieta' Cestino (RECYCLE.DLL)...");
+        app_recycle_settings_launch();
+    } else if (strcmp(cmd, "recyclequota") == 0) {
+        cmd_print(state, "Test Limite Spazio Cestino (RECYCLE.DLL)...");
+        app_recycle_quota_prompt_launch("C:\\Docs\\ARCHIVIO_BACKUP.PAK");
     } else if (strcmp(cmd, "control") == 0 || strcmp(cmd, "controlpanel") == 0) {
         cmd_print(state, "Apertura Pannello di controllo...");
         app_control_panel_open();

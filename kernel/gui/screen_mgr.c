@@ -4,24 +4,110 @@
 #include <drivers/mouse.h>
 #include <drivers/net/net_nic.h>
 #include <drivers/power.h>
+#include <drivers/rtc.h>
 #include <drivers/sound.h>
 #include <drivers/sound_wav.h>
 #include <drivers/timer.h>
 #include <fs/registry.h>
 #include <fs/vfs.h>
+#include <fs/vfs_mount.h>
 #include <gui/graphics.h>
+#include <gui/fontmgr.h>
 #include <gui/icons.h>
 #include <gui/image.h>
 #include <gui/screen_mgr.h>
 #include <gui/wm.h>
+#include <clipboard.h>
 #include <mm/heap.h>
 #include <net/dhcp.h>
+#include <net/dns.h>
 #include <net/icmp.h>
+#include <net/nettls_loader.h>
+#include <net/socket.h>
+#include <net/tcp.h>
 #include <string.h>
+#include <net/tcp.h>
+#include <drivers/vga.h>
+#include <drivers/driver_mgr.h>
+#include <drivers/net/wifi.h>
+#include <drivers/usb/usb.h>
+#include <drivers/usb/uhci.h>
+#include <drivers/usb/ohci.h>
+#include <drivers/usb/xhci.h>
+#include <drivers/ac97.h>
+#include <arch/x86_64/cpu.h>
+#include <arch/x86_64/smp.h>
+#include <arch/x86_64/sched.h>
+#include <ipc/ipc.h>
+#include <mm/paging.h>
+#include <fs/exfat.h>
 #include <user.h>
+#include <apps/regedit.h>
+#include <apps/rules_viewer.h>
+#include <apps/taskmgr.h>
+#include <comdlg.h>
+#include <drivers/pci.h>
+#include <drivers/acpi.h>
+#include <drivers/nvme.h>
+#include <gpu3d.h>
+#include <drivers/usb/usb_msc.h>
+#include <gui/uistyle_loader.h>
+#include <settings.h>
+#include <kernel_ext_api.h>
 
 static kernel_api_t g_kernel_api;
+static kernel_ext_api_t g_kernel_ext_api;
 static bool g_api_initialized = false;
+
+extern void wm_focus_window(int32_t id);
+extern void wm_set_background_type(int bg_type);
+extern void app_comdlg_ftp_stack_launch(void);
+extern void app_sound_props_launch(void);
+extern void app_display_props_launch(void);
+extern void app_power_props_launch(void);
+extern void app_mouse_props_launch(void);
+extern void app_devmgmt_launch(void);
+extern void app_about_launch(void);
+extern void app_user_accounts_launch(void);
+extern void app_net_props_launch(void);
+extern void app_timedate_props_launch(void);
+extern void app_keyboard_props_launch(void);
+extern void app_browser_launch(void);
+extern void app_browser_open_url(const char *url);
+extern void app_explorer_open_this_pc(void);
+extern void app_explorer_open_drive_c(void);
+extern void app_explorer_open_drive_u(void);
+extern void app_explorer_open_drive_d(void);
+extern void app_explorer_open_recycle_bin(void);
+extern void app_recycle_quota_prompt_launch(const char *target_path);
+extern void app_recycle_settings_launch(void);
+extern void app_oobe_launch(void);
+extern void app_notepad_open_file(const char *t, const char *c);
+extern const char *ac97_get_device_name(void);
+extern bool hwaccel_is_ready(void);
+extern uint64_t gfx_get_lfb_phys(void);
+extern bool hwaccel_init(uint64_t lfb_phys, uint32_t w, uint32_t h);
+extern void *hwaccel_get_info(void);
+extern bool hwaccel_set_scale(int mode, uint32_t pct);
+extern int wm_get_background_type(void);
+extern void wm_set_theme(int theme);
+extern int vga_get_current_mode_index(void);
+extern int theme_mgr_init(const char *path);
+extern int theme_mgr_find_by_id(int id);
+extern int theme_mgr_get_count(void);
+extern bool theme_mgr_apply(int idx);
+extern uint8_t sound_get_volume(void);
+extern const char *sound_get_driver_name(void);
+extern bool sound_is_ac97(void);
+extern int cursor_mgr_get_active_scheme_index(void);
+extern int cursor_mgr_get_scheme_count(void);
+extern void *cursor_mgr_get_scheme_info(int idx);
+extern void cursor_mgr_draw(int32_t x, int32_t y, int type);
+extern bool cursor_mgr_set_active_scheme(int idx);
+extern void gfx_draw_mini_monitor(int32_t x, int32_t y, int sel);
+extern uint32_t power_get_idle_seconds(void);
+extern void power_set_screen_timeout(uint32_t sec);
+extern void driver_mgr_init(void);
 
 static void serial_log(const char *s) {
   if (!s)
@@ -331,8 +417,248 @@ void screen_mgr_init(void) {
   g_kernel_api.icmp_ping_ip =
       (bool (*)(uint32_t, uint32_t, void *, void *))icmp_ping_ip;
 
+  // Estensioni Sistema, RTC, Profilo Utente e UI Temizzata per Applet .DLL
+  g_kernel_api.rtc_get_time = (void (*)(void *))rtc_get_time;
+  g_kernel_api.user_create_or_migrate = user_create_or_migrate;
+  g_kernel_api.registry_get_value_sz = registry_get_value_sz;
+  g_kernel_api.registry_get_value_dword = registry_get_value_dword;
+  g_kernel_api.wm_get_current_theme_props =
+      (const void *(*)(void))wm_get_current_theme_props;
+  g_kernel_api.wm_get_theme = wm_get_theme;
+  g_kernel_api.wm_draw_themed_button = wm_draw_themed_button;
+  g_kernel_api.wm_draw_themed_tab = wm_draw_themed_tab;
+  g_kernel_api.gfx_fill_rounded_alpha = gfx_fill_rounded_alpha;
+
+  // VFS Avanzato, Appunti Globali (Clipboard) e Socket TCP per COMDLG.DLL & FTP Stack
+  g_kernel_api.vfs_unlink = vfs_unlink;
+  g_kernel_api.vfs_rename = vfs_rename;
+  g_kernel_api.vfs_mkdir = vfs_mkdir;
+  g_kernel_api.clipboard_set_text = clipboard_set_text;
+  g_kernel_api.clipboard_get_text = clipboard_get_text;
+  g_kernel_api.clipboard_push_file = clipboard_push_file;
+  g_kernel_api.clipboard_get_file_count = clipboard_get_file_count;
+  g_kernel_api.clipboard_get_file = clipboard_get_file;
+  g_kernel_api.clipboard_clear_files = clipboard_clear_files;
+  g_kernel_api.tcp_create_conn = (void *(*)(void))tcp_create_conn;
+  g_kernel_api.tcp_connect =
+      (bool (*)(void *, uint32_t, uint16_t))tcp_connect;
+  g_kernel_api.tcp_send =
+      (int (*)(void *, const void *, uint16_t))tcp_send;
+  g_kernel_api.tcp_recv =
+      (int (*)(void *, void *, uint16_t))tcp_recv;
+  g_kernel_api.tcp_close = (void (*)(void *))tcp_close;
+  g_kernel_api.tcp_destroy_conn = (void (*)(void *))tcp_destroy_conn;
+
+  // Streaming VFS a blocchi e telemetria bus hardware reale
+  g_kernel_api.vfs_open = (void *(*)(const char *))vfs_open;
+  g_kernel_api.vfs_read = (int32_t (*)(void *, void *, uint32_t))vfs_read;
+  g_kernel_api.vfs_write =
+      (int32_t (*)(void *, const void *, uint32_t))vfs_write;
+  g_kernel_api.vfs_close = (void (*)(void *))vfs_close;
+  g_kernel_api.vfs_file_size = vfs_file_size;
+  g_kernel_api.vfs_flush = vfs_flush;
+  g_kernel_api.vfs_get_drive_bus_info = vfs_get_drive_bus_info;
+  g_kernel_api.wm_create_window =
+      (void *(*)(const char *, int32_t, int32_t, int32_t, int32_t, int))wm_create_window;
+  g_kernel_api.app_control_panel_open = app_control_panel_open;
+  g_kernel_api.net_socket = net_socket;
+  g_kernel_api.net_connect =
+      (int (*)(int, const void *))net_connect;
+  g_kernel_api.net_send = net_send;
+  g_kernel_api.net_recv = net_recv;
+  g_kernel_api.net_close = net_close;
+  g_kernel_api.net_poll = net_poll;
+  g_kernel_api.dns_resolve = dns_resolve;
+  g_kernel_api.screen_mgr_verify_module = screen_mgr_verify_module;
+  g_kernel_api.fontmgr_get_ttf_glyph = fontmgr_get_ttf_glyph;
+  g_kernel_api.nettls_http_get =
+      (bool (*)(const char *, uint32_t, void *))nettls_http_get;
+  g_kernel_api.nettls_free_response =
+      (void (*)(void *))nettls_free_response;
+
+  memset(&g_kernel_ext_api, 0, sizeof(g_kernel_ext_api));
+  g_kernel_ext_api.wm_focus_window = wm_focus_window;
+  g_kernel_ext_api.wm_set_background_type = wm_set_background_type;
+  g_kernel_ext_api.comdlg_open_file_dialog = (bool (*)(const char *, void *, void *))comdlg_open_file_dialog;
+  g_kernel_ext_api.comdlg_save_file_dialog = (bool (*)(const char *, const char *, void *, void *))comdlg_save_file_dialog;
+  g_kernel_ext_api.app_comdlg_copy_move_launch = (void (*)(int, const char *, const char *))app_comdlg_copy_move_launch;
+  g_kernel_ext_api.app_comdlg_ftp_stack_launch = app_comdlg_ftp_stack_launch;
+  g_kernel_ext_api.app_sound_props_launch = app_sound_props_launch;
+  g_kernel_ext_api.app_display_props_launch = app_display_props_launch;
+  g_kernel_ext_api.app_power_props_launch = app_power_props_launch;
+  g_kernel_ext_api.app_mouse_props_launch = app_mouse_props_launch;
+  g_kernel_ext_api.app_devmgmt_launch = app_devmgmt_launch;
+  g_kernel_ext_api.app_about_launch = app_about_launch;
+  g_kernel_ext_api.app_user_accounts_launch = app_user_accounts_launch;
+  g_kernel_ext_api.app_net_props_launch = app_net_props_launch;
+  g_kernel_ext_api.app_timedate_props_launch = app_timedate_props_launch;
+  g_kernel_ext_api.app_keyboard_props_launch = app_keyboard_props_launch;
+  g_kernel_ext_api.app_browser_launch = app_browser_launch;
+  g_kernel_ext_api.app_browser_open_url = app_browser_open_url;
+  g_kernel_ext_api.app_explorer_open_this_pc = app_explorer_open_this_pc;
+  g_kernel_ext_api.app_explorer_open_drive_c = app_explorer_open_drive_c;
+  g_kernel_ext_api.app_explorer_open_drive_u = app_explorer_open_drive_u;
+  g_kernel_ext_api.app_explorer_open_drive_d = app_explorer_open_drive_d;
+  g_kernel_ext_api.app_explorer_open_recycle_bin = app_explorer_open_recycle_bin;
+  g_kernel_ext_api.app_recycle_quota_prompt_launch = app_recycle_quota_prompt_launch;
+  g_kernel_ext_api.app_recycle_settings_launch = app_recycle_settings_launch;
+  g_kernel_ext_api.app_oobe_launch = app_oobe_launch;
+  g_kernel_ext_api.ac97_is_available = ac97_is_available;
+  g_kernel_ext_api.ac97_set_volume = ac97_set_volume;
+  g_kernel_ext_api.ac97_stop = ac97_stop;
+  g_kernel_ext_api.sound_stop = sound_stop;
+  g_kernel_ext_api.sound_set_volume = sound_set_volume;
+  g_kernel_ext_api.smp_get_info = (void *(*)(void))smp_get_info;
+  g_kernel_ext_api.cpu_get_info = (void *(*)(void))cpu_get_info;
+  g_kernel_ext_api.sched_get_task = (void *(*)(int))sched_get_task;
+  g_kernel_ext_api.sched_state_to_str = (const char *(*)(int))sched_state_to_str;
+  g_kernel_ext_api.sched_get_task_count = sched_get_task_count;
+  g_kernel_ext_api.task_kill = task_kill;
+  g_kernel_ext_api.ipc_pending_msg_count = ipc_pending_msg_count;
+  g_kernel_ext_api.paging_get_stats = (void (*)(void *))paging_get_stats;
+  g_kernel_ext_api.power_enter_screen_standby = power_enter_screen_standby;
+  g_kernel_ext_api.power_get_status = power_get_status;
+  g_kernel_ext_api.registry_get_log_count = registry_get_log_count;
+  g_kernel_ext_api.registry_get_log_line = registry_get_log_line;
+  g_kernel_ext_api.registry_get_root_count = registry_get_root_count;
+  g_kernel_ext_api.registry_get_root = (void *(*)(int))registry_get_root;
+  g_kernel_ext_api.registry_get_key = (void *(*)(const char *))registry_get_key;
+  g_kernel_ext_api.registry_get_risk_string = (const char *(*)(int))registry_get_risk_string;
+  g_kernel_ext_api.registry_get_risk_level = (int (*)(const char *, const char *))registry_get_risk_level;
+  g_kernel_ext_api.vfs_get_drive_info = (bool (*)(char, void *))vfs_get_drive_info;
+  g_kernel_ext_api.vfs_list_drives = vfs_list_drives;
+  g_kernel_ext_api.vfs_wildcard_match = vfs_wildcard_match;
+  g_kernel_ext_api.vfs_mount_drive = (bool (*)(char, const char *, const char *, uint32_t, uint64_t, bool, void *))vfs_mount_drive;
+  g_kernel_ext_api.vfs_seek = (int32_t (*)(void *, uint32_t, int))vfs_seek;
+  g_kernel_ext_api.vfs_is_protected = vfs_is_protected;
+  g_kernel_ext_api.exfat_check_boot_integrity = (bool (*)(void *))exfat_check_boot_integrity;
+  g_kernel_ext_api.exfat_get_used_mb = exfat_get_used_mb;
+  g_kernel_ext_api.exfat_get_allocated_clusters = exfat_get_allocated_clusters;
+  g_kernel_ext_api.exfat_get_free_clusters = exfat_get_free_clusters;
+  g_kernel_ext_api.driver_mgr_get_count = driver_mgr_get_count;
+  g_kernel_ext_api.driver_mgr_get_driver = (void *(*)(int))driver_mgr_get_driver;
+  g_kernel_ext_api.driver_mgr_status_to_str = (const char *(*)(int))driver_mgr_status_to_str;
+  g_kernel_ext_api.xhci_is_active = xhci_is_active;
+  g_kernel_ext_api.xhci_get_controller = (void *(*)(void))xhci_get_controller;
+  g_kernel_ext_api.uhci_is_active = uhci_is_active;
+  g_kernel_ext_api.uhci_get_controller = (void *(*)(void))uhci_get_controller;
+  g_kernel_ext_api.ohci_is_active = ohci_is_active;
+  g_kernel_ext_api.ohci_get_controller = (void *(*)(void))ohci_get_controller;
+  g_kernel_ext_api.usb_get_device_count = usb_get_device_count;
+  g_kernel_ext_api.usb_get_device = (void *(*)(int))usb_get_device;
+  g_kernel_ext_api.usb_controller_type_to_str = (const char *(*)(int))usb_controller_type_to_str;
+  g_kernel_ext_api.usb_speed_to_str = (const char *(*)(int))usb_speed_to_str;
+  g_kernel_ext_api.usb_class_to_str = usb_class_to_str;
+  g_kernel_ext_api.wifi_scan = (int (*)(void *, int))wifi_scan;
+  g_kernel_ext_api.wifi_connect = wifi_connect;
+  g_kernel_ext_api.wifi_disconnect = wifi_disconnect;
+  g_kernel_ext_api.wifi_get_info = (bool (*)(void *))wifi_get_info;
+  g_kernel_ext_api.wifi_set_hardware_cap = wifi_set_hardware_cap;
+  g_kernel_ext_api.wifi_bus_to_str = (const char *(*)(int))wifi_bus_to_str;
+  g_kernel_ext_api.wifi_band_to_str = (const char *(*)(int))wifi_band_to_str;
+  g_kernel_ext_api.vga_is_bga_supported = vga_is_bga_supported;
+  g_kernel_ext_api.vga_get_mode_count = vga_get_mode_count;
+  g_kernel_ext_api.vga_get_mode_info = (void *(*)(int))vga_get_mode_info;
+  g_kernel_ext_api.vga_set_mode_index = vga_set_mode_index;
+  g_kernel_ext_api.vga_set_resolution = vga_set_resolution;
+  g_kernel_ext_api.dhcp_get_state = (int (*)(void))dhcp_get_state;
+  g_kernel_ext_api.dhcp_state_to_str = (const char *(*)(int))dhcp_state_to_str;
+  g_kernel_ext_api.tcp_get_connections_count = tcp_get_connections_count;
+  g_kernel_ext_api.tcp_get_connection = (void *(*)(int))tcp_get_connection;
+  g_kernel_ext_api.tcp_state_to_str = (const char *(*)(int))tcp_state_to_str;
+  g_kernel_ext_api.kernel_get_boot_info = (void *(*)(void))kernel_get_boot_info;
+  g_kernel_ext_api.ata_get_primary_master = (void *(*)(void))ata_get_primary_master;
+  g_kernel_ext_api.ata_get_device_count = ata_get_device_count;
+  g_kernel_ext_api.ac97_get_device_name = ac97_get_device_name;
+  g_kernel_ext_api.hwaccel_is_ready = hwaccel_is_ready;
+  g_kernel_ext_api.gfx_get_lfb_phys = gfx_get_lfb_phys;
+  g_kernel_ext_api.hwaccel_init = hwaccel_init;
+  g_kernel_ext_api.hwaccel_get_info = hwaccel_get_info;
+  g_kernel_ext_api.hwaccel_set_scale = hwaccel_set_scale;
+  g_kernel_ext_api.wm_get_background_type = wm_get_background_type;
+  g_kernel_ext_api.wm_set_theme = wm_set_theme;
+  g_kernel_ext_api.vga_get_current_mode_index = vga_get_current_mode_index;
+  g_kernel_ext_api.vga_init = vga_init;
+  g_kernel_ext_api.theme_mgr_init = theme_mgr_init;
+  g_kernel_ext_api.theme_mgr_find_by_id = theme_mgr_find_by_id;
+  g_kernel_ext_api.theme_mgr_get = (void *(*)(int))theme_mgr_get;
+  g_kernel_ext_api.theme_mgr_get_count = theme_mgr_get_count;
+  g_kernel_ext_api.theme_mgr_apply = theme_mgr_apply;
+  g_kernel_ext_api.sound_get_volume = sound_get_volume;
+  g_kernel_ext_api.sound_get_driver_name = sound_get_driver_name;
+  g_kernel_ext_api.sound_is_ac97 = sound_is_ac97;
+  g_kernel_ext_api.cursor_mgr_get_active_scheme_index = cursor_mgr_get_active_scheme_index;
+  g_kernel_ext_api.cursor_mgr_get_scheme_count = cursor_mgr_get_scheme_count;
+  g_kernel_ext_api.cursor_mgr_get_scheme_info = cursor_mgr_get_scheme_info;
+  g_kernel_ext_api.cursor_mgr_draw = cursor_mgr_draw;
+  g_kernel_ext_api.cursor_mgr_set_active_scheme = cursor_mgr_set_active_scheme;
+  g_kernel_ext_api.gfx_draw_mini_monitor = gfx_draw_mini_monitor;
+  g_kernel_ext_api.power_get_idle_seconds = power_get_idle_seconds;
+  g_kernel_ext_api.power_set_profile = (void (*)(int))power_set_profile;
+  g_kernel_ext_api.power_set_screen_timeout = power_set_screen_timeout;
+  g_kernel_ext_api.app_notepad_open_file = app_notepad_open_file;
+  g_kernel_ext_api.driver_mgr_init = driver_mgr_init;
+  g_kernel_ext_api.app_calc_launch = app_calc_launch;
+  g_kernel_ext_api.app_cmd_launch = app_cmd_launch;
+  g_kernel_ext_api.app_notepad_launch = app_notepad_launch;
+  g_kernel_ext_api.app_player_launch = app_player_launch;
+  g_kernel_ext_api.app_player_open_file = app_player_open_file;
+  g_kernel_ext_api.app_regedit_launch = app_regedit_launch;
+  g_kernel_ext_api.app_rules_viewer_launch = app_rules_viewer_launch;
+  g_kernel_ext_api.app_rules_viewer_open_file = app_rules_viewer_open_file;
+  g_kernel_ext_api.app_taskmgr_launch = app_taskmgr_launch;
+  g_kernel_ext_api.ata_get_device = (const void *(*)(int))ata_get_device;
+  g_kernel_ext_api.atapi_get_disc_type_name = (const char *(*)(const void *))atapi_get_disc_type_name;
+  g_kernel_ext_api.comdlg_exec_file_op = (bool (*)(int, const char *, const char *))comdlg_exec_file_op;
+  g_kernel_ext_api.gfx_set_custom_wallpaper = gfx_set_custom_wallpaper;
+  g_kernel_ext_api.recycle_empty_bin = recycle_empty_bin;
+  g_kernel_ext_api.recycle_get_stats = recycle_get_stats;
+  g_kernel_ext_api.recycle_restore_file = recycle_restore_file;
+  g_kernel_ext_api.settings_handle_key = (bool (*)(const void *, char, void *))settings_handle_key;
+  g_kernel_ext_api.settings_handle_mouse = (int (*)(const void *, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, bool, void *))settings_handle_mouse;
+  g_kernel_ext_api.settings_loader_init = settings_loader_init;
+  g_kernel_ext_api.settings_render = (void (*)(const void *, int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, bool, uint32_t, void *, const void *))settings_render;
+  g_kernel_ext_api.theme_mgr_render_script = theme_mgr_render_script;
+  g_kernel_ext_api.uistyle_get_active = uistyle_get_active;
+  g_kernel_ext_api.uistyle_set_active = uistyle_set_active;
+  g_kernel_ext_api.usb_msc_get_device = (const void *(*)(void))usb_msc_get_device;
+  g_kernel_ext_api.usb_msc_is_present = usb_msc_is_present;
+  g_kernel_ext_api.pci_read32 = pci_read32;
+  g_kernel_ext_api.pci_read16 = pci_read16;
+  g_kernel_ext_api.pci_read8 = pci_read8;
+  g_kernel_ext_api.pci_write32 = pci_write32;
+  g_kernel_ext_api.pci_write16 = pci_write16;
+  g_kernel_ext_api.pci_find_device = (bool (*)(uint16_t, uint16_t, void *))pci_find_device;
+  g_kernel_ext_api.pci_find_class = (bool (*)(uint8_t, uint8_t, void *))pci_find_class;
+  g_kernel_ext_api.pci_find_class_prog_if = (bool (*)(uint8_t, uint8_t, uint8_t, void *))pci_find_class_prog_if;
+  g_kernel_ext_api.pci_enable_bus_master = (void (*)(void *))pci_enable_bus_master;
+  g_kernel_ext_api.ata_read_sectors = ata_read_sectors;
+  g_kernel_ext_api.ata_write_sectors = ata_write_sectors;
+  g_kernel_ext_api.ata_read_device_sectors = (bool (*)(const void *, uint64_t, uint32_t, void *))ata_read_device_sectors;
+  g_kernel_ext_api.ata_write_device_sectors = (bool (*)(const void *, uint64_t, uint32_t, const void *))ata_write_device_sectors;
+  g_kernel_ext_api.atapi_read_cd_sector = (bool (*)(const void *, uint32_t, void *))atapi_read_cd_sector;
+  g_kernel_ext_api.atapi_read_cd_sectors = (bool (*)(const void *, uint32_t, uint32_t, void *))atapi_read_cd_sectors;
+  g_kernel_ext_api.usb_msc_read_sector = usb_msc_read_sector;
+  g_kernel_ext_api.usb_msc_write_sector = usb_msc_write_sector;
+  g_kernel_ext_api.vfs_register_driver = (bool (*)(const void *))vfs_register_driver;
+  g_kernel_ext_api.xhci_init = xhci_init;
+  g_kernel_ext_api.usb_find_wireless_device = (void *(*)(void))usb_find_wireless_device;
+  g_kernel_ext_api.usb_subsystem_init = usb_subsystem_init;
+  g_kernel_ext_api.kmalloc_aligned = kmalloc_aligned;
+  g_kernel_ext_api.pci_get_device_count = pci_get_device_count;
+  g_kernel_ext_api.pci_get_device = (const void *(*)(int))pci_get_device;
+  g_kernel_ext_api.pci_get_bar_addr = (uint64_t (*)(const void *, int))pci_get_bar_addr;
+  g_kernel_ext_api.paging_map_mmio = paging_map_mmio;
+  g_kernel_ext_api.dma_alloc = dma_alloc;
+  g_kernel_ext_api.acpi_get_info = (const void *(*)(void))acpi_get_info;
+  g_kernel_ext_api.gpu3d_get_info = (const void *(*)(void))gpu3d_get_info;
+  g_kernel_ext_api.nvme_is_present = nvme_is_present;
+  g_kernel_ext_api.nvme_get_model = nvme_get_model;
+  g_kernel_ext_api.nvme_get_capacity_sectors = nvme_get_capacity_sectors;
+  g_kernel_api.ext_api = &g_kernel_ext_api;
+
   g_api_initialized = true;
-  serial_log("[SCREEN_MGR] Tabella API Kernel collegata con successo (43 "
+  serial_log("[SCREEN_MGR] Tabella API Kernel collegata con successo (76 "
              "Entrypoint).\n");
 }
 

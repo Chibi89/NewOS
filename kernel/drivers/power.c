@@ -1,4 +1,5 @@
 #include <drivers/power.h>
+#include <drivers/acpi.h>
 #include <drivers/timer.h>
 #include <arch/x86_64/io.h>
 #include <arch/x86_64/idt.h>
@@ -120,6 +121,9 @@ void power_shutdown(void) {
     outb(0x3F8, 'F');
     outb(0x3F8, 'F');
 
+    // 0. Spegnimento ACPI reale tramite FADT PM1a/PM1b_CNT_BLK (_S5_)
+    acpi_shutdown();
+
     // 1. Invio comando di spegnimento ACPI QEMU (porta standard 0x604)
     outw(0x604, 0x2000);
 
@@ -171,6 +175,9 @@ void power_reboot(void) {
     outb(0x3F8, 'B');
     outb(0x3F8, 'O');
     outb(0x3F8, 'T');
+
+    // 0. Reset ACPI reale tramite FADT RESET_REG
+    acpi_reboot();
 
     // 1. Reset tramite porta 0x64 (8042 Keyboard Controller)
     uint8_t good = 0x02;

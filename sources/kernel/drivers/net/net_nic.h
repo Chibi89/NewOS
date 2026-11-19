@@ -5,8 +5,10 @@
 
 typedef enum {
     NIC_TYPE_NONE = 0,
-    NIC_TYPE_E1000,     // Intel 82540EM Gigabit Ethernet
+    NIC_TYPE_E1000,     // Intel 82540EM / e1000e Gigabit Ethernet
     NIC_TYPE_RTL8139,   // Realtek RTL8139 Fast Ethernet
+    NIC_TYPE_R8169,     // Realtek RTL8111/8168/8125 Gigabit/2.5GbE Ethernet
+    NIC_TYPE_VIRTIO,    // VirtIO-Net Paravirtual Gigabit Ethernet
     NIC_TYPE_WIFI       // Wi-Fi 7/6E Ultra-High Throughput (fino a 5.0 GB/s con vincolo HW reale)
 } nic_type_t;
 

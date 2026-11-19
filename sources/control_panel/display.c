@@ -2,6 +2,7 @@
 #include "cpl_theme.h"
 #include <gui/wm.h>
 #include <gui/graphics.h>
+#include <gui/hwaccel_loader.h>
 #include <gui/icons.h>
 #include <drivers/vga.h>
 #include <mm/heap.h>
@@ -18,6 +19,10 @@ typedef struct {
     int orig_mode;
     int selected_theme_idx;
     int theme_scroll_offset;
+    uint32_t selected_scale_mode;
+    uint32_t selected_scale_pct;
+    uint32_t orig_scale_mode;
+    uint32_t orig_scale_pct;
 } display_state_t;
 
 static const char* bg_names[NUM_BACKGROUNDS] = {
@@ -421,7 +426,7 @@ static void draw_theme_tab(window_t* win, display_state_t* state) {
     // Footer informativo all'esterno del box
     char footer_msg[128];
     mini_snprintf(footer_msg, sizeof(footer_msg),
-                  "Libreria: %d temi rilevati in NewOS\\Resource\\Themes",
+                  "Libreria: %d temi rilevati in NewOS\\Resources\\Themes",
                   total_themes);
     gfx_draw_string(cx + 14, cy + 300, footer_msg, COLOR_BTNSHADOW, 0, true);
 }
@@ -431,14 +436,45 @@ static void draw_res_tab(window_t* win, display_state_t* state) {
     int32_t cy = win->y + 24;
     int32_t cw = win->width - 8;
 
-    // Mini monitor preview
-    gfx_draw_mini_monitor(cx + (cw - 120) / 2, cy + 30, wm_get_background_type());
+    // Mini monitor a sinistra + Scheda Accelerazione Hardware & DPI a destra
+    gfx_draw_mini_monitor(cx + 22, cy + 34, wm_get_background_type());
+
+    const hwaccel_info_t* hw = hwaccel_get_info();
+    int32_t hw_x = cx + 154;
+    int32_t hw_y = cy + 32;
+    int32_t hw_w = cw - 168;
+    gfx_draw_bevel_rect(hw_x, hw_y, hw_w, 96, true);
+    gfx_fill_rect(hw_x + 8, hw_y - 6, 176, 12, COLOR_BTNFACE);
+    gfx_draw_string(hw_x + 10, hw_y - 6, " HW Accel & Monitor ", COLOR_WINDOWTEXT, 0, true);
+
+    char line_buf[80];
+    if (hw) {
+        char gpu_short[40];
+        int k = 0;
+        while (hw->gpu_name[k] && k < 36) { gpu_short[k] = hw->gpu_name[k]; k++; }
+        gpu_short[k] = '\0';
+        mini_snprintf(line_buf, sizeof(line_buf), "GPU: %s", gpu_short);
+        gfx_draw_string(hw_x + 8, hw_y + 12, line_buf, 0x0A246A, 0, true);
+
+        mini_snprintf(line_buf, sizeof(line_buf), "PAT/WC: %s | Blit: %s",
+                      hw->pat_wc_active ? "Attivo" : "Standard",
+                      hw->sse2_supported ? "SSE2" : "Scalar");
+        gfx_draw_string(hw_x + 8, hw_y + 32, line_buf, COLOR_WINDOWTEXT, 0, true);
+
+        mini_snprintf(line_buf, sizeof(line_buf), "Monitor: %s (%s)",
+                      hw->monitor_name, hw->edid_valid ? "EDID" : "Auto");
+        gfx_draw_string(hw_x + 8, hw_y + 52, line_buf, 0x444444, 0, true);
+
+        mini_snprintf(line_buf, sizeof(line_buf), "DPI: %u DPI | Scala: %u%%",
+                      (unsigned)hw->detected_dpi, (unsigned)hw->scale_percent);
+        gfx_draw_string(hw_x + 8, hw_y + 72, line_buf, 0x0A246A, 0, true);
+    }
 
     // Box Risoluzioni
     int32_t box_x = cx + 14;
     int32_t box_y = cy + 138;
     int32_t box_w = cw - 28;
-    int32_t box_h = 175;
+    int32_t box_h = 148;
 
     gfx_draw_bevel_rect(box_x, box_y, box_w, box_h, true);
     gfx_fill_rect(box_x + 10, box_y - 6, 176, 12, COLOR_BTNFACE);
@@ -452,7 +488,7 @@ static void draw_res_tab(window_t* win, display_state_t* state) {
 
     char info_str[80];
     mini_snprintf(info_str, sizeof(info_str), "Driver Video: %s",
-                  bga_ok ? "VGA.SYS (Accelerazione VBE BGA)" : "VESA Framebuffer Legacy");
+                  bga_ok ? "VGA.SYS (BGA) + HWACCEL.DLL" : "VESA LFB + HWACCEL.DLL");
     gfx_draw_string(box_x + 10, box_y + 10, info_str, 0x0A246A, 0, true);
 
     int mode_count = vga_get_mode_count();
@@ -463,26 +499,39 @@ static void draw_res_tab(window_t* win, display_state_t* state) {
         int col = i / 3;
         int row = i % 3;
         int32_t bx = box_x + 10 + col * (box_w / 2);
-        int32_t by = box_y + 30 + row * 44;
+        int32_t by = box_y + 28 + row * 38;
         int32_t bw = (box_w / 2) - 16;
-        int32_t bh = 40;
+        int32_t bh = 34;
 
         bool is_sel = (state->selected_mode == i);
         gfx_fill_rect(bx, by, bw, bh, is_sel ? 0xC0D2EC : COLOR_BTNFACE);
         gfx_draw_bevel_rect(bx, by, bw, bh, is_sel);
 
-        // Radio button
         int32_t rx = bx + 8;
-        int32_t ry = by + 13;
+        int32_t ry = by + 10;
         gfx_fill_rect(rx, ry, 14, 14, is_sel ? COLOR_BTNFACE : 0xFFFFFF);
         gfx_draw_bevel_rect(rx, ry, 14, 14, true);
         if (is_sel) {
             gfx_fill_rect(rx + 3, ry + 3, 8, 8, 0x0A246A);
         }
 
-        // Testo risoluzione e formato
-        gfx_draw_string(bx + 28, by + 6, m->label, is_sel ? 0x0A246A : COLOR_WINDOWTEXT, 0, true);
-        gfx_draw_string(bx + 28, by + 22, m->aspect_ratio, 0x555555, 0, true);
+        gfx_draw_string(bx + 28, by + 3, m->label, is_sel ? 0x0A246A : COLOR_WINDOWTEXT, 0, true);
+        gfx_draw_string(bx + 28, by + 17, m->aspect_ratio, 0x555555, 0, true);
+    }
+
+    // Sezione Scala DPI / UI
+    int32_t sc_y = box_y + 156;
+    gfx_draw_string(box_x, sc_y + 5, "Scala DPI:", COLOR_WINDOWTEXT, 0, true);
+    const char* sc_lbls[5] = { "Auto", "100%", "125%", "150%", "200%" };
+    const uint32_t sc_vals[5] = { 0, 100, 125, 150, 200 };
+    for (int s = 0; s < 5; s++) {
+        int32_t sx = box_x + 88 + s * 68;
+        int32_t sw_b = 62;
+        bool active = (s == 0 && state->selected_scale_mode == 0) ||
+                      (s > 0 && state->selected_scale_mode == 1 && state->selected_scale_pct == sc_vals[s]);
+        gfx_fill_rect(sx, sc_y, sw_b, 24, active ? 0xC0D2EC : COLOR_BTNFACE);
+        gfx_draw_bevel_rect(sx, sc_y, sw_b, 24, active);
+        gfx_draw_string(sx + 10, sc_y + 4, sc_lbls[s], active ? 0x0A246A : COLOR_WINDOWTEXT, 0, true);
     }
 }
 
@@ -641,11 +690,21 @@ static void display_mouse(window_t* win, int32_t mx, int32_t my, bool clicked) {
             int col = i / 3;
             int row = i % 3;
             int32_t bx = box_x + 10 + col * (box_w / 2);
-            int32_t by = box_y + 30 + row * 44;
+            int32_t by = box_y + 28 + row * 38;
             int32_t bw = (box_w / 2) - 16;
-            int32_t bh = 40;
+            int32_t bh = 34;
             if (mx >= bx && mx <= bx + bw && my >= by && my <= by + bh) {
                 state->selected_mode = i;
+                return;
+            }
+        }
+        int32_t sc_y = box_y + 156;
+        const uint32_t sc_vals[5] = { 0, 100, 125, 150, 200 };
+        for (int s = 0; s < 5; s++) {
+            int32_t sx = box_x + 88 + s * 68;
+            if (mx >= sx && mx <= sx + 62 && my >= sc_y && my <= sc_y + 24) {
+                state->selected_scale_mode = (s == 0) ? 0 : 1;
+                if (s > 0) state->selected_scale_pct = sc_vals[s];
                 return;
             }
         }
@@ -664,6 +723,7 @@ static void display_mouse(window_t* win, int32_t mx, int32_t my, bool clicked) {
             vga_set_mode_index(state->selected_mode);
             state->orig_mode = state->selected_mode;
         }
+        hwaccel_set_scale(state->selected_scale_mode, state->selected_scale_pct);
         wm_destroy_window(win->id);
         return;
     }
@@ -672,6 +732,7 @@ static void display_mouse(window_t* win, int32_t mx, int32_t my, bool clicked) {
         if (state->orig_mode != vga_get_current_mode_index()) {
             vga_set_mode_index(state->orig_mode);
         }
+        hwaccel_set_scale(state->orig_scale_mode, state->orig_scale_pct);
         wm_set_background_type(state->orig_bg);
         wm_set_theme(state->orig_theme);
         wm_destroy_window(win->id);
@@ -693,6 +754,9 @@ static void display_mouse(window_t* win, int32_t mx, int32_t my, bool clicked) {
             win->y = ((int32_t)gfx_get_height() - 28 - win->height) / 2;
             if (win->y < 10) win->y = 10;
         }
+        hwaccel_set_scale(state->selected_scale_mode, state->selected_scale_pct);
+        state->orig_scale_mode = state->selected_scale_mode;
+        state->orig_scale_pct = state->selected_scale_pct;
         return;
     }
 }
@@ -786,6 +850,9 @@ static void display_key(window_t* win, char c) {
 }
 
 void app_display_props_launch(void) {
+    if (!hwaccel_is_ready()) {
+        hwaccel_init(gfx_get_lfb_phys(), gfx_get_width(), gfx_get_height());
+    }
     uint32_t sw = gfx_get_width();
     uint32_t sh = gfx_get_height();
     int32_t win_w = 560;
@@ -807,8 +874,13 @@ void app_display_props_launch(void) {
         state->active_tab     = 0;
         state->selected_mode  = vga_get_current_mode_index();
         state->orig_mode      = state->selected_mode;
+        const hwaccel_info_t* hw = hwaccel_get_info();
+        state->selected_scale_mode = hw ? hw->scale_mode : 0;
+        state->selected_scale_pct  = hw ? hw->scale_percent : 100;
+        state->orig_scale_mode     = state->selected_scale_mode;
+        state->orig_scale_pct      = state->selected_scale_pct;
         state->theme_scroll_offset = 0;
-        theme_mgr_init("C:/NewOS/Resource/Themes");
+        theme_mgr_init("C:/NewOS/Resources/Themes");
         state->selected_theme_idx = theme_mgr_find_by_id(state->selected_theme);
         if (state->selected_theme_idx < 0) state->selected_theme_idx = 0;
         if (state->selected_theme_idx >= 6) {

@@ -54,42 +54,30 @@ uint32_t exfat_ops_allocate_cluster(void) {
     const exfat_vbr_t* vbr = exfat_get_vbr();
     if (!vbr) return 0;
 
-    uint32_t total_clusters = vbr->cluster_count;
+    uint32_t cl = exfat_find_free_cluster();
+    if (cl < 2) return 0;
+
     uint32_t fat_lba = EXFAT_PARTITION_LBA + vbr->fat_offset;
-
+    uint32_t sec = fat_lba + (cl * 4) / 512;
+    uint32_t off = (cl * 4) % 512;
     uint8_t sec_buf[512];
-
-    // Scansiona la FAT per trovare il primo cluster libero (valore 0x00000000)
-    for (uint32_t cl = 2; cl < total_clusters + 2; cl++) {
-        uint32_t sec = fat_lba + (cl * 4) / 512;
-        uint32_t off = (cl * 4) % 512;
-
-        if (!vfs_cache_read_sector(0, sec, sec_buf)) {
-            continue;
-        }
-
-        uint32_t val = *(uint32_t*)(sec_buf + off);
-        if (val == 0) {
-            // Trovato cluster libero! Marcalo come ultimo cluster (0xFFFFFFFF)
-            *(uint32_t*)(sec_buf + off) = 0xFFFFFFFF;
-            vfs_cache_write_sector(0, sec, sec_buf);
-
-            // Inizializza a zero il cluster allocato
-            uint32_t spc = 1 << vbr->sectors_per_cluster_shift;
-            uint32_t cl_lba = exfat_cluster_to_lba(cl);
-            uint8_t zero_sec[512];
-            memset(zero_sec, 0, 512);
-            for (uint32_t s = 0; s < spc; s++) {
-                vfs_cache_write_sector(0, cl_lba + s, zero_sec);
-            }
-
-            exfat_set_bitmap_bit(cl, true);
-            exfat_notify_cluster_allocated();
-            return cl;
-        }
+    if (vfs_cache_read_sector(0, sec, sec_buf)) {
+        *(uint32_t*)(sec_buf + off) = 0xFFFFFFFF;
+        vfs_cache_write_sector(0, sec, sec_buf);
     }
 
-    return 0;
+    // Inizializza a zero il cluster allocato
+    uint32_t spc = 1 << vbr->sectors_per_cluster_shift;
+    uint32_t cl_lba = exfat_cluster_to_lba(cl);
+    uint8_t zero_sec[512];
+    memset(zero_sec, 0, 512);
+    for (uint32_t s = 0; s < spc; s++) {
+        vfs_cache_write_sector(0, cl_lba + s, zero_sec);
+    }
+
+    exfat_set_bitmap_bit(cl, true);
+    exfat_notify_cluster_allocated();
+    return cl;
 }
 
 bool exfat_ops_create_entry(uint32_t dir_cluster, const char* name, uint32_t first_cluster, uint32_t initial_size, uint16_t attributes) {
