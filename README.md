@@ -17,6 +17,17 @@
 
 ---
 
+## Novità della Settimana (16 – 19 Novembre 2026)
+
+- **Scorporo Massivo Out-of-Kernel (28 DLL in `C:\NewOS\SystemLibrary\`)**: riduzione di `kernel.bin` da ~326 KB a **173.996 byte (~170 KB / 480 KB)** spostando fuori dal kernel le applicazioni (`EXPLORER.DLL`, `SYSAPPS.DLL`), le estensioni FS (`FS_EXT.DLL`), i dialoghi comuni (`COMDLG.DLL`), lo stile UI moderno Copenhagen (`COPENHAGEN.DLL`), l'accelerazione 2D/DPI (`HWACCEL.DLL`), il gestore font TrueType/Unicode (`FONTMGR.DLL`) e i codec immagine (`IMGCODEC.DLL`).
+- **Motore Web Browser Completo Out-of-Kernel**: integrati fuori dal kernel `WEBBROWSER.DLL`, il motore HTML/DOM NetSurf/Hubbub (`NETSURF_CORE.DLL`), il motore CSS `libcss` (`CSSENGINE.DLL`), il motore JavaScript QuickJS (`JSENGINE.DLL`) e il layer HTTPS/TLS (`NETTLS.DLL`).
+- **Supporto Hardware Bare-Metal Esteso & Ottimizzazione Kernel**: aggiunto parsing tabelle **ACPI**, scansione **PCI/PCIe fino a 256 bus** con decodifica **BAR a 64-bit**, mapping MMIO (`paging_map_mmio`), allocatore DMA allineato e nuovi driver **NVMe** (`NVME.DLL`), **Intel HDA** (`AUDIO.DLL`), **Realtek RTL8169/8168** e **VirtIO-Net** (`NETSTACK.DLL`).
+- **Accelerazione Grafica & Sottosistema 3D (`GPU3D.DLL`)**: introdotti i driver **VMware SVGA II**, **VirtIO-GPU**, **Intel GPU** e rasterizzatore 3D software fallback (`soft3d.c`).
+- **Gestione Periferiche ad Albero (`DEVMGMT.CPL`)**: rinnovata l'applet Gestione Periferiche con vista gerarchica categorizzata, espansione/collasso nodi e ispezione hardware reale PCI/ACPI.
+- **Configurazione IDE Freestanding**: aggiunti `.vscode/c_cpp_properties.json` e `.clangd` allineati a `tools/build.js` per azzerare i falsi positivi di IntelliSense.
+
+---
+
 ## Caratteristiche Principali
 
 ### 1. Bootloader Ibrido Dual-Mode (BIOS & UEFI), OOBE e Autenticazione Protetta
