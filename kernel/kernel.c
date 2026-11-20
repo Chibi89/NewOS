@@ -10,6 +10,7 @@
 #include <arch/x86_64/sched.h>
 #include <arch/x86_64/smp.h>
 #include <arch/x86_64/syscall.h>
+#include <bsod.h>
 #include <drivers/acpi.h>
 #include <drivers/ahci.h>
 #include <drivers/ata.h>
@@ -98,6 +99,9 @@ void kernel_main(BootInfo *binfo) {
   if (vfs_init()) {
     outb(0x3F8, 'F');
   }
+
+  // Pre-carica BSOD.DLL e KERNEL.SYM in RAM per gestione crash zero-disk
+  bsod_init();
 
   // Inizializza Sottosistema Modulare Driver (C:\SYSTEM\DRIVERS\)
   driver_mgr_init();

@@ -2,7 +2,7 @@
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 [![Arch](https://img.shields.io/badge/architecture-x86__64%20(Long%20Mode)-blue.svg)]()
-[![Kernel Size](https://img.shields.io/badge/kernel%20size-170%20KB%20%2F%20480%20KB-brightgreen.svg)]()
+[![Kernel Size](https://img.shields.io/badge/kernel%20size-174%20KB%20%2F%20480%20KB-brightgreen.svg)]()
 [![Dual Boot](https://img.shields.io/badge/boot-BIOS%20MBR%20%2B%20UEFI%2064--bit-blueviolet.svg)]()
 [![Filesystem](https://img.shields.io/badge/filesystems-exFAT%20%7C%20NTFS--3G%20%7C%20ISO%209660%20%7C%20UDF%20%7C%20RamFS-purple.svg)]()
 [![UI](https://img.shields.io/badge/GUI-Liquid%20Glass%20%7C%20Mica%20%7C%20Classic%202000-lightgrey.svg)]()
@@ -14,6 +14,28 @@
   <br />
   <em>Ambiente Desktop di NewOS V1 (64-bit) con tema Liquid Glass attivo, griglia icone anti-collisione ed Esplora Risorse su Disco locale (C:).</em>
 </p>
+
+---
+
+## Registro Aggiornamenti e Fix Recenti
+
+<details>
+<summary><strong>Espandi per visualizzare gli aggiornamenti e i fix recenti</strong></summary>
+
+### 20 Novembre 2026
+- **BSOD Liquid Glass Out-of-Kernel (`BSOD.DLL` + `KERNEL.SYM`)**:
+  - Implementata la schermata blu diagnostica out-of-kernel in [bsod_dll.c](file:///c:/Users/morga/Desktop/MyOS/SystemLibrary/bsod_dll.c) e [bsod_loader.c](file:///c:/Users/morga/Desktop/MyOS/kernel/arch/x86_64/bsod_loader.c), pre-caricata in RAM al boot insieme alla tabella simboli `KERNEL.SYM` (`NSYM`, 10.504 simboli riga) e allo sfondo ufficiale di login (`LOGIN.BMP` 1024x768 nitido) senza dipendere da disco o `kmalloc` durante il crash.
+  - Agganciamento diretto a tutte le eccezioni CPU non gestite in [idt.c](file:///c:/Users/morga/Desktop/MyOS/kernel/arch/x86_64/idt.c), dump completo dei registri x86_64 (`RIP`, `RSP`, `RBP`, `CR2`, `CR3`, `RAX..R15`), stack backtrace con risoluzione **file e riga sorgente**, output su seriale `COM1` e polling tastiera (`[INVIO / R]` Riavvia, `[S]` Spegni).
+  - Aggiunto comando di test `bsodtest [pf|div0|ud]` in [cmd.c](file:///c:/Users/morga/Desktop/MyOS/kernel/apps/cmd.c).
+- **Fix Cambio Risoluzione & Cambio Tema/Stile Anti-Artefatto**:
+  - In [vga.c](file:///c:/Users/morga/Desktop/MyOS/kernel/drivers/vga.c): programmati i registri BGA `VBE_DISPI_INDEX_VIRT_WIDTH`, `VIRT_HEIGHT`, `X_OFFSET=0`, `Y_OFFSET=0` (rimosso `NOCLEARMEM`) eliminando lo sfasamento di stride sulle risoluzioni widescreen (`1280x720`, ecc.).
+  - In [graphics.c](file:///c:/Users/morga/Desktop/MyOS/kernel/gui/graphics.c): `photo_wallpaper_buf` e `blurred_buf` si ridimensionano dinamicamente a `scr_width x scr_height` con copia riga per riga secondo `scr_pitch_pixels`, pulizia `gfx_clear(0)`, ricalcolo `gfx_precompute_blur()` coerente con sfondi procedurali o fotografici (`active_bg_is_photo`) e ombre `gfx_draw_drop_shadow()` arrotondate.
+  - In [wm.c](file:///c:/Users/morga/Desktop/MyOS/kernel/gui/wm.c) e [uistyle_loader.c](file:///c:/Users/morga/Desktop/MyOS/kernel/gui/uistyle_loader.c): redraw atomico `wm_render() + gfx_flip()` ad ogni cambio tema, UI Style o risoluzione.
+- **Ricollegamento Schermata di Logout (`LOGOUT.MOD`) & Fix PIC**:
+  - Ricollegata la voce **"Arresta il sistema..."** del menu Start in [wm.c](file:///c:/Users/morga/Desktop/MyOS/kernel/gui/wm.c) a `screen_mgr_run_logoutscreen()` con gestione completa di Spegnimento ACPI, Riavvio, Standby/Sospensione, Disconnessione (ritorno a `LOGIN.MOD`) e Annulla.
+  - Corretto l'indirizzamento delle stringhe opzioni in [logoutscreen.c](file:///c:/Users/morga/Desktop/MyOS/logoutscreen/logoutscreen.c) in formato 100% PIC `RIP`-relativo per il rendering corretto dei testi nel modulo piatto `LOGOUT.MOD`.
+
+</details>
 
 ---
 

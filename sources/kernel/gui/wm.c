@@ -7,10 +7,12 @@
 #include <drivers/keyboard.h>
 #include <drivers/power.h>
 #include <drivers/rtc.h>
+#include <fs/registry.h>
 #include <fs/vfs.h>
 #include <gui/graphics.h>
 #include <gui/icons.h>
 #include <gui/image.h>
+#include <gui/screen_mgr.h>
 #include <gui/wm.h>
 #include <gui/cursor_loader.h>
 #include <gui/uistyle_loader.h>
@@ -188,6 +190,8 @@ void wm_apply_theme_props(const theme_info_t *props) {
       g_active_theme_props.surface_alpha < 255) {
     gfx_precompute_blur();
   }
+  wm_render();
+  gfx_flip();
 }
 
 const theme_info_t *wm_get_current_theme_props(void) {
@@ -209,6 +213,8 @@ void wm_set_theme(int theme) {
   if (theme != THEME_CLASSIC || g_active_theme_props.surface_alpha < 255) {
     gfx_precompute_blur();
   }
+  wm_render();
+  gfx_flip();
 }
 
 int wm_get_theme(void) { return current_theme; }
@@ -1849,7 +1855,39 @@ void wm_update(mouse_state_t *mouse, char key) {
         else if (item == 8)
           app_about_launch();
         else if (item == 9) {
-          app_shutdown_dialog_launch();
+          start_menu_open = false;
+          logoutscreen_result_t res = screen_mgr_run_logoutscreen();
+          if (res == LOGOUT_ACTION_SHUTDOWN) {
+            power_shutdown();
+          } else if (res == LOGOUT_ACTION_REBOOT) {
+            power_reboot();
+          } else if (res == LOGOUT_ACTION_SUSPEND) {
+            power_enter_screen_standby();
+            gfx_draw_background(current_bg_type);
+            wm_render();
+            gfx_flip();
+          } else if (res == LOGOUT_ACTION_DISCONNECT) {
+            for (int wi = 0; wi < MAX_WINDOWS; wi++) {
+              if (windows[wi]) wm_destroy_window(windows[wi]->id);
+            }
+            loginscreen_result_t lres = screen_mgr_run_loginscreen();
+            if (lres == LOGIN_SHUTDOWN) {
+              power_shutdown();
+            } else if (lres == LOGIN_REBOOT) {
+              power_reboot();
+            }
+            registry_logon_load_readonly_preferences();
+            gfx_draw_background(current_bg_type);
+            wm_render();
+            gfx_flip();
+          } else {
+            gfx_draw_background(current_bg_type);
+            wm_render();
+            gfx_flip();
+          }
+          prev_mouse_left = mouse->left_button;
+          prev_mouse_right = mouse->right_button;
+          return;
         }
         start_menu_open = false;
         prev_mouse_left = mouse->left_button;

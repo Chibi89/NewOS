@@ -2,6 +2,7 @@
 #include <arch/x86_64/pic.h>
 #include <arch/x86_64/io.h>
 #include <arch/x86_64/sched.h>
+#include <bsod.h>
 #include <string.h>
 
 static idt_entry_t idt_entries[256];
@@ -76,6 +77,9 @@ void register_interrupt_handler(uint8_t n, isr_handler_t handler) {
 uint64_t isr_handler_main(interrupt_frame_t* frame) {
     if (interrupt_handlers[frame->int_no] != NULL) {
         interrupt_handlers[frame->int_no](frame);
+    } else if (frame->int_no < 32) {
+        // Eccezione CPU non gestita -> BSOD diagnostica
+        bsod_from_exception(frame);
     }
 
     // Se è un IRQ hardware (32..47), invia EOI al PIC

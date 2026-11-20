@@ -98,12 +98,16 @@ bool vga_set_resolution(uint32_t width, uint32_t height) {
         return false;
     }
 
-    // 1. Programma i registri BGA della scheda video
+    // 1. Programma i registri BGA della scheda video (XRES, YRES, VIRT_WIDTH/HEIGHT, OFFSET)
     bga_write(VBE_DISPI_INDEX_ENABLE, VBE_DISPI_DISABLED);
     bga_write(VBE_DISPI_INDEX_XRES, (uint16_t)width);
     bga_write(VBE_DISPI_INDEX_YRES, (uint16_t)height);
+    bga_write(VBE_DISPI_INDEX_VIRT_WIDTH, (uint16_t)width);
+    bga_write(VBE_DISPI_INDEX_VIRT_HEIGHT, (uint16_t)height);
+    bga_write(VBE_DISPI_INDEX_X_OFFSET, 0);
+    bga_write(VBE_DISPI_INDEX_Y_OFFSET, 0);
     bga_write(VBE_DISPI_INDEX_BPP, 32);
-    bga_write(VBE_DISPI_INDEX_ENABLE, VBE_DISPI_ENABLED | VBE_DISPI_LFB_ENABLED | VBE_DISPI_NOCLEARMEM);
+    bga_write(VBE_DISPI_INDEX_ENABLE, VBE_DISPI_ENABLED | VBE_DISPI_LFB_ENABLED);
 
     // 2. Riconfigura il sottosistema grafico del kernel
     return gfx_set_resolution(width, height);

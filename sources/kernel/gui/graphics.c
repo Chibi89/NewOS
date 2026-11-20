@@ -14,7 +14,11 @@
 
 static uint32_t *photo_wallpaper_buf = NULL;
 static int loaded_photo_type = -1;
+static uint32_t loaded_photo_w = 0;
+static uint32_t loaded_photo_h = 0;
+static bool active_bg_is_photo = false;
 static uint32_t *blurred_buf = NULL; // Pre-blurred wallpaper per Liquid Glass
+static size_t blurred_buf_capacity = 0;
 
 static uint32_t *lfb_front = NULL;
 static uint32_t *lfb_back = NULL;
@@ -510,9 +514,21 @@ void gfx_draw_gradient_v(int32_t x, int32_t y, int32_t w, int32_t h,
   }
 }
 
+static void gfx_copy_wallpaper_to_back(void) {
+  if (!photo_wallpaper_buf || !lfb_back)
+    return;
+  uint32_t copy_w = (loaded_photo_w < scr_width) ? loaded_photo_w : scr_width;
+  uint32_t copy_h = (loaded_photo_h < scr_height) ? loaded_photo_h : scr_height;
+  for (uint32_t y = 0; y < copy_h; y++) {
+    memcpy(&lfb_back[y * scr_pitch_pixels],
+           &photo_wallpaper_buf[y * loaded_photo_w], copy_w * sizeof(uint32_t));
+  }
+}
+
 void gfx_draw_background(int bg_type) {
   int32_t h = scr_height - 28; // Esclude la taskbar
   int32_t w = scr_width;
+  active_bg_is_photo = false;
 
   switch (bg_type) {
   case BG_BLUE_NAVY:
@@ -563,7 +579,8 @@ void gfx_draw_background(int bg_type) {
 
   case BG_PHOTO_HERO:
   case BG_PHOTO_FLOW: {
-    if (loaded_photo_type != bg_type) {
+    if (loaded_photo_type != bg_type || loaded_photo_w != scr_width ||
+        loaded_photo_h != scr_height) {
       const char *fn = (bg_type == BG_PHOTO_HERO) ? "HERO" : "FLOW";
       char path_buf[128];
       image_t *img = NULL;
@@ -587,31 +604,39 @@ void gfx_draw_background(int bg_type) {
         img = image_load_from_file(path_buf);
       }
       if (img) {
+        if (photo_wallpaper_buf &&
+            (loaded_photo_w != scr_width || loaded_photo_h != scr_height)) {
+          kfree(photo_wallpaper_buf);
+          photo_wallpaper_buf = NULL;
+        }
         if (!photo_wallpaper_buf) {
-          photo_wallpaper_buf = (uint32_t *)kmalloc(1024 * 768 * 4);
+          photo_wallpaper_buf =
+              (uint32_t *)kmalloc((size_t)scr_width * scr_height * 4);
         }
         if (photo_wallpaper_buf) {
-          if (img->width == 1024 && img->height == 768) {
-            memcpy(photo_wallpaper_buf, img->pixels, 1024 * 768 * 4);
+          if ((uint32_t)img->width == scr_width &&
+              (uint32_t)img->height == scr_height) {
+            memcpy(photo_wallpaper_buf, img->pixels,
+                   (size_t)scr_width * scr_height * 4);
           } else {
-            image_t *res = image_resize(img, 1024, 768);
+            image_t *res = image_resize(img, scr_width, scr_height);
             if (res) {
-              memcpy(photo_wallpaper_buf, res->pixels, 1024 * 768 * 4);
+              memcpy(photo_wallpaper_buf, res->pixels,
+                     (size_t)scr_width * scr_height * 4);
               image_free(res);
             }
           }
           loaded_photo_type = bg_type;
+          loaded_photo_w = scr_width;
+          loaded_photo_h = scr_height;
         }
         image_free(img);
       }
     }
-    if (photo_wallpaper_buf && loaded_photo_type == bg_type) {
-      size_t qwords = ((size_t)1024 * 768 * 4) / sizeof(uint64_t);
-      uint64_t *dst = (uint64_t *)lfb_back;
-      uint64_t *src = (uint64_t *)photo_wallpaper_buf;
-      for (size_t i = 0; i < qwords; i++) {
-        dst[i] = src[i];
-      }
+    if (photo_wallpaper_buf && loaded_photo_type == bg_type &&
+        loaded_photo_w == scr_width && loaded_photo_h == scr_height) {
+      gfx_copy_wallpaper_to_back();
+      active_bg_is_photo = true;
     } else {
       if (bg_type == BG_PHOTO_FLOW) {
         // Sfondo procedurale Windows 11 Flow / Bloom (gradiente ad alta
@@ -630,13 +655,9 @@ void gfx_draw_background(int bg_type) {
   }
 
   case BG_CUSTOM: {
-    if (photo_wallpaper_buf) {
-      size_t qwords = ((size_t)1024 * 768 * 4) / sizeof(uint64_t);
-      uint64_t *dst = (uint64_t *)lfb_back;
-      uint64_t *src = (uint64_t *)photo_wallpaper_buf;
-      for (size_t i = 0; i < qwords; i++) {
-        dst[i] = src[i];
-      }
+    if (photo_wallpaper_buf && loaded_photo_w > 0 && loaded_photo_h > 0) {
+      gfx_copy_wallpaper_to_back();
+      active_bg_is_photo = true;
     } else {
       gfx_fill_rect(0, 0, w, h, COLOR_DESKTOP);
     }
@@ -836,18 +857,24 @@ bool gfx_set_resolution(uint32_t width, uint32_t height) {
   scr_pitch_pixels = width;
   scr_pitch_bytes = width * 4;
 
-  // Reset buffer sfondi fotografici
+  // Reset buffer sfondi fotografici e Liquid Glass blur
   if (photo_wallpaper_buf) {
     kfree(photo_wallpaper_buf);
     photo_wallpaper_buf = NULL;
     loaded_photo_type = -1;
+    loaded_photo_w = 0;
+    loaded_photo_h = 0;
+    active_bg_is_photo = false;
   }
 
-  // Reset Liquid Glass blur
   if (blurred_buf) {
     kfree(blurred_buf);
     blurred_buf = NULL;
+    blurred_buf_capacity = 0;
   }
+
+  // Pulizia completa backbuffer per prevenire artefatti residui
+  gfx_clear(0);
 
   // Limiti coordinate mouse
   mouse_set_bounds(width, height);
@@ -856,8 +883,13 @@ bool gfx_set_resolution(uint32_t width, uint32_t height) {
   // Notifica Window Manager per riallineare finestre e menu
   wm_on_resolution_changed(old_w, old_h, width, height);
 
-  // Ridisegna immediatamente il desktop alla nuova risoluzione
+  // Ridisegna sfondo, aggiorna blur Liquid Glass e renderizza subito l'intera scena
   gfx_draw_background(wm_get_background_type());
+  const theme_info_t *th = wm_get_current_theme_props();
+  if (wm_get_theme() != THEME_CLASSIC || (th && th->surface_alpha < 255)) {
+    gfx_precompute_blur();
+  }
+  wm_render();
   gfx_flip();
 
   return true;
@@ -1075,23 +1107,29 @@ void gfx_draw_specular_rim(int32_t x, int32_t y, int32_t w, int32_t h,
 // ---- gfx_draw_drop_shadow -----------------------------------
 void gfx_draw_drop_shadow(int32_t x, int32_t y, int32_t w, int32_t h,
                           int32_t spread) {
-  // 3 layer progressivamente piu' leggeri
+  const theme_info_t *th = wm_get_current_theme_props();
+  int32_t r = (th && th->corner_radius > 0) ? th->corner_radius : 8;
+  // 3 layer progressivamente piu' leggeri con angoli arrotondati anti-artefatto
   static const struct {
     int32_t off;
     uint8_t a;
-  } layers[] = {{3, 75}, {5, 45}, {8, 20}};
+  } layers[] = {{3, 70}, {5, 40}, {8, 18}};
   for (int li = 0; li < 3; li++) {
     int32_t sx = x + layers[li].off;
     int32_t sy = y + layers[li].off;
+    int32_t sw_box = w + spread;
+    int32_t sh_box = h + spread;
     int32_t x1 = sx < 0 ? 0 : sx;
     int32_t y1 = sy < 0 ? 0 : sy;
-    int32_t x2 = (sx + w + spread > (int32_t)scr_width) ? (int32_t)scr_width
-                                                        : sx + w + spread;
-    int32_t y2 = (sy + h + spread > (int32_t)scr_height) ? (int32_t)scr_height
-                                                         : sy + h + spread;
+    int32_t x2 = (sx + sw_box > (int32_t)scr_width) ? (int32_t)scr_width
+                                                    : sx + sw_box;
+    int32_t y2 = (sy + sh_box > (int32_t)scr_height) ? (int32_t)scr_height
+                                                     : sy + sh_box;
     for (int32_t py = y1; py < y2; py++) {
       uint32_t *row = &lfb_back[py * scr_pitch_pixels];
       for (int32_t px = x1; px < x2; px++) {
+        if (!inside_rounded(px, py, sx, sy, sw_box, sh_box, r + 2))
+          continue;
         row[px] = blend_color(row[px], LG_SHADOW_COLOR, layers[li].a);
       }
     }
@@ -1099,17 +1137,27 @@ void gfx_draw_drop_shadow(int32_t x, int32_t y, int32_t w, int32_t h,
 }
 
 // ---- gfx_precompute_blur ------------------------------------
-// Separable box-blur 5x5 sul photo_wallpaper_buf -> blurred_buf.
-// Se non c'e' foto, copia semplicemente il back-buffer attuale.
+// Separable box-blur 5x5 sul buffer di sfondo attivo -> blurred_buf.
+// Se non c'e' foto attiva, sfoca il back-buffer attuale (sfondi procedurali).
 void gfx_precompute_blur(void) {
+  size_t need = (size_t)scr_width * scr_height * sizeof(uint32_t);
+  if (blurred_buf && blurred_buf_capacity < need) {
+    kfree(blurred_buf);
+    blurred_buf = NULL;
+    blurred_buf_capacity = 0;
+  }
   if (!blurred_buf) {
-    blurred_buf =
-        (uint32_t *)kmalloc((size_t)scr_width * scr_height * sizeof(uint32_t));
+    blurred_buf = (uint32_t *)kmalloc(need);
     if (!blurred_buf)
       return;
+    blurred_buf_capacity = need;
   }
 
-  uint32_t *src = photo_wallpaper_buf ? photo_wallpaper_buf : lfb_back;
+  uint32_t *src =
+      (active_bg_is_photo && photo_wallpaper_buf && loaded_photo_w == scr_width &&
+       loaded_photo_h == scr_height)
+          ? photo_wallpaper_buf
+          : lfb_back;
   uint32_t W = scr_width, H = scr_height;
   // tmp buffer (usa blurred_buf come scratch nella prima passata)
   uint32_t *tmp = blurred_buf;
@@ -1177,24 +1225,34 @@ void gfx_set_custom_wallpaper(const uint32_t *pixels, int32_t width,
                               int32_t height) {
   if (!pixels || width <= 0 || height <= 0)
     return;
+  if (photo_wallpaper_buf &&
+      (loaded_photo_w != scr_width || loaded_photo_h != scr_height)) {
+    kfree(photo_wallpaper_buf);
+    photo_wallpaper_buf = NULL;
+  }
   if (!photo_wallpaper_buf) {
-    photo_wallpaper_buf = (uint32_t *)kmalloc(1024 * 768 * 4);
+    photo_wallpaper_buf =
+        (uint32_t *)kmalloc((size_t)scr_width * scr_height * 4);
   }
   if (photo_wallpaper_buf) {
-    if (width == 1024 && height == 768) {
-      memcpy(photo_wallpaper_buf, pixels, 1024 * 768 * 4);
+    if ((uint32_t)width == scr_width && (uint32_t)height == scr_height) {
+      memcpy(photo_wallpaper_buf, pixels, (size_t)scr_width * scr_height * 4);
     } else {
       image_t src;
       src.width = width;
       src.height = height;
       src.pixels = (uint32_t *)pixels;
-      image_t *res = image_resize(&src, 1024, 768);
+      image_t *res = image_resize(&src, scr_width, scr_height);
       if (res) {
-        memcpy(photo_wallpaper_buf, res->pixels, 1024 * 768 * 4);
+        memcpy(photo_wallpaper_buf, res->pixels,
+               (size_t)scr_width * scr_height * 4);
         image_free(res);
       }
     }
     loaded_photo_type = BG_CUSTOM;
+    loaded_photo_w = scr_width;
+    loaded_photo_h = scr_height;
+    active_bg_is_photo = true;
     wm_set_background_type(BG_CUSTOM);
     gfx_precompute_blur();
   }

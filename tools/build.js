@@ -172,6 +172,7 @@ const cFiles = [
     'kernel/lib/clipboard.c',
     'kernel/lib/aes256.c',
     'kernel/arch/x86_64/idt.c',
+    'kernel/arch/x86_64/bsod_loader.c',
     'kernel/arch/x86_64/pic.c',
     'kernel/arch/x86_64/cpu.c',
     'kernel/arch/x86_64/syscall.c',
@@ -271,7 +272,7 @@ for (const c of cFiles) {
     const baseName = path.basename(c, '.c');
     const objName = path.join(OBJ_DIR, `${baseName}.o`);
     cObjFiles.push(objName);
-    const cmd = `${llvm.clang} ${cFlags} -c "${path.join(ROOT, c)}" -o "${objName}"`;
+    const cmd = `${llvm.clang} ${cFlags} -g -c "${path.join(ROOT, c)}" -o "${objName}"`;
     execSync(cmd, { stdio: 'inherit' });
     console.log(`  CC: ${c} -> ${baseName}.o`);
 }
@@ -293,6 +294,80 @@ execSync(objcopyCmd, { stdio: 'inherit' });
 
 const kernelStat = fs.statSync(kernelBin);
 console.log(`[OK] Kernel 64-bit generato con successo: ${kernelStat.size} byte`);
+
+// Estrazione tabella simboli compatta KERNEL.SYM ('NSYM') da kernel.elf per BSOD.DLL
+const targetLibDirEarly = path.join(BIN_DIR, 'NewOS', 'SystemLibrary');
+if (!fs.existsSync(targetLibDirEarly)) fs.mkdirSync(targetLibDirEarly, { recursive: true });
+const objdumpExe = llvm.dir ? `"${path.join(llvm.dir, 'llvm-objdump.exe')}"` : 'llvm-objdump';
+const symDumpRaw = execSync(`${objdumpExe} -d -l --no-show-raw-insn "${kernelElf}"`, { maxBuffer: 64 * 1024 * 1024 }).toString('utf8');
+{
+    const strPool = [];
+    const strMap = new Map();
+    const addStr = (s) => {
+        if (strMap.has(s)) return strMap.get(s);
+        const off = strPool.reduce((acc, cur) => acc + cur.length + 1, 0);
+        if (off + s.length + 1 > 65535) return 0;
+        strPool.push(s);
+        strMap.set(s, off);
+        return off;
+    };
+    addStr('unknown');
+
+    const entries = [];
+    let curFunc = 'unknown';
+    let curFile = 'kernel';
+    let curLine = 0;
+    let lastKey = '';
+
+    const rootNorm = ROOT.replace(/\\/g, '/').toLowerCase();
+    for (const rawLine of symDumpRaw.split(/\r?\n/)) {
+        const fnMatch = rawLine.match(/^[0-9a-fA-F]+\s+<([^>]+)>:/);
+        if (fnMatch) {
+            curFunc = fnMatch[1];
+            continue;
+        }
+        const locMatch = rawLine.match(/^;\s*(.+):(\d+)\s*$/);
+        if (locMatch) {
+            let fp = locMatch[1].replace(/\\/g, '/');
+            if (fp.toLowerCase().startsWith(rootNorm + '/')) fp = fp.slice(rootNorm.length + 1);
+            curFile = fp;
+            curLine = parseInt(locMatch[2], 10) || 0;
+            continue;
+        }
+        const insnMatch = rawLine.match(/^\s*([0-9a-fA-F]+):/);
+        if (insnMatch && curLine > 0) {
+            const addr = BigInt('0x' + insnMatch[1]);
+            const key = `${curFunc}|${curFile}|${curLine}`;
+            if (key !== lastKey) {
+                lastKey = key;
+                const fOff = addStr(curFile);
+                const fnOff = addStr(curFunc);
+                entries.push({ addr, line: curLine, fileOff: fOff, funcOff: fnOff });
+            }
+        }
+    }
+
+    entries.sort((a, b) => (a.addr < b.addr ? -1 : a.addr > b.addr ? 1 : 0));
+    const strBuf = Buffer.concat(strPool.map(s => Buffer.from(s + '\0', 'utf8')));
+    const hdrSize = 16;
+    const recSize = 16;
+    const strOffset = hdrSize + entries.length * recSize;
+    const symBuf = Buffer.alloc(strOffset + strBuf.length);
+    symBuf.write('NSYM', 0, 4, 'ascii');
+    symBuf.writeUInt32LE(entries.length, 4);
+    symBuf.writeUInt32LE(strOffset, 8);
+    symBuf.writeUInt32LE(strBuf.length, 12);
+    for (let i = 0; i < entries.length; i++) {
+        const off = hdrSize + i * recSize;
+        symBuf.writeBigUInt64LE(entries[i].addr, off);
+        symBuf.writeUInt32LE(entries[i].line, off + 8);
+        symBuf.writeUInt16LE(entries[i].fileOff, off + 12);
+        symBuf.writeUInt16LE(entries[i].funcOff, off + 14);
+    }
+    strBuf.copy(symBuf, strOffset);
+    fs.writeFileSync(path.join(targetLibDirEarly, 'KERNEL.SYM'), symBuf);
+    console.log(`[OK] KERNEL.SYM generato: ${entries.length} simboli riga (${symBuf.length} byte)`);
+}
 
 // 6b. Compilazione e Firma Moduli Esterni Protetti (.MOD)
 console.log('\n--> Compilazione e Firma Moduli Esterni Protetti (C:\\NewOS\\Boot\\)...');
@@ -488,7 +563,8 @@ const systemLibraries = [
     { src: 'SystemLibrary/fs_ext_dll.c', ini: 'SystemLibrary/FS_EXT.INI', out: 'FS_EXT.DLL', iniOut: 'FS_EXT.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
     { src: 'SystemLibrary/netstack_dll.c', ini: 'SystemLibrary/NETSTACK.INI', out: 'NETSTACK.DLL', iniOut: 'NETSTACK.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
     { src: 'SystemLibrary/nvme_dll.c', ini: 'SystemLibrary/NVME.INI', out: 'NVME.DLL', iniOut: 'NVME.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
-    { src: 'SystemLibrary/gpu3d_dll.c', ini: 'SystemLibrary/GPU3D.INI', out: 'GPU3D.DLL', iniOut: 'GPU3D.INI', allowSse2: true, needsReloc: true, extraFlags: `-mstackrealign -Wno-unused-function -Wno-unused-parameter` }
+    { src: 'SystemLibrary/gpu3d_dll.c', ini: 'SystemLibrary/GPU3D.INI', out: 'GPU3D.DLL', iniOut: 'GPU3D.INI', allowSse2: true, needsReloc: true, extraFlags: `-mstackrealign -Wno-unused-function -Wno-unused-parameter` },
+    { src: 'SystemLibrary/bsod_dll.c', ini: 'SystemLibrary/BSOD.INI', out: 'BSOD.DLL', iniOut: 'BSOD.INI', extraFlags: `-Wno-unused-function -Wno-unused-parameter` }
 ];
 
 const targetLibDir = path.join(BIN_DIR, 'NewOS', 'SystemLibrary');

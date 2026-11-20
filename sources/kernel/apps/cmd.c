@@ -932,6 +932,20 @@ static void cmd_execute_internal(cmd_state_t* state, const char* cmd) {
     } else if (strcmp(cmd, "taskmgr") == 0) {
         cmd_print(state, "Avvio Gestione attivita' (TASKMGR.EXE)...");
         app_taskmgr_launch();
+    } else if (strncmp(cmd, "bsodtest", 8) == 0) {
+        const char* mode = cmd + 8;
+        while (*mode == ' ') mode++;
+        if (strcmp(mode, "pf") == 0) {
+            volatile uint64_t* bad_ptr = (volatile uint64_t*)0x00001000DEADBEEFULL;
+            *bad_ptr = 0xCAFEBABEULL;
+        } else if (strcmp(mode, "div0") == 0) {
+            volatile uint64_t a = 100, b = 0;
+            volatile uint64_t c = a / b;
+            (void)c;
+        } else {
+            // Test eccezione #UD (Invalid Opcode) con risoluzione file:riga via KERNEL.SYM
+            asm volatile("ud2");
+        }
     } else if (strlen(cmd) > 0) {
         char err[CMD_COLS];
         mini_snprintf(err, sizeof(err), "'%s' comando non riconosciuto. Digita HELP.", cmd);

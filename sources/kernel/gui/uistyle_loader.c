@@ -97,6 +97,8 @@ bool uistyle_set_active(int style_id) {
                              (uint32_t)g_active_uistyle);
     registry_save_to_disk();
   }
+  wm_render();
+  gfx_flip();
   return true;
 }
 
