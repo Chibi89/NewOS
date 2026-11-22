@@ -207,6 +207,43 @@ Tutte le applicazioni accessorie e i tool di sistema sono organizzati come modul
 | <img src="screenshot_player.png" alt="NewOS Media Player" width="410" /> | <img src="screenshot_start.png" alt="Tema Classic Windows 2000 e Audio AC97" width="410" /> |
 | *Riproduzione multimediale `.WAV` con analizzatore di spettro e playlist* | *Tema Classic Bevel Windows 2000 con Proprietà Audio AC97 e Prompt dei Comandi* |
 
+<details>
+<summary><strong>📸 Galleria Funzionalità Implementate (Menu Start, Explorer, Window Manager, CPL, Sicurezza, CLI & App)</strong></summary>
+
+<br/>
+
+#### Menu Start Moderno & Personalizzazione (`STARTMENU.DLL`, `DESK.CPL`)
+| Menu Start Griglia Moderna | Ricerca Live nel Menu Start | Selettore Stile Start in `DESK.CPL` |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/screenshot_startmenu_modern_grid.png" alt="Menu Start Griglia Moderna" width="280" /> | <img src="docs/screenshots/screenshot_startmenu_modern_search.png" alt="Ricerca Live Menu Start" width="280" /> | <img src="docs/screenshots/screenshot_display_startmenu_opt.png" alt="Selettore Stile Start in DESK.CPL" width="280" /> |
+
+#### Esplora Risorse (`EXPLORER.DLL`) & Cestino Reale (`RECYCLE.DLL`)
+| Schede Multiple (`Ctrl+T` / `Ctrl+W`) | Filtri Ricerca Live (`[.TXT]` / `[.DLL]`) | Anteprima & Dettagli Sidebar | Cestino Reale (`C:\Recycle.Bin`) |
+| :---: | :---: | :---: | :---: |
+| <img src="docs/screenshots/screenshot_explorer_tabs.png" alt="Explorer Tab Multiple" width="210" /> | <img src="docs/screenshots/screenshot_explorer_search_filter.png" alt="Explorer Filtri Ricerca" width="210" /> | <img src="docs/screenshots/screenshot_exp_cat1_preview_details.png" alt="Explorer Anteprima e Dettagli" width="210" /> | <img src="docs/screenshots/screenshot_recycle_bin_real.png" alt="Cestino Reale" width="210" /> |
+
+#### Window Manager, Notifiche & Desktop (`wm.c`)
+| Window Snap Laterale (`50%`) | Switcher Grafico `Alt+Tab` | Centro Notifiche & Toast |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/screenshot_wm_cat2_snap.png" alt="Window Snap" width="280" /> | <img src="docs/screenshots/screenshot_wm_cat2_alttab.png" alt="Alt+Tab Grafico" width="280" /> | <img src="docs/screenshots/screenshot_wm_notif_center.png" alt="Centro Notifiche" width="280" /> |
+
+#### Pannello di Controllo, Font TrueType, Porte COM/LPT & Package Service
+| Font TrueType (`FONTSCPL.DLL`) | Porte COM/LPT & Loopback (`PORTS.DLL`) | Installazione Software (`PKGSVC.DLL`) |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/screenshot_fontscpl_applied.png" alt="Font TrueType FONTSCPL.DLL" width="280" /> | <img src="docs/screenshots/screenshot_ports_loopback.png" alt="Porte COM e LPT PORTS.DLL" width="280" /> | <img src="docs/screenshots/screenshot_pkgsvc_installed.png" alt="Package Service PKGSVC.DLL" width="280" /> |
+
+#### Sicurezza, Diagnostica Bare-Metal & Applicazioni di Sistema
+| Audit Log (`SECCPL.DLL`) | Benchmark Hardware (`BENCH.DLL`) | Task Manager Moduli DLL | Notepad (`Ctrl+F` / Righe) | Visualizzatore (`IMGVIEW.DLL`) |
+| :---: | :---: | :---: | :---: | :---: |
+| <img src="docs/screenshots/screenshot_seccpl_audit_log.png" alt="SECCPL Audit Log" width="170" /> | <img src="docs/screenshots/screenshot_bench_hw.png" alt="BENCH.DLL" width="170" /> | <img src="docs/screenshots/screenshot_taskmgr_dll_modules.png" alt="Task Manager Moduli DLL" width="170" /> | <img src="docs/screenshots/screenshot_notepad_find_lines.png" alt="Notepad Trova e Righe" width="170" /> | <img src="docs/screenshots/screenshot_imgview_init.png" alt="IMGVIEW.DLL" width="170" /> |
+
+#### Terminale CMD Potenziato, Collegamenti `.LNK` & Rete CLI
+| History, Tab & Redirect `>` | `arp -a` & `mklnk` | Avvio via Collegamento `.LNK` |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/screenshot_cmd_enhanced.png" alt="CMD History Tab Redirect" width="280" /> | <img src="docs/screenshots/screenshot_cmd_net_lnk.png" alt="CMD arp -a e mklnk" width="280" /> | <img src="docs/screenshots/screenshot_lnk_launch.png" alt="Avvio da file LNK" width="280" /> |
+
+</details>
+
 ---
 
 ### 7. Librerie Dinamiche Out-of-Kernel (`C:\NewOS\SystemLibrary\`)
@@ -489,6 +526,43 @@ All accessory applications and system tools are organized as independent modules
 | :---: | :---: |
 | <img src="screenshot_player.png" alt="NewOS Media Player" width="410" /> | <img src="screenshot_start.png" alt="Classic Windows 2000 Theme and AC97 Audio" width="410" /> |
 | *`.WAV` media playback with spectrum analyzer and playlist* | *Classic Bevel Windows 2000 theme with AC97 Audio Properties and Command Prompt* |
+
+<details>
+<summary><strong>📸 Implemented Features Gallery (Start Menu, Explorer, Window Manager, CPL, Security, CLI & Apps)</strong></summary>
+
+<br/>
+
+#### Modern Start Menu & Personalization (`STARTMENU.DLL`, `DESK.CPL`)
+| Modern Grid Start Menu | Live Search in Start Menu | Start Style Selector in `DESK.CPL` |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/screenshot_startmenu_modern_grid.png" alt="Modern Grid Start Menu" width="280" /> | <img src="docs/screenshots/screenshot_startmenu_modern_search.png" alt="Start Menu Live Search" width="280" /> | <img src="docs/screenshots/screenshot_display_startmenu_opt.png" alt="Start Style Selector in DESK.CPL" width="280" /> |
+
+#### Enhanced File Explorer (`EXPLORER.DLL`) & Real Recycle Bin (`RECYCLE.DLL`)
+| Multiple Tabs (`Ctrl+T` / `Ctrl+W`) | Live Search Filters (`[.TXT]` / `[.DLL]`) | Preview & Details Sidebar | Real Recycle Bin (`C:\Recycle.Bin`) |
+| :---: | :---: | :---: | :---: |
+| <img src="docs/screenshots/screenshot_explorer_tabs.png" alt="Explorer Multiple Tabs" width="210" /> | <img src="docs/screenshots/screenshot_explorer_search_filter.png" alt="Explorer Search Filters" width="210" /> | <img src="docs/screenshots/screenshot_exp_cat1_preview_details.png" alt="Explorer Preview and Details" width="210" /> | <img src="docs/screenshots/screenshot_recycle_bin_real.png" alt="Real Recycle Bin" width="210" /> |
+
+#### Window Manager, Notifications & Desktop (`wm.c`)
+| Window Snap (`50%` Split) | Graphical `Alt+Tab` Switcher | Notification Center & Toasts |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/screenshot_wm_cat2_snap.png" alt="Window Snap" width="280" /> | <img src="docs/screenshots/screenshot_wm_cat2_alttab.png" alt="Graphical Alt+Tab" width="280" /> | <img src="docs/screenshots/screenshot_wm_notif_center.png" alt="Notification Center" width="280" /> |
+
+#### Control Panel, TrueType Fonts, COM/LPT Ports & Package Service
+| TrueType Fonts (`FONTSCPL.DLL`) | COM/LPT Ports & Loopback (`PORTS.DLL`) | Third-Party Installer (`PKGSVC.DLL`) |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/screenshot_fontscpl_applied.png" alt="TrueType Fonts FONTSCPL.DLL" width="280" /> | <img src="docs/screenshots/screenshot_ports_loopback.png" alt="COM and LPT Ports PORTS.DLL" width="280" /> | <img src="docs/screenshots/screenshot_pkgsvc_installed.png" alt="Package Service PKGSVC.DLL" width="280" /> |
+
+#### Security, Bare-Metal Diagnostics & System Applications
+| Audit Log (`SECCPL.DLL`) | Hardware Benchmark (`BENCH.DLL`) | Task Manager DLL Modules | Notepad (`Ctrl+F` / Lines) | Image Viewer (`IMGVIEW.DLL`) |
+| :---: | :---: | :---: | :---: | :---: |
+| <img src="docs/screenshots/screenshot_seccpl_audit_log.png" alt="SECCPL Audit Log" width="170" /> | <img src="docs/screenshots/screenshot_bench_hw.png" alt="BENCH.DLL" width="170" /> | <img src="docs/screenshots/screenshot_taskmgr_dll_modules.png" alt="Task Manager DLL Modules" width="170" /> | <img src="docs/screenshots/screenshot_notepad_find_lines.png" alt="Notepad Find and Lines" width="170" /> | <img src="docs/screenshots/screenshot_imgview_init.png" alt="IMGVIEW.DLL" width="170" /> |
+
+#### Enhanced CMD Terminal, `.LNK` Shortcuts & CLI Networking
+| History, Tab & Redirect `>` | `arp -a` & `mklnk` | Launching via `.LNK` Shortcut |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/screenshot_cmd_enhanced.png" alt="CMD History Tab Redirect" width="280" /> | <img src="docs/screenshots/screenshot_cmd_net_lnk.png" alt="CMD arp -a and mklnk" width="280" /> | <img src="docs/screenshots/screenshot_lnk_launch.png" alt="Launching via LNK file" width="280" /> |
+
+</details>
 
 ---
 
