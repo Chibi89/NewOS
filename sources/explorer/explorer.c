@@ -25,9 +25,20 @@
 #include <gui/wm.h>
 #include <include/clipboard.h>
 #include <include/comdlg.h>
+#include <fs/registry.h>
 #include <mm/heap.h>
 #include <settings.h>
 #include <string.h>
+
+static void explorer_save_prefs(const explorer_state_t *state) {
+  if (!state) return;
+  const char *reg_key = "HKEY_CURRENT_USER\\Software\\NewOS\\Explorer";
+  registry_set_value_dword(reg_key, "ViewMode", (uint32_t)state->view_mode);
+  registry_set_value_dword(reg_key, "ShowExtensions", state->show_extensions ? 1 : 0);
+  registry_set_value_dword(reg_key, "ShowHidden", state->show_hidden ? 1 : 0);
+  registry_set_value_dword(reg_key, "ShowPreviewPane", state->show_preview_pane ? 1 : 0);
+  registry_set_value_dword(reg_key, "ShowCheckboxes", state->show_checkboxes ? 1 : 0);
+}
 
 static void explorer_get_view_metrics(const explorer_state_t *state,
                                       int32_t content_w, int *out_cols,
@@ -1768,28 +1779,38 @@ static void explorer_draw(window_t *win) {
                       true);
     }
 
-    // Box input filtro ricerca se attivo
+    // Box input filtro ricerca + preset rapidi se attivo
     if (state->search_active) {
       gfx_draw_string(cx + 392, tb_y + 4, "Filtro:", th_txt, 0, true);
-      int32_t fw = cw - 446;
-      if (fw > 160)
-        fw = 160;
+      int32_t fw = cw - 556;
+      if (fw < 72) fw = 72;
+      if (fw > 110) fw = 110;
       if (is_glass) {
         uint16_t in_r = cur_th->input_radius > 0 ? cur_th->input_radius : 5;
-        gfx_fill_rounded_alpha(cx + 448, tb_y + 2, fw, 18, in_r,
+        gfx_fill_rounded_alpha(cx + 444, tb_y + 2, fw, 18, in_r,
                                cur_th->window_bg ? cur_th->window_bg : 0xFFFFFF,
                                220);
-        gfx_draw_rounded_rect(cx + 448, tb_y + 2, fw, 18, in_r,
+        gfx_draw_rounded_rect(cx + 444, tb_y + 2, fw, 18, in_r,
                               cur_th->control_border_color
                                   ? cur_th->control_border_color
                                   : 0xC8D4E2);
       } else {
-        gfx_fill_rect(cx + 448, tb_y + 2, fw, 18, 0xFFFFFF);
-        gfx_draw_bevel_rect(cx + 448, tb_y + 2, fw, 18, true);
+        gfx_fill_rect(cx + 444, tb_y + 2, fw, 18, 0xFFFFFF);
+        gfx_draw_bevel_rect(cx + 444, tb_y + 2, fw, 18, true);
       }
       char s_disp[48];
       mini_snprintf(s_disp, sizeof(s_disp), "%s|", state->search_filter);
-      gfx_draw_string(cx + 452, tb_y + 3, s_disp, th_acc, 0, true);
+      gfx_draw_string(cx + 448, tb_y + 3, s_disp, th_acc, 0, true);
+
+      // Chip filtro rapido [.TXT] [.DLL] [All]
+      int32_t fx = cx + 448 + fw;
+      const char *chips[3] = { ".TXT", ".DLL", "All" };
+      for (int ci = 0; ci < 3 && fx + 34 <= cx + cw - 4; ci++) {
+        bool act = (ci < 2) ? (strcasecmp(state->search_filter, chips[ci]) == 0) : (state->search_filter[0] == '\0');
+        gfx_fill_rounded_rect(fx, tb_y + 2, 34, 18, 4, act ? th_acc : 0xE2E8F0);
+        gfx_draw_string(fx + 3, tb_y + 3, chips[ci], act ? 0xFFFFFF : 0x1E293B, 0, true);
+        fx += 36;
+      }
     }
 
     // Separatore sotto toolbar
@@ -3831,6 +3852,7 @@ static void explorer_mouse(window_t *win, int32_t mx, int32_t my,
             state->show_hidden = !state->show_hidden;
             explorer_load_items(state);
           }
+          explorer_save_prefs(state);
           state->view_submenu_open = false;
           state->active_menu = EXPLORER_MENU_NONE;
           return;
@@ -3842,6 +3864,7 @@ static void explorer_mouse(window_t *win, int32_t mx, int32_t my,
           int v = (rel_y - 4) / 17;
           if (v >= 0 && v < EXPLORER_VIEW_COUNT) {
             state->view_mode = (explorer_view_mode_t)v;
+            explorer_save_prefs(state);
             state->scroll_row = 0;
           }
         } else if (rel_y >= 146 && rel_y < 164) {
@@ -4171,6 +4194,23 @@ static void explorer_mouse(window_t *win, int32_t mx, int32_t my,
     if (mx >= cx + 318 && mx <= cx + 386 && my >= tb_y && my <= tb_y + 22) {
       state->show_folder_tree = !state->show_folder_tree;
       return;
+    }
+
+    // Click su chip filtro rapido [.TXT] [.DLL] [All]
+    if (state->search_active && my >= tb_y + 2 && my <= tb_y + 20) {
+      int32_t fw = cw - 556;
+      if (fw < 72) fw = 72;
+      if (fw > 110) fw = 110;
+      int32_t fx = cx + 448 + fw;
+      const char *chips[3] = { ".TXT", ".DLL", "" };
+      for (int ci = 0; ci < 3 && fx + 34 <= cx + cw - 4; ci++) {
+        if (mx >= fx && mx <= fx + 34) {
+          strcpy(state->search_filter, chips[ci]);
+          explorer_load_items(state);
+          return;
+        }
+        fx += 36;
+      }
     }
 
     // 5. Clic sulla Barra degli Indirizzi (Breadcrumb o editing)
@@ -4876,6 +4916,22 @@ static window_t *explorer_create_base(const char *title, explorer_mode_t mode,
         state->sort_mode = sm;
     }
     kfree(ini_buf);
+  }
+
+  // Carica preferenze utente persistenti dal Registro di Sistema (HKCU)
+  {
+    const char *rk = "HKEY_CURRENT_USER\\Software\\NewOS\\Explorer";
+    uint32_t v = 0;
+    if (registry_get_value_dword(rk, "ViewMode", &v) && v < EXPLORER_VIEW_COUNT)
+      state->view_mode = (explorer_view_mode_t)v;
+    if (registry_get_value_dword(rk, "ShowExtensions", &v))
+      state->show_extensions = (v != 0);
+    if (registry_get_value_dword(rk, "ShowHidden", &v))
+      state->show_hidden = (v != 0);
+    if (registry_get_value_dword(rk, "ShowPreviewPane", &v))
+      state->show_preview_pane = (v != 0);
+    if (registry_get_value_dword(rk, "ShowCheckboxes", &v))
+      state->show_checkboxes = (v != 0);
   }
 
   outb(0x3F8, '3');

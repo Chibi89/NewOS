@@ -9,7 +9,7 @@ Elenco completo delle migliorie architetturali, grafiche, di sistema e hardware 
 - [x] **Ordinamento da intestazione colonna**: nella vista `Dettagli`, click su `Nome`, `Tipo`, `Dimensione` o `Perm` per ordinare ASC/DESC con freccia indicatrice.
 - [x] **Selezione multipla**: checkbox per elemento + `CTRL+Click`, con conteggio selezione e dimensione totale nella barra di stato.
 - [ ] **Drag & Drop reale**: trascinare file/cartelle su un'altra cartella, su un disco nella sidebar o sul Desktop per spostare/copiare.
-- [ ] **Ricerca avanzata & Filtri**: filtro rapido mentre si digita, ricerca ricorsiva nelle sottocartelle e filtro per estensione/dimensione.
+- [x] **Ricerca avanzata & Filtri**: filtro rapido mentre si digita, ricerca ricorsiva nelle sottocartelle e filtro per estensione/dimensione.
 - [x] **Tab / Schede multiple**: barra tab in alto stile Windows 11 Explorer per aprire più cartelle nella stessa finestra (`Ctrl+T`, `Ctrl+W`).
 - [x] **Breadcrumb cliccabile**: nella barra degli indirizzi, click sui singoli segmenti del percorso (`C:\ > NewOS > ...`) per navigare direttamente al livello cliccato.
 
@@ -42,7 +42,7 @@ Elenco completo delle migliorie architetturali, grafiche, di sistema e hardware 
 ---
 
 ## 4. File System, Storage & Cestino ([`kernel/fs/vfs.c`](kernel/fs/vfs.c), `RECYCLE.DLL`)
-- [ ] **Cestino reale integrato**: tasto `Canc` / **Elimina** in Explorer sposta in `C:\Recycle.Bin\` con file metadati (percorso originale, data, dimensione) per il **Ripristino** da `RECYCLE.DLL`; `Shift+Canc` per eliminazione definitiva.
+- [x] **Cestino reale integrato**: tasto `Canc` / **Elimina** in Explorer sposta in `C:\Recycle.Bin\` con file metadati (percorso originale, data, dimensione) per il **Ripristino** da `RECYCLE.DLL`; `Shift+Canc` per eliminazione definitiva.
 - [ ] **Scrittura completa su `EXT4` e `FAT32`**: consolidare il supporto R/W sicuro su `FAT32` (chiavette USB e partizione ESP) ed `EXT4` in `FS_EXT.DLL`.
 - [ ] **Write-back cache & Flush periodico sicuro**: timer di flush automatico in background dei settori dirty e indicatore di **"Rimozione sicura dell'hardware"** USB nella tray bar.
 - [ ] **Compressione / Archivi `.ZIP` / `.TAR`**: supporto in `FS_EXT.DLL` ed Explorer per aprire/estrarre archivi `.ZIP` come cartelle virtuali.
@@ -53,7 +53,7 @@ Elenco completo delle migliorie architetturali, grafiche, di sistema e hardware 
 ## 5. Sicurezza, Registro, Multi-Utente & Gestione Pacchetti ([`SystemLibrary/seccpl.c`](SystemLibrary/seccpl.c), [`kernel/fs/registry.c`](kernel/fs/registry.c))
 - [x] **Servizio Standardizzato Obbligatorio di Installazione Software Terzi (`PKGSVC.DLL`)**:
   - Implementato in [`SystemLibrary/pkgsvc.c`](SystemLibrary/pkgsvc.c) con isolamento forzato in `C:\ProgramFile\<App>\` (blocco ACL di percorsi in `C:\NewOS\`), creazione manifest `APP.INI`, registrazione in `HKLM\SOFTWARE\NewOS\InstalledApps` e disinstallazione pulita.
-- [ ] **Persistenza preferenze utente**: salvare nel Registro (a sessione autenticata) vista Explorer preferita, `show_extensions`, `show_hidden`, posizione delle icone sul desktop, tema e risoluzione scelta.
+- [x] **Persistenza preferenze utente**: salvare nel Registro (a sessione autenticata) vista Explorer preferita, `show_extensions`, `show_hidden`, posizione delle icone sul desktop, tema e risoluzione scelta.
 - [ ] **Gestione multi-account reale (`USERACCT.CPL`)**: creazione di più utenti locali in `C:\User\<Nome>\` con password hashata, distinzione Standard/Amministratore e schermata di selezione utente in `LOGIN.MOD`.
 - [ ] **Dialogo UAC / Elevazione inline**: prompt di elevazione password amministratore quando un utente Standard tenta un'operazione protetta (`C:\NewOS\`, `Regedit` su `HKLM`, cambio policy).
 - [x] **Audit Log di Sicurezza**: registro eventi critici (login riusciti/falliti, modifiche policy LSA, tentativi ACL negati) consultabile in `SECCPL.CPL`.
