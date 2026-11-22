@@ -38,8 +38,10 @@
 - **Diagnostica & Benchmark Bare-Metal (`BENCH.DLL`) & Audit Log Sicurezza (`SECCPL.CPL`)**:
   - Aggiunto il modulo out-of-kernel [bench_dll.c](SystemLibrary/bench_dll.c) (`BENCH.DLL`, avviabile con `start bench`) con rilevamento CPUID reale x86_64, test banda RAM via `RDTSC` (MB/s), indice CPU e scansione VFS.
   - Aggiunta la tab **`Audit Log`** in [seccpl.c](SystemLibrary/seccpl.c) per ispezionare gli eventi LSA/ACL e i commit di policy.
-- **Esplora Risorse — Sottomenu `Mostra`, Anteprima, Selezione Multipla & Breadcrumb**:
-  - Aggiunti in [explorer.c](explorer/explorer.c) il sottomenu `Mostra >` (`Estensioni file`, `Elementi nascosti`, `Riquadro anteprima`, `Caselle di controllo`), selezione multipla con conteggio/dimensione nella status bar, ordinamento ASC/DESC cliccando sugli header colonne in `Dettagli` e barra indirizzi **Breadcrumb** cliccabile.
+- **Esplora Risorse — Tab Multiple, Sottomenu `Mostra`, Anteprima, Selezione Multipla & Breadcrumb**:
+  - Aggiunte in [explorer.c](explorer/explorer.c) le **Tab / Schede multiple** (`Ctrl+T`, `Ctrl+W`, pulsanti `+` / `x`), il sottomenu `Mostra >` (`Estensioni file`, `Elementi nascosti`, `Riquadro anteprima`, `Caselle di controllo`), selezione multipla con conteggio/dimensione nella status bar, ordinamento ASC/DESC cliccando sugli header colonne in `Dettagli` e barra indirizzi **Breadcrumb** cliccabile.
+- **Terminale `CMD` Potenziato ([`cmd.c`](kernel/apps/cmd.c))**:
+  - Aggiunti **cronologia comandi** navigabile con frecce **`Su`/`Giù`**, **completamento comandi/file con `Tab`**, **redirect output (`>` e `>>`)** su file VFS e **scrollback con rotella del mouse**.
 - **Gestione Font TrueType (`FONTSCPL.CPL`), Installazione Software Terzi (`PKGSVC.DLL`) & Porte I/O (`PORTS.DLL`)**:
   - Aggiunta applet out-of-kernel [fontscpl.c](SystemLibrary/fontscpl.c) con scansione `.TTF`, anteprima live TrueType via `FONTMGR.DLL` e salvataggio nel Registro.
   - Aggiunto servizio obbligatorio [pkgsvc.c](SystemLibrary/pkgsvc.c) per l'installazione isolata di software terzi in `C:\ProgramFile\<App>\` (blocco ACL su `C:\NewOS\`, manifest `APP.INI` e registrazione in `HKLM`).
@@ -312,8 +314,10 @@ tools\qemu-system-x86_64.exe -cdrom NewOS_V1.iso -m 256M -vga std -device AC97 -
 - **Bare-Metal Diagnostics & Benchmark (`BENCH.DLL`) & Security Audit Log (`SECCPL.CPL`)**:
   - Added out-of-kernel [bench_dll.c](SystemLibrary/bench_dll.c) (`BENCH.DLL`, launched via `start bench`) with real x86_64 CPUID detection, `RDTSC`-timed RAM bandwidth benchmark (MB/s), CPU score, and VFS scan.
   - Added the **`Audit Log`** tab in [seccpl.c](SystemLibrary/seccpl.c) to inspect LSA/ACL events and policy commits.
-- **File Explorer — `Show` Submenu, Preview Pane, Multi-Selection & Clickable Breadcrumb**:
-  - Added the `Show >` submenu (`File extensions`, `Hidden items`, `Preview pane`, `Item checkboxes`) in [explorer.c](explorer/explorer.c), multi-selection with status bar item/byte totals, ASC/DESC column-header sorting in `Details` view, and clickable **Breadcrumb** path segments.
+- **File Explorer — Multi-Tabs, `Show` Submenu, Preview Pane, Multi-Selection & Clickable Breadcrumb**:
+  - Added **multi-tab browsing** (`Ctrl+T`, `Ctrl+W`, `+` / `x` buttons), the `Show >` submenu (`File extensions`, `Hidden items`, `Preview pane`, `Item checkboxes`) in [explorer.c](explorer/explorer.c), multi-selection with status bar item/byte totals, ASC/DESC column-header sorting in `Details` view, and clickable **Breadcrumb** path segments.
+- **Enhanced `CMD` Terminal ([`cmd.c`](kernel/apps/cmd.c))**:
+  - Added **command history** (`Up`/`Down` arrows), **`Tab` auto-completion** for commands and `C:\` paths, **output redirection (`>` and `>>`)** to VFS files, and **mouse-wheel scrollback**.
 - **TrueType Font Manager (`FONTSCPL.CPL`), Standardized 3rd-Party Installer (`PKGSVC.DLL`) & I/O Ports (`PORTS.DLL`)**:
   - Added out-of-kernel [fontscpl.c](SystemLibrary/fontscpl.c) scanning `.TTF` fonts with live `FONTMGR.DLL` TrueType preview and Registry persistence.
   - Added mandatory [pkgsvc.c](SystemLibrary/pkgsvc.c) package service enforcing isolated installs under `C:\ProgramFile\<App>\` (ACL block on `C:\NewOS\`, `APP.INI` manifest, and `HKLM` registration).

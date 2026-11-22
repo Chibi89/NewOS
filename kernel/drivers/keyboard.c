@@ -67,6 +67,16 @@ static void keyboard_callback(interrupt_frame_t *frame) {
       keyboard_inject_char(KEY_DEL);
       return;
     }
+    // Frecce Su (0x48) / Giu' (0x50)
+    if (scancode == 0x48) {
+      keyboard_inject_char(KEY_ARROW_UP);
+      return;
+    }
+    if (scancode == 0x50) {
+      keyboard_inject_char(KEY_ARROW_DOWN);
+      return;
+    }
+    if (scancode & 0x80) return;
   }
 
   if (scancode == 0x2A || scancode == 0x36) { // Left / Right Shift down
@@ -157,6 +167,14 @@ static void keyboard_callback(interrupt_frame_t *frame) {
     }
     if (base == 'n') {
       keyboard_inject_char(KEY_CTRL_N);
+      return;
+    }
+    if (base == 't') {
+      keyboard_inject_char(KEY_CTRL_T);
+      return;
+    }
+    if (base == 'w') {
+      keyboard_inject_char(KEY_CTRL_W);
       return;
     }
   }

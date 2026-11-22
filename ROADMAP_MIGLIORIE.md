@@ -10,7 +10,7 @@ Elenco completo delle migliorie architetturali, grafiche, di sistema e hardware 
 - [x] **Selezione multipla**: checkbox per elemento + `CTRL+Click`, con conteggio selezione e dimensione totale nella barra di stato.
 - [ ] **Drag & Drop reale**: trascinare file/cartelle su un'altra cartella, su un disco nella sidebar o sul Desktop per spostare/copiare.
 - [ ] **Ricerca avanzata & Filtri**: filtro rapido mentre si digita, ricerca ricorsiva nelle sottocartelle e filtro per estensione/dimensione.
-- [ ] **Tab / Schede multiple**: barra tab in alto stile Windows 11 Explorer per aprire più cartelle nella stessa finestra (`Ctrl+T`, `Ctrl+W`).
+- [x] **Tab / Schede multiple**: barra tab in alto stile Windows 11 Explorer per aprire più cartelle nella stessa finestra (`Ctrl+T`, `Ctrl+W`).
 - [x] **Breadcrumb cliccabile**: nella barra degli indirizzi, click sui singoli segmenti del percorso (`C:\ > NewOS > ...`) per navigare direttamente al livello cliccato.
 
 ---
@@ -92,7 +92,7 @@ Elenco completo delle migliorie architetturali, grafiche, di sistema e hardware 
 - [ ] **Visualizzatore Immagini dedicato (`IMGVIEW`)**: zoom, rotazione e presentazione per `.BMP`, `.PNG`, `.JPG`, `.WEBP` tramite `IMGCODEC.DLL`.
 - [ ] **NewOS Media Player (`player/`)**: completare la decodifica e riproduzione reale di `.MP3` / `.FLAC` (codec `.CDC`) e seek bar interattiva.
 - [x] **Task Manager (`taskmgr/`)**: tab **Prestazioni** (grafici storici CPU/RAM/Disk I/O/Network I/O) e tab **Moduli DLL** caricati con consumo memoria e CRC32.
-- [ ] **Terminale `CMD` potenziato**: cronologia comandi con frecce `Su/Giù`, completamento percorsi con `Tab`, redirect output (`>` e `>>`) e scrollback con rotella del mouse.
+- [x] **Terminale `CMD` potenziato**: cronologia comandi con frecce `Su/Giù`, completamento percorsi con `Tab`, redirect output (`>` e `>>`) e scrollback con rotella del mouse.
 
 ---
 

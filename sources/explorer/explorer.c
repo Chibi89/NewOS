@@ -1641,6 +1641,47 @@ static void explorer_draw(window_t *win) {
     gfx_draw_string(cx + 282, menu_y + 1, "?", th_txt, 0, true);
   }
 
+  // Barra Tab / Schede multiple (a destra di '?')
+  if (state->num_tabs > 0) {
+    int32_t tx = cx + 306;
+    int32_t max_tx = cx + cw - 28;
+    for (int ti = 0; ti < state->num_tabs && tx + 54 < max_tx; ti++) {
+      bool cur_tab = (ti == state->active_tab);
+      explorer_mode_t tm = cur_tab ? state->mode : state->tabs[ti].mode;
+      const char *tname = "PC";
+      if (tm == EXPLORER_MODE_DRIVE_C) tname = "C:\\";
+      else if (tm == EXPLORER_MODE_DRIVE_D) tname = "D:\\";
+      else if (tm == EXPLORER_MODE_DRIVE_U) tname = "USB";
+      else if (tm == EXPLORER_MODE_RECYCLE_BIN) tname = "Cestino";
+      else if (tm == EXPLORER_MODE_CONTROL_PANEL) tname = "Pannello";
+      else if (tm == EXPLORER_MODE_SETTINGS) tname = "Impost.";
+      else if (tm == EXPLORER_MODE_FOLDER) tname = "Cartella";
+      int32_t tw = 58;
+      if (is_glass) {
+        gfx_fill_rounded_alpha(tx, menu_y, tw, 16, 4, cur_tab ? 0xFFFFFF : 0xCBD5E1, cur_tab ? 210 : 120);
+        gfx_draw_rounded_rect(tx, menu_y, tw, 16, 4, cur_tab ? th_acc : 0x94A3B8);
+      } else {
+        gfx_fill_rect(tx, menu_y, tw, 16, cur_tab ? 0xFFFFFF : COLOR_BTNFACE);
+        gfx_draw_bevel_rect(tx, menu_y, tw, 16, !cur_tab);
+      }
+      gfx_draw_string(tx + 4, menu_y + 1, tname, cur_tab ? th_acc : th_txt, 0, true);
+      if (cur_tab && state->num_tabs > 1) {
+        gfx_draw_string(tx + tw - 11, menu_y + 1, "x", 0xB91C1C, 0, true);
+      }
+      tx += tw + 3;
+    }
+    if (state->num_tabs < 4 && tx + 20 <= cx + cw - 4) {
+      if (is_glass) {
+        gfx_fill_rounded_alpha(tx, menu_y, 20, 16, 4, 0xE2E8F0, 180);
+        gfx_draw_rounded_rect(tx, menu_y, 20, 16, 4, 0x94A3B8);
+      } else {
+        gfx_fill_rect(tx, menu_y, 20, 16, COLOR_BTNFACE);
+        gfx_draw_bevel_rect(tx, menu_y, 20, 16, false);
+      }
+      gfx_draw_string(tx + 6, menu_y + 1, "+", th_txt, 0, true);
+    }
+  }
+
   // Separatore sotto la barra dei menu
   if (is_glass) {
     gfx_fill_alpha(cx + 4, cy + 19, cw - 8, 1,
@@ -3998,6 +4039,46 @@ static void explorer_mouse(window_t *win, int32_t mx, int32_t my,
                                ? EXPLORER_MENU_NONE
                                : EXPLORER_MENU_HELP;
       return;
+    } else if (state->num_tabs > 0 && mx >= cx + 306) {
+      int32_t tx = cx + 306;
+      int32_t max_tx = cx + cw - 28;
+      for (int ti = 0; ti < state->num_tabs && tx + 54 < max_tx; ti++) {
+        int32_t tw = 58;
+        if (mx >= tx && mx < tx + tw) {
+          if (ti == state->active_tab && state->num_tabs > 1 && mx >= tx + tw - 14) {
+            for (int k = ti; k < state->num_tabs - 1; k++) state->tabs[k] = state->tabs[k + 1];
+            state->num_tabs--;
+            if (state->active_tab >= state->num_tabs) state->active_tab = state->num_tabs - 1;
+            state->mode = state->tabs[state->active_tab].mode;
+            strcpy(state->current_path, state->tabs[state->active_tab].current_path);
+            strcpy(state->folder_name, state->tabs[state->active_tab].folder_name);
+            explorer_load_items(state);
+          } else if (ti != state->active_tab) {
+            state->tabs[state->active_tab].mode = state->mode;
+            strcpy(state->tabs[state->active_tab].current_path, state->current_path);
+            strcpy(state->tabs[state->active_tab].folder_name, state->folder_name);
+            state->active_tab = ti;
+            state->mode = state->tabs[ti].mode;
+            strcpy(state->current_path, state->tabs[ti].current_path);
+            strcpy(state->folder_name, state->tabs[ti].folder_name);
+            explorer_load_items(state);
+          }
+          return;
+        }
+        tx += tw + 3;
+      }
+      if (state->num_tabs < 4 && mx >= tx && mx <= tx + 22) {
+        state->tabs[state->active_tab].mode = state->mode;
+        strcpy(state->tabs[state->active_tab].current_path, state->current_path);
+        strcpy(state->tabs[state->active_tab].folder_name, state->folder_name);
+        int nt = state->num_tabs++;
+        state->tabs[nt].mode = EXPLORER_MODE_DRIVE_C;
+        strcpy(state->tabs[nt].current_path, "C:\\");
+        state->tabs[nt].folder_name[0] = '\0';
+        state->active_tab = nt;
+        explorer_navigate_to(state, EXPLORER_MODE_DRIVE_C, NULL);
+        return;
+      }
     }
   }
 
@@ -4518,6 +4599,30 @@ static void explorer_key(window_t *win, char c) {
   if (!state)
     return;
 
+  if ((uint8_t)c == KEY_CTRL_T && state->num_tabs < 4) {
+    state->tabs[state->active_tab].mode = state->mode;
+    strcpy(state->tabs[state->active_tab].current_path, state->current_path);
+    strcpy(state->tabs[state->active_tab].folder_name, state->folder_name);
+    int nt = state->num_tabs++;
+    state->tabs[nt].mode = EXPLORER_MODE_DRIVE_C;
+    strcpy(state->tabs[nt].current_path, "C:\\");
+    state->tabs[nt].folder_name[0] = '\0';
+    state->active_tab = nt;
+    explorer_navigate_to(state, EXPLORER_MODE_DRIVE_C, NULL);
+    return;
+  }
+  if ((uint8_t)c == KEY_CTRL_W && state->num_tabs > 1) {
+    int ti = state->active_tab;
+    for (int k = ti; k < state->num_tabs - 1; k++) state->tabs[k] = state->tabs[k + 1];
+    state->num_tabs--;
+    if (state->active_tab >= state->num_tabs) state->active_tab = state->num_tabs - 1;
+    state->mode = state->tabs[state->active_tab].mode;
+    strcpy(state->current_path, state->tabs[state->active_tab].current_path);
+    strcpy(state->folder_name, state->tabs[state->active_tab].folder_name);
+    explorer_load_items(state);
+    return;
+  }
+
   if (state->mode == EXPLORER_MODE_SETTINGS) {
     if (settings_handle_key(screen_mgr_get_api(), c, &state->settings_state)) {
       return;
@@ -4774,6 +4879,11 @@ static window_t *explorer_create_base(const char *title, explorer_mode_t mode,
   }
 
   outb(0x3F8, '3');
+  state->num_tabs = 1;
+  state->active_tab = 0;
+  state->tabs[0].mode = state->mode;
+  strcpy(state->tabs[0].current_path, state->current_path);
+  strcpy(state->tabs[0].folder_name, state->folder_name);
   explorer_load_items(state);
   outb(0x3F8, '4');
 

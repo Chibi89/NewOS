@@ -139,6 +139,15 @@ typedef struct {
     bool item_selected[MAX_EXPLORER_ITEMS];
     int selected_count;
     uint64_t selected_bytes;
+
+    // Tab / Schede multiple (Ctrl+T, Ctrl+W)
+    struct {
+        explorer_mode_t mode;
+        char current_path[128];
+        char folder_name[128];
+    } tabs[4];
+    int num_tabs;
+    int active_tab;
 } explorer_state_t;
 
 // Funzioni pubbliche di apertura

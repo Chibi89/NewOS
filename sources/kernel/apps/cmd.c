@@ -41,9 +41,17 @@
 
 #define CMD_COLS 56
 #define CMD_ROWS 18
+#define CMD_CMD_HIST 16
+#define CMD_SB_ROWS  48
 
 typedef struct {
     char lines[CMD_ROWS][CMD_COLS];
+    char sb_lines[CMD_SB_ROWS][CMD_COLS];
+    int  sb_count;
+    int  view_scroll;
+    char cmd_hist[CMD_CMD_HIST][CMD_COLS];
+    int  hist_count;
+    int  hist_nav;
     char input_line[CMD_COLS];
     int input_pos;
     int current_row;
@@ -53,6 +61,14 @@ typedef struct {
 } cmd_state_t;
 
 static void cmd_scroll(cmd_state_t* state) {
+    if (state->sb_count < CMD_SB_ROWS) {
+        memcpy(state->sb_lines[state->sb_count++], state->lines[0], CMD_COLS);
+    } else {
+        for (int s = 0; s < CMD_SB_ROWS - 1; s++) {
+            memcpy(state->sb_lines[s], state->sb_lines[s + 1], CMD_COLS);
+        }
+        memcpy(state->sb_lines[CMD_SB_ROWS - 1], state->lines[0], CMD_COLS);
+    }
     for (int r = 0; r < CMD_ROWS - 1; r++) {
         memcpy(state->lines[r], state->lines[r + 1], CMD_COLS);
     }
@@ -1041,8 +1057,113 @@ static void cmd_execute_pipe_filter(cmd_state_t* state, const char* filter_cmd, 
     }
 }
 
+static void cmd_save_history(cmd_state_t* state, const char* cmd) {
+    if (!cmd || !cmd[0]) return;
+    if (state->hist_count < CMD_CMD_HIST) {
+        strncpy(state->cmd_hist[state->hist_count++], cmd, CMD_COLS - 1);
+    } else {
+        for (int i = 0; i < CMD_CMD_HIST - 1; i++) {
+            memcpy(state->cmd_hist[i], state->cmd_hist[i + 1], CMD_COLS);
+        }
+        strncpy(state->cmd_hist[CMD_CMD_HIST - 1], cmd, CMD_COLS - 1);
+    }
+    state->hist_nav = state->hist_count;
+    state->view_scroll = 0;
+}
+
+static void cmd_autocomplete(cmd_state_t* state) {
+    if (!state || state->input_pos <= 0) return;
+    static const char* cmds[] = {
+        "help", "ver", "cls", "dir", "sysinfo", "mem", "pci",
+        "ifconfig", "ping ", "start ", "type ", "echo ", "cat "
+    };
+    for (int i = 0; i < (int)(sizeof(cmds) / sizeof(cmds[0])); i++) {
+        if (strncmp(state->input_line, cmds[i], (size_t)state->input_pos) == 0) {
+            strncpy(state->input_line, cmds[i], CMD_COLS - 1);
+            state->input_pos = (int)strlen(state->input_line);
+            return;
+        }
+    }
+    // Completamento file in C:\ dopo uno spazio (es. "type BENV")
+    const char* sp = strrchr(state->input_line, ' ');
+    if (sp && sp[1]) {
+        const char* prefix = sp + 1;
+        size_t plen = strlen(prefix);
+        vfs_dirent_t* ents = (vfs_dirent_t*)kmalloc(sizeof(vfs_dirent_t) * 32);
+        if (ents) {
+            int n = vfs_readdir("C:\\", ents, 32);
+            for (int i = 0; i < n; i++) {
+                if (strncasecmp(ents[i].name, prefix, plen) == 0) {
+                    size_t base_len = (size_t)(sp + 1 - state->input_line);
+                    if (base_len + strlen(ents[i].name) < CMD_COLS - 1) {
+                        strcpy(state->input_line + base_len, ents[i].name);
+                        state->input_pos = (int)strlen(state->input_line);
+                    }
+                    break;
+                }
+            }
+            kfree(ents);
+        }
+    }
+}
+
 static void cmd_execute(cmd_state_t* state, const char* cmd) {
     if (!state || !cmd) return;
+    cmd_save_history(state, cmd);
+
+    // Controllo redirect output '>' o '>>' su file VFS
+    const char* redir = strstr(cmd, ">>");
+    bool is_append = (redir != NULL);
+    if (!redir) redir = strchr(cmd, '>');
+    if (redir && !strchr(cmd, '|')) {
+        char left_cmd[CMD_COLS];
+        char out_path[96];
+        size_t llen = (size_t)(redir - cmd);
+        if (llen >= sizeof(left_cmd)) llen = sizeof(left_cmd) - 1;
+        strncpy(left_cmd, cmd, llen);
+        left_cmd[llen] = '\0';
+        while (llen > 0 && left_cmd[llen - 1] == ' ') left_cmd[--llen] = '\0';
+
+        const char* rp = redir + (is_append ? 2 : 1);
+        while (*rp == ' ') rp++;
+        if (strchr(rp, ':') || rp[0] == '\\' || rp[0] == '/') {
+            strncpy(out_path, rp, sizeof(out_path) - 1);
+            out_path[sizeof(out_path) - 1] = '\0';
+        } else {
+            mini_snprintf(out_path, sizeof(out_path), "C:\\%s", rp);
+        }
+
+        char prompt_echo[CMD_COLS + 8];
+        mini_snprintf(prompt_echo, sizeof(prompt_echo), "C:\\> %s", cmd);
+        cmd_print(state, prompt_echo);
+
+        state->pipe_active = true;
+        state->pipe_pos = 0;
+        state->pipe_buffer[0] = '\0';
+        cmd_execute_internal(state, left_cmd);
+        state->pipe_active = false;
+
+        if (!vfs_exists(out_path)) vfs_create(out_path);
+        if (is_append) {
+            uint32_t old_sz = 0;
+            char* old_buf = (char*)vfs_read_entire_file(out_path, &old_sz);
+            uint32_t new_sz = old_sz + (uint32_t)state->pipe_pos;
+            char* comb = (char*)kmalloc(new_sz + 1);
+            if (comb) {
+                if (old_buf && old_sz > 0) memcpy(comb, old_buf, old_sz);
+                if (state->pipe_pos > 0) memcpy(comb + old_sz, state->pipe_buffer, (size_t)state->pipe_pos);
+                vfs_write_entire_file_inplace(out_path, comb, new_sz);
+                kfree(comb);
+            }
+            if (old_buf) kfree(old_buf);
+        } else {
+            vfs_write_entire_file_inplace(out_path, state->pipe_buffer, (uint32_t)state->pipe_pos);
+        }
+        char ok_msg[CMD_COLS];
+        mini_snprintf(ok_msg, sizeof(ok_msg), "Output salvato in %s (%d B)", out_path, state->pipe_pos);
+        cmd_print(state, ok_msg);
+        return;
+    }
 
     // Controllo operatore pipe '|' per streaming IPC tra comandi
     const char* pipe_char = strchr(cmd, '|');
@@ -1100,23 +1221,73 @@ static void cmd_draw(window_t* win) {
     gfx_fill_rect(cx, cy, cw, ch, 0x000000);
     gfx_draw_bevel_rect(cx, cy, cw, ch, true);
 
-    // Stampa righe di output
+    // Stampa righe di output (con supporto scrollback rotella mouse)
     for (int r = 0; r < CMD_ROWS; r++) {
-        if (state->lines[r][0] != '\0') {
-            gfx_draw_string(cx + 6, cy + 6 + r * 16, state->lines[r], 0xFFFFFF, 0x000000, false);
+        int virt_idx = state->sb_count - state->view_scroll + r;
+        const char* row_str = NULL;
+        if (virt_idx < state->sb_count && virt_idx >= 0) {
+            row_str = state->sb_lines[virt_idx];
+        } else {
+            int line_idx = virt_idx - state->sb_count;
+            if (line_idx >= 0 && line_idx < CMD_ROWS) {
+                row_str = state->lines[line_idx];
+            }
+        }
+        if (row_str && row_str[0] != '\0') {
+            gfx_draw_string(cx + 6, cy + 6 + r * 16, row_str, 0xFFFFFF, 0x000000, false);
         }
     }
 
     // Stampa prompt corrente e testo in digitazione
-    char cur_line[CMD_COLS + 16];
-    mini_snprintf(cur_line, sizeof(cur_line), "C:\\> %s_", state->input_line);
-    gfx_draw_string(cx + 6, cy + 6 + state->current_row * 16, cur_line, 0xFFFFFF, 0x000000, false);
+    if (state->view_scroll == 0) {
+        char cur_line[CMD_COLS + 16];
+        mini_snprintf(cur_line, sizeof(cur_line), "C:\\> %s_", state->input_line);
+        gfx_draw_string(cx + 6, cy + 6 + state->current_row * 16, cur_line, 0xFFFFFF, 0x000000, false);
+    } else {
+        char sb_ind[32];
+        mini_snprintf(sb_ind, sizeof(sb_ind), "[Scrollback +%d righe]", state->view_scroll);
+        gfx_draw_string(cx + cw - 190, cy + 6, sb_ind, 0x60A5FA, 0x000000, true);
+    }
 }
 
 static void cmd_key(window_t* win, char c) {
     cmd_state_t* state = (cmd_state_t*)win->app_data;
     if (!state) return;
 
+    if (c == KEY_WHEEL_UP) {
+        if (state->view_scroll < state->sb_count) state->view_scroll++;
+        return;
+    }
+    if (c == KEY_WHEEL_DOWN) {
+        if (state->view_scroll > 0) state->view_scroll--;
+        return;
+    }
+    if (c == KEY_ARROW_UP) {
+        if (state->hist_count > 0 && state->hist_nav > 0) {
+            state->hist_nav--;
+            strncpy(state->input_line, state->cmd_hist[state->hist_nav], CMD_COLS - 1);
+            state->input_pos = (int)strlen(state->input_line);
+        }
+        return;
+    }
+    if (c == KEY_ARROW_DOWN) {
+        if (state->hist_nav < state->hist_count - 1) {
+            state->hist_nav++;
+            strncpy(state->input_line, state->cmd_hist[state->hist_nav], CMD_COLS - 1);
+            state->input_pos = (int)strlen(state->input_line);
+        } else {
+            state->hist_nav = state->hist_count;
+            state->input_line[0] = '\0';
+            state->input_pos = 0;
+        }
+        return;
+    }
+    if (c == '\t') {
+        cmd_autocomplete(state);
+        return;
+    }
+
+    state->view_scroll = 0;
     if (c == '\n') {
         cmd_execute(state, state->input_line);
         memset(state->input_line, 0, CMD_COLS);
