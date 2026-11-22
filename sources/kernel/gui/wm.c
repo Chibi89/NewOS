@@ -14,6 +14,7 @@
 #include <gui/image.h>
 #include <gui/screen_mgr.h>
 #include <gui/wm.h>
+#include <launcher.h>
 #include <gui/cursor_loader.h>
 #include <gui/uistyle_loader.h>
 #include <include/comdlg.h>
@@ -1617,49 +1618,30 @@ void wm_update(mouse_state_t *mouse, char key) {
       if (!icon_was_dragged) {
         int idx = dragging_icon_idx;
         if (desktop_icons[idx].type == 0) {
-          if (!(uistyle_get_active() == UISTYLE_COPENHAGEN && uistyle_open_explorer(NULL)))
-            app_explorer_open_this_pc();
-        }
-        else if (desktop_icons[idx].type == 1)
-          app_cmd_launch();
-        else if (desktop_icons[idx].type == 2)
-          app_notepad_launch();
-        else if (desktop_icons[idx].type == 3)
-          app_calc_launch();
-        else if (desktop_icons[idx].type == 4)
-          app_about_launch();
-        else if (desktop_icons[idx].type == 5) {
-          app_explorer_open_folder(desktop_icons[idx].label);
+          launcher_open("thispc", NULL);
+        } else if (desktop_icons[idx].type == 1) {
+          launcher_open("cmd", NULL);
+        } else if (desktop_icons[idx].type == 2) {
+          launcher_open("notepad", NULL);
+        } else if (desktop_icons[idx].type == 3) {
+          launcher_open("calc", NULL);
+        } else if (desktop_icons[idx].type == 4) {
+          launcher_open("about", NULL);
+        } else if (desktop_icons[idx].type == 5) {
+          launcher_open_typed(LAUNCH_TYPE_FOLDER, desktop_icons[idx].label, NULL, NULL);
         } else if (desktop_icons[idx].type == 6) {
-          const char *dot = strstr(desktop_icons[idx].label, ".");
-          if (dot &&
-              (strcasecmp(dot, ".jpg") == 0 || strcasecmp(dot, ".bmp") == 0)) {
-            user_profile_t *up = user_get_current();
-            const char *uname =
-                (up && up->username[0]) ? up->username : "Morgan";
-            char wp_path[128];
-            mini_snprintf(wp_path, sizeof(wp_path), "/USER/%s/DESKTOP/%s",
-                          uname, desktop_icons[idx].label);
-            image_t *img = image_load_from_file(wp_path);
-            if (!img) {
-              mini_snprintf(wp_path, sizeof(wp_path), "C:/USER/%s/DESKTOP/%s",
-                            uname, desktop_icons[idx].label);
-              img = image_load_from_file(wp_path);
-            }
-            if (img) {
-              gfx_set_custom_wallpaper(img->pixels, img->width, img->height);
-              image_free(img);
-            }
-          } else {
-            app_notepad_open_file(desktop_icons[idx].label,
-                                  desktop_icons[idx].content);
-          }
+          user_profile_t *up = user_get_current();
+          const char *uname = (up && up->username[0]) ? up->username : "Morgan";
+          char full_path[128];
+          mini_snprintf(full_path, sizeof(full_path), "C:/USER/%s/DESKTOP/%s",
+                        uname, desktop_icons[idx].label);
+          launcher_open_typed(LAUNCH_TYPE_FILE, full_path, NULL, desktop_icons[idx].content);
         } else if (desktop_icons[idx].type == 7) {
-          app_explorer_open_recycle_bin();
+          launcher_open("recycle", NULL);
         } else if (desktop_icons[idx].type == 8) {
-          app_installer_launch();
+          launcher_open("installer", NULL);
         } else if (desktop_icons[idx].type == 9) {
-          app_browser_launch();
+          launcher_open("browser", NULL);
         }
       }
       dragging_icon_idx = -1;
@@ -1837,23 +1819,23 @@ void wm_update(mouse_state_t *mouse, char key) {
           mouse->y <= my + mh) {
         int item = (mouse->y - my - 8) / 32;
         if (item == 0)
-          app_browser_launch();
+          launcher_open("browser", NULL);
         else if (item == 1)
-          app_cmd_launch();
+          launcher_open("cmd", NULL);
         else if (item == 2)
-          app_notepad_launch();
+          launcher_open("notepad", NULL);
         else if (item == 3)
-          app_calc_launch();
+          launcher_open("calc", NULL);
         else if (item == 4)
-          app_player_launch();
+          launcher_open("player", NULL);
         else if (item == 5)
-          app_rules_viewer_launch();
+          launcher_open("rules", NULL);
         else if (item == 6)
-          app_control_panel_open();
+          launcher_open("control", NULL);
         else if (item == 7)
-          app_regedit_launch();
+          launcher_open("regedit", NULL);
         else if (item == 8)
-          app_about_launch();
+          launcher_open("about", NULL);
         else if (item == 9) {
           start_menu_open = false;
           logoutscreen_result_t res = screen_mgr_run_logoutscreen();

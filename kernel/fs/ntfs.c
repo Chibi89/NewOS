@@ -356,19 +356,19 @@ static void ntfs_vfs_close(vfs_mount_t* mnt, vfs_file_t* file) {
     if (file) file->is_open = false;
 }
 
-static int32_t ntfs_vfs_seek(vfs_mount_t* mnt, vfs_file_t* file, int32_t offset, int whence) {
+static int64_t ntfs_vfs_seek(vfs_mount_t* mnt, vfs_file_t* file, int64_t offset, int whence) {
     (void)mnt;
     if (!file || !file->is_open) return -1;
-    int32_t new_pos = (int32_t)file->current_pos;
+    int64_t new_pos = (int64_t)file->current_pos;
 
     if (whence == VFS_SEEK_SET) new_pos = offset;
     else if (whence == VFS_SEEK_CUR) new_pos += offset;
-    else if (whence == VFS_SEEK_END) new_pos = (int32_t)file->size + offset;
+    else if (whence == VFS_SEEK_END) new_pos = (int64_t)file->size + offset;
 
     if (new_pos < 0) new_pos = 0;
-    if ((uint32_t)new_pos > file->size) new_pos = (int32_t)file->size;
+    if ((uint64_t)new_pos > file->size) new_pos = (int64_t)file->size;
 
-    file->current_pos = (uint32_t)new_pos;
+    file->current_pos = (uint64_t)new_pos;
     return new_pos;
 }
 

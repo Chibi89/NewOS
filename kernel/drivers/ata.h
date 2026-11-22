@@ -3,7 +3,7 @@
 
 #include <types.h>
 
-#define MAX_ATA_DEVICES 4
+#define MAX_ATA_DEVICES 8
 
 typedef struct ata_device_s {
     bool     present;
@@ -27,7 +27,11 @@ typedef struct ata_device_s {
     char     part_fs[16];   // "exFAT", "FAT32", "NTFS", "RAW"
     bool     is_ahci;       // true = Dispositivo controllato tramite Serial ATA AHCI (prioritario)
     uint8_t  ahci_port;     // Numero porta AHCI (0..31)
+    bool     is_nvme;       // true = Dispositivo SSD NVMe PCIe (via NVME.DLL)
 } ata_device_t;
+
+// Registra eventuale controller/disco NVMe nel pool dispositivi a blocchi (dopo mount di C:)
+bool ata_register_nvme_device(void);
 
 // Verifica se il controller AHCI Serial ATA è attivo come driver primario prioritario
 bool storage_is_ahci_active(void);

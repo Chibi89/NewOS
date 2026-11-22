@@ -1,5 +1,6 @@
 #include <drivers/ata.h>
 #include <drivers/ahci.h>
+#include <drivers/nvme.h>
 #include <fs/fs_probe.h>
 #include <arch/x86_64/io.h>
 #include <string.h>
@@ -464,6 +465,10 @@ const ata_device_t* ata_get_primary_master(void) {
 bool ata_read_device_sectors(const ata_device_t* dev, uint64_t lba, uint32_t count, void* buffer) {
     if (!dev || !buffer || count == 0) return false;
 
+    if (dev->is_nvme) {
+        return nvme_read_sectors(lba, count, buffer);
+    }
+
     if (dev->is_ahci) {
         if (dev->is_atapi) {
             uint32_t base_sec = dev->boot_lba ? dev->boot_lba : 32;
@@ -565,6 +570,9 @@ bool ata_read_sectors(uint64_t lba, uint32_t count, void* buffer) {
 
 bool ata_write_device_sectors(const ata_device_t* dev, uint64_t lba, uint32_t count, const void* buffer) {
     if (!dev || dev->is_atapi || !buffer || count == 0) return false;
+    if (dev->is_nvme) {
+        return nvme_write_sectors(lba, count, buffer);
+    }
     if (dev->is_ahci) {
         return ahci_write_sectors(dev->ahci_port, lba, count, buffer);
     }
@@ -627,4 +635,60 @@ bool ata_write_sectors(uint64_t lba, uint32_t count, const void* buffer) {
     def.io_base = ATA_PRIMARY_IO;
     def.drive = 0;
     return ata_write_device_sectors(&def, lba, count, buffer);
+}
+
+bool ata_register_nvme_device(void) {
+    if (!g_ata_initialized) ata_init();
+    for (int i = 0; i < g_device_count; i++) {
+        if (g_devices[i].is_nvme) return true;
+    }
+    if (g_device_count >= MAX_ATA_DEVICES) return false;
+    if (!nvme_init() || !nvme_is_present()) return false;
+
+    uint64_t cap_sec = nvme_get_capacity_sectors();
+    uint32_t sec_sz = nvme_get_sector_size();
+    if (sec_sz < 512) sec_sz = 512;
+    if (cap_sec == 0) return false;
+
+    ata_device_t* dev = &g_devices[g_device_count];
+    memset(dev, 0, sizeof(ata_device_t));
+    dev->present = true;
+    dev->is_nvme = true;
+    dev->total_sectors = cap_sec;
+    dev->size_bytes = cap_sec * (uint64_t)sec_sz;
+    dev->size_mb = (uint32_t)(dev->size_bytes / (1024ULL * 1024ULL));
+    dev->size_gb = (uint32_t)(dev->size_mb / 1024U);
+    strncpy(dev->model, nvme_get_model(), sizeof(dev->model) - 1);
+
+    // Sonda reale GPT / MBR sul namespace NVMe senza limiti fittizi
+    uint64_t gpt_lba = 0, gpt_secs = 0;
+    char gpt_fs[16] = "RAW";
+    if (gpt_probe_table(ata_probe_sector_reader, dev, &gpt_lba, &gpt_secs, gpt_fs, sizeof(gpt_fs))) {
+        dev->has_gpt = true;
+        dev->part_lba = gpt_lba;
+        dev->part_sectors = gpt_secs;
+        strncpy(dev->part_fs, gpt_fs, sizeof(dev->part_fs) - 1);
+    } else {
+        uint8_t mbr[512];
+        if (nvme_read_sectors(0, 1, mbr) && mbr[510] == 0x55 && mbr[511] == 0xAA) {
+            dev->has_mbr = true;
+            uint8_t ptype = mbr[446 + 4];
+            uint32_t plba = *(uint32_t*)&mbr[446 + 8];
+            uint32_t psec = *(uint32_t*)&mbr[446 + 12];
+            dev->part_type = ptype;
+            dev->part_lba = plba;
+            dev->part_sectors = psec;
+            if (plba > 0) {
+                uint8_t vbr[512];
+                if (nvme_read_sectors(plba, 1, vbr)) {
+                    if (memcmp(&vbr[3], "EXFAT   ", 8) == 0) strncpy(dev->part_fs, "exFAT", sizeof(dev->part_fs) - 1);
+                    else if (memcmp(&vbr[3], "NTFS    ", 8) == 0) strncpy(dev->part_fs, "NTFS", sizeof(dev->part_fs) - 1);
+                    else strncpy(dev->part_fs, "RAW", sizeof(dev->part_fs) - 1);
+                }
+            }
+        }
+    }
+
+    g_device_count++;
+    return true;
 }

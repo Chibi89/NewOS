@@ -177,19 +177,20 @@ bool vfs_mount_drive(char drive_letter, const char* fs_name, const char* label, 
     }
     target->priv_data = priv;
 
-    // Calcolo capacità reale dal chip del dispositivo collegato (HD / SSD)
+    // Calcolo capacità reale dal chip del dispositivo collegato (HD / SSD / NVMe) senza limiti fittizi
     if (priv) {
         const ata_device_t* d = (const ata_device_t*)priv;
-        if (d->size_mb > 0) {
+        if (d->size_bytes > 0) {
+            target->total_bytes = d->size_bytes;
+            target->total_mb = (uint32_t)(d->size_bytes / (1024ULL * 1024ULL));
+            target->free_bytes = d->size_bytes;
+            target->free_mb = target->total_mb;
+        } else if (d->size_mb > 0) {
             target->total_mb = d->size_mb;
-            target->free_mb = d->size_mb > 64 ? d->size_mb - 64 : 0;
-        } else {
-            target->total_mb = 128;
-            target->free_mb = 64;
+            target->total_bytes = (uint64_t)d->size_mb * 1024ULL * 1024ULL;
+            target->free_mb = d->size_mb;
+            target->free_bytes = target->total_bytes;
         }
-    } else {
-        target->total_mb = (letter == 'C') ? 128 : ((letter == 'D') ? 650 : ((letter == 'U') ? 128 : 16));
-        target->free_mb = target->total_mb / 2;
     }
 
     // Chiama callback mount del driver se implementata
@@ -264,17 +265,25 @@ bool vfs_get_drive_info(char drive_letter, vfs_drive_info_t* out_info) {
                 dev = ata_get_primary_master();
                 g_mounts[i].priv_data = (void*)dev;
             }
-            if (dev && dev->present && dev->size_mb > 0) {
+            if (dev && dev->present && dev->size_bytes > 0) {
+                g_mounts[i].total_bytes = dev->size_bytes;
+                g_mounts[i].total_mb = (uint32_t)(dev->size_bytes / (1024ULL * 1024ULL));
+            } else if (dev && dev->present && dev->size_mb > 0) {
                 g_mounts[i].total_mb = dev->size_mb;
+                g_mounts[i].total_bytes = (uint64_t)dev->size_mb * 1024ULL * 1024ULL;
             }
 
             if (g_mounts[i].driver && strcmp(g_mounts[i].driver->name, "exFAT") == 0) {
                 uint32_t used_mb = exfat_get_used_mb();
+                uint64_t used_bytes = (uint64_t)exfat_get_allocated_clusters() * (uint64_t)exfat_cluster_size();
                 g_mounts[i].free_mb = g_mounts[i].total_mb > used_mb ? (g_mounts[i].total_mb - used_mb) : 0;
+                g_mounts[i].free_bytes = g_mounts[i].total_bytes > used_bytes ? (g_mounts[i].total_bytes - used_bytes) : 0;
             }
 
             out_info->total_mb = g_mounts[i].total_mb;
             out_info->free_mb = g_mounts[i].free_mb;
+            out_info->total_bytes = g_mounts[i].total_bytes;
+            out_info->free_bytes = g_mounts[i].free_bytes;
             return true;
         }
     }
@@ -350,6 +359,13 @@ bool vfs_get_drive_bus_info(char drive_letter, vfs_bus_info_t* out_info) {
         out_info->bus_type = VFS_BUS_ATAPI_CD;
         out_info->bus_max_kbps = 33000;
         strncpy(out_info->controller, "ATAPI CD/DVD", sizeof(out_info->controller) - 1);
+        return true;
+    }
+
+    if (dev && dev->is_nvme) {
+        out_info->bus_type = VFS_BUS_NVME;
+        out_info->bus_max_kbps = 3500000;
+        strncpy(out_info->controller, "NVMe PCIe", sizeof(out_info->controller) - 1);
         return true;
     }
 

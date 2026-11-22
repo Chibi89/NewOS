@@ -931,7 +931,17 @@ static void cmd_execute_internal(cmd_state_t* state, const char* cmd) {
         app_power_props_launch();
     } else if (strcmp(cmd, "taskmgr") == 0) {
         cmd_print(state, "Avvio Gestione attivita' (TASKMGR.EXE)...");
-        app_taskmgr_launch();
+        launcher_open("taskmgr", NULL);
+    } else if (strncmp(cmd, "start ", 6) == 0 || strncmp(cmd, "open ", 5) == 0) {
+        const char* target = (strncmp(cmd, "start ", 6) == 0) ? (cmd + 6) : (cmd + 5);
+        while (*target == ' ') target++;
+        if (target[0] == '\0') {
+            cmd_print(state, "Uso: start <programma | file | cartella | url>");
+        } else if (launcher_open(target, NULL)) {
+            cmd_print(state, "Avviato tramite servizio LAUNCHER.DLL.");
+        } else {
+            cmd_print(state, "Impossibile avviare il target specificato.");
+        }
     } else if (strncmp(cmd, "bsodtest", 8) == 0) {
         const char* mode = cmd + 8;
         while (*mode == ' ') mode++;

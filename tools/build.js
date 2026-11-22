@@ -203,6 +203,8 @@ const cFiles = [
     'kernel/gui/hwaccel_loader.c',
     'kernel/gui/gpu3d_loader.c',
     'kernel/apps/sysapps_loader.c',
+    'kernel/apps/launcher_loader.c',
+    'kernel/apps/seccpl_loader.c',
     'control_panel/cpl_ext_loader.c',
     'explorer/explorer_loader.c',
     'kernel/drivers/power.c',
@@ -564,7 +566,9 @@ const systemLibraries = [
     { src: 'SystemLibrary/netstack_dll.c', ini: 'SystemLibrary/NETSTACK.INI', out: 'NETSTACK.DLL', iniOut: 'NETSTACK.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
     { src: 'SystemLibrary/nvme_dll.c', ini: 'SystemLibrary/NVME.INI', out: 'NVME.DLL', iniOut: 'NVME.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
     { src: 'SystemLibrary/gpu3d_dll.c', ini: 'SystemLibrary/GPU3D.INI', out: 'GPU3D.DLL', iniOut: 'GPU3D.INI', allowSse2: true, needsReloc: true, extraFlags: `-mstackrealign -Wno-unused-function -Wno-unused-parameter` },
-    { src: 'SystemLibrary/bsod_dll.c', ini: 'SystemLibrary/BSOD.INI', out: 'BSOD.DLL', iniOut: 'BSOD.INI', extraFlags: `-Wno-unused-function -Wno-unused-parameter` }
+    { src: 'SystemLibrary/bsod_dll.c', ini: 'SystemLibrary/BSOD.INI', out: 'BSOD.DLL', iniOut: 'BSOD.INI', extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
+    { src: 'SystemLibrary/launcher_dll.c', ini: 'SystemLibrary/LAUNCHER.INI', out: 'LAUNCHER.DLL', iniOut: 'LAUNCHER.INI', extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
+    { src: 'SystemLibrary/seccpl.c', ini: 'SystemLibrary/SECCPL.INI', out: 'SECCPL.DLL', iniOut: 'SECCPL.INI', extraFlags: `-Wno-unused-function -Wno-unused-parameter` }
 ];
 
 const targetLibDir = path.join(BIN_DIR, 'NewOS', 'SystemLibrary');

@@ -8,9 +8,11 @@
 #include <fs/ntfs.h>
 #include <fs/fs_probe.h>
 #include <fs/ramfs.h>
+#include <fs/registry.h>
 #include <drivers/ata.h>
 #include <mm/heap.h>
 #include <string.h>
+#include <user.h>
 #include <arch/x86_64/io.h>
 
 #define MAX_OPEN_FILES 16
@@ -152,9 +154,13 @@ bool vfs_init(void) {
     // R: -> Disco RAM in memoria ad altissima velocità
     vfs_mount_drive('R', "RamFS", "Disco RAM (R:)", 0, 0, false, NULL);
 
-    // Carica dinamicamente FS_EXT.DLL (NTFS/UDF) ora che C: e' montato
+    // Carica dinamicamente FS_EXT.DLL (NTFS/UDF) e NVME.DLL ora che C: e' montato
     ntfs_init();
     udf_init();
+    if (ata_register_nvme_device()) {
+        dev_cnt = ata_get_device_count();
+        vfs_serial("[VFS] Controller NVMe rilevato e registrato nel VFS!\n");
+    }
 
     // 3. Montaggio di tutti gli altri Hard Disk / SSD secondari rilevati sulla scheda madre:
     // Il disco C: e' SEMPRE e RIGOROSAMENTE il sistema operativo in esecuzione.
@@ -296,7 +302,7 @@ int32_t vfs_write(vfs_file_t* file, const void* buf, uint32_t count) {
     return wb;
 }
 
-int32_t vfs_seek(vfs_file_t* file, int32_t offset, int whence) {
+int64_t vfs_seek(vfs_file_t* file, int64_t offset, int whence) {
     if (!file || !file->is_open) return -1;
 
     if (file->driver_data) {
@@ -306,19 +312,19 @@ int32_t vfs_seek(vfs_file_t* file, int32_t offset, int whence) {
         }
     }
 
-    int32_t new_pos = (int32_t)file->current_pos;
+    int64_t new_pos = (int64_t)file->current_pos;
     if (whence == VFS_SEEK_SET) new_pos = offset;
     else if (whence == VFS_SEEK_CUR) new_pos += offset;
-    else if (whence == VFS_SEEK_END) new_pos = (int32_t)file->size + offset;
+    else if (whence == VFS_SEEK_END) new_pos = (int64_t)file->size + offset;
 
     if (new_pos < 0) new_pos = 0;
-    if ((uint32_t)new_pos > file->size) new_pos = (int32_t)file->size;
+    if ((uint64_t)new_pos > file->size) new_pos = (int64_t)file->size;
 
-    file->current_pos = (uint32_t)new_pos;
+    file->current_pos = (uint64_t)new_pos;
     return new_pos;
 }
 
-uint32_t vfs_tell(vfs_file_t* file) {
+uint64_t vfs_tell(vfs_file_t* file) {
     if (!file || !file->is_open) return 0;
     return file->current_pos;
 }
@@ -394,7 +400,7 @@ bool vfs_exists(const char* path) {
     return resolve_path_exfat(clean, NULL, NULL);
 }
 
-uint32_t vfs_file_size(const char* path) {
+uint64_t vfs_file_size(const char* path) {
     if (!path) return 0;
 
     const char* rel_path = NULL;
@@ -416,8 +422,98 @@ uint32_t vfs_file_size(const char* path) {
     return 0;
 }
 
+static bool path_starts_with_nocase(const char* str, const char* prefix);
+
+static const char* strip_drive_and_slashes(const char* path) {
+    if (!path) return "";
+    const char* p = path;
+    if ((p[0] >= 'A' && p[0] <= 'Z' && p[1] == ':') ||
+        (p[0] >= 'a' && p[0] <= 'z' && p[1] == ':')) {
+        p += 2;
+    }
+    while (*p == '\\' || *p == '/') p++;
+    return p;
+}
+
+static bool vfs_is_admin_authenticated(void) {
+    if (registry_is_read_only()) return false;
+    user_profile_t* up = user_get_current();
+    if (!up || !up->username[0]) return false;
+    if (strcasecmp(up->username, "Ospite") == 0 || strcasecmp(up->username, "Guest") == 0) {
+        return false;
+    }
+    return true;
+}
+
+static bool vfs_check_acl(const char* path, bool is_delete, bool is_write) {
+    if (!path) return false;
+    const char* p = strip_drive_and_slashes(path);
+
+    // 1. Sottopath C:\NewOS\... : protetti da policy KernelSecurityPolicy + autenticazione Admin
+    if (path_starts_with_nocase(p, "NewOS/") || path_starts_with_nocase(p, "NewOS\\") ||
+        strcasecmp(p, "NewOS") == 0) {
+        if (!is_write && !is_delete) return true;
+
+        const char* acl_path  = "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Lsa\\KernelSecurityPolicy\\FileSystemACL";
+        const char* exec_path = "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Lsa\\KernelSecurityPolicy\\ExecutionControl";
+
+        uint32_t req_admin = 1;
+        registry_get_value_dword(acl_path, "RequireAdminForNewOS", &req_admin);
+        if (req_admin && !vfs_is_admin_authenticated()) {
+            registry_audit_log("FS_ACCESSO_NEGATO", path, is_delete ? "DELETE" : "WRITE", "-",
+                               "Richiesta autenticazione Amministratore per C:\\NewOS", REG_RISK_CRITICAL);
+            return false;
+        }
+
+        if (is_delete) {
+            uint32_t allow_del = 0;
+            registry_get_value_dword(acl_path, "AllowNewOSDelete", &allow_del);
+            if (!allow_del) {
+                registry_audit_log("FS_ACCESSO_NEGATO", path, "DELETE", "0",
+                                   "Bloccata eliminazione in C:\\NewOS (AllowNewOSDelete=0)", REG_RISK_CRITICAL);
+                return false;
+            }
+        } else {
+            uint32_t prot_sys = 1;
+            uint32_t newos_perm = 13;
+            registry_get_value_dword(exec_path, "ProtectSystemDirs", &prot_sys);
+            registry_get_value_dword(acl_path, "NewOS_Perm", &newos_perm);
+            if (prot_sys && !(newos_perm & 2)) {
+                registry_audit_log("FS_ACCESSO_NEGATO", path, "WRITE", "0",
+                                   "Scrittura bloccata in C:\\NewOS da ProtectSystemDirs", REG_RISK_CRITICAL);
+                return false;
+            }
+        }
+    }
+
+    // 2. Permessi su C:\ProgramFile e C:\User
+    if (is_write || is_delete) {
+        const char* acl_path = "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Lsa\\KernelSecurityPolicy\\FileSystemACL";
+        if (path_starts_with_nocase(p, "ProgramFile/") || path_starts_with_nocase(p, "ProgramFile\\")) {
+            uint32_t pf_perm = 7;
+            registry_get_value_dword(acl_path, "ProgramFile_Perm", &pf_perm);
+            if (!(pf_perm & 2)) {
+                registry_audit_log("FS_ACCESSO_NEGATO", path, "WRITE", "0",
+                                   "Scrittura bloccata in C:\\ProgramFile da FileSystemACL", REG_RISK_MEDIUM);
+                return false;
+            }
+        } else if (path_starts_with_nocase(p, "User/") || path_starts_with_nocase(p, "User\\")) {
+            uint32_t usr_perm = 7;
+            registry_get_value_dword(acl_path, "UserProfile_Perm", &usr_perm);
+            if (!(usr_perm & 2)) {
+                registry_audit_log("FS_ACCESSO_NEGATO", path, "WRITE", "0",
+                                   "Scrittura bloccata in C:\\User da FileSystemACL", REG_RISK_MEDIUM);
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
 bool vfs_create(const char* path) {
     if (!path) return false;
+    if (vfs_is_protected(path) || !vfs_check_acl(path, false, true)) return false;
 
     const char* rel_path = NULL;
     vfs_mount_t* mnt = vfs_resolve_path_mount(path, &rel_path);
@@ -430,6 +526,7 @@ bool vfs_create(const char* path) {
 
 bool vfs_mkdir(const char* path) {
     if (!path) return false;
+    if (vfs_is_protected(path) || !vfs_check_acl(path, false, true)) return false;
 
     const char* rel_path = NULL;
     vfs_mount_t* mnt = vfs_resolve_path_mount(path, &rel_path);
@@ -471,10 +568,13 @@ bool vfs_is_protected(const char* path) {
         return true;
     }
 
-    // 2. Moduli protetti di boot e codec (.MOD e .CDC)
+    // 2. Moduli protetti di boot e diagnostica (.MOD e .DLL critiche)
     if (strcasecmp(p, "BOOTSCR.MOD") == 0 || strcasecmp(p, "LOGIN.MOD") == 0 ||
         strcasecmp(p, "LOGOUT.MOD") == 0 || strcasecmp(p, "BOOTSETUP.MOD") == 0 ||
-        strcasecmp(p, "UPDATE.MOD") == 0) {
+        strcasecmp(p, "UPDATE.MOD") == 0 || strcasecmp(p, "REGISTRY.DAT") == 0 ||
+        strcasecmp(p, "NewOS/Boot/LOGIN.MOD") == 0 || strcasecmp(p, "NewOS/Boot/LOGOUT.MOD") == 0 ||
+        strcasecmp(p, "NewOS/Boot/BOOTSCR.MOD") == 0 || strcasecmp(p, "NewOS/SystemLibrary/BSOD.DLL") == 0 ||
+        strcasecmp(p, "NewOS/SystemLibrary/LAUNCHER.DLL") == 0 || strcasecmp(p, "NewOS/SystemLibrary/SECCPL.DLL") == 0) {
         return true;
     }
 
@@ -503,8 +603,8 @@ bool vfs_is_program_file_path(const char* path) {
 bool vfs_unlink(const char* path) {
     if (!path) return false;
 
-    // Protezione WAF: rifiuta l'eliminazione di file critici o cartelle di sistema
-    if (vfs_is_protected(path)) {
+    // Protezione WAF + Policy LSA (Admin + AllowNewOSDelete per C:\NewOS)
+    if (vfs_is_protected(path) || !vfs_check_acl(path, true, true)) {
         return false;
     }
 
@@ -520,8 +620,9 @@ bool vfs_unlink(const char* path) {
 bool vfs_rename(const char* old_path, const char* new_path) {
     if (!old_path || !new_path) return false;
 
-    // Protezione WAF: rifiuta di rinominare elementi protetti o sovrascrivere file protetti
-    if (vfs_is_protected(old_path) || vfs_is_protected(new_path)) {
+    // Protezione WAF + Policy LSA
+    if (vfs_is_protected(old_path) || vfs_is_protected(new_path) ||
+        !vfs_check_acl(old_path, true, true) || !vfs_check_acl(new_path, false, true)) {
         return false;
     }
 

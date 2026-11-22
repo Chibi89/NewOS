@@ -86,5 +86,8 @@ void registry_logon_load_readonly_preferences(void);
 bool registry_load_from_disk(void);
 bool registry_save_to_disk(void);
 
+// Commit protetto ed isolato per le sole policy critiche del kernel (ramo LSA)
+bool registry_commit_kernel_policy(const char* subkey, const char* val_name, uint32_t new_val);
+
 #endif // FS_REGISTRY_H
 

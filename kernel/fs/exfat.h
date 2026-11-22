@@ -50,7 +50,7 @@ typedef struct __attribute__((packed)) {
 
 typedef struct {
     char     name[128];
-    uint32_t size;
+    uint64_t size;
     uint32_t first_cluster;
     uint16_t attributes;
     bool     is_directory;
@@ -74,11 +74,11 @@ bool exfat_find_in_dir(uint32_t dir_cluster, const char* name, exfat_item_info_t
 // Elenca gli elementi presenti in una directory
 int32_t exfat_list_dir(uint32_t dir_cluster, exfat_item_info_t* out_items, int32_t max_items);
 
-// Legge dati da un file dato il suo exfat_item_info_t
-int32_t exfat_read_file(const exfat_item_info_t* file_info, uint32_t offset, void* buf, uint32_t count);
+// Legge dati da un file dato il suo exfat_item_info_t (supporto > 4GB)
+int32_t exfat_read_file(const exfat_item_info_t* file_info, uint64_t offset, void* buf, uint32_t count);
 
-// Scrive dati in-place su un file esistente preservando i cluster
-int32_t exfat_write_file_inplace(const exfat_item_info_t* file_info, uint32_t offset, const void* buf, uint32_t count);
+// Scrive dati in-place su un file esistente preservando i cluster (supporto > 4GB)
+int32_t exfat_write_file_inplace(const exfat_item_info_t* file_info, uint64_t offset, const void* buf, uint32_t count);
 
 // Diagnostica e verifica integrita' regione di avvio exFAT (VBR primario e secondario)
 typedef struct {

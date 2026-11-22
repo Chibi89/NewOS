@@ -154,7 +154,7 @@ bool vfs_cache_write_sector(uint32_t dev_id, uint64_t lba, const void* buffer) {
             } else {
                 // Modalita' Write-Through sincrona
                 const ata_device_t* dev = (dev_id == 0) ? ata_get_primary_master() : ata_get_device((int)dev_id);
-                if (dev && !ata_write_sectors(lba, 1, buffer)) return false;
+                if (dev && !ata_write_device_sectors(dev, lba, 1, buffer)) return false;
                 g_sector_cache[i].dirty = false;
                 return true;
             }
@@ -182,7 +182,7 @@ bool vfs_cache_write_sector(uint32_t dev_id, uint64_t lba, const void* buffer) {
         return true;
     } else {
         const ata_device_t* dev = (dev_id == 0) ? ata_get_primary_master() : ata_get_device((int)dev_id);
-        if (dev && !ata_write_sectors(lba, 1, buffer)) return false;
+        if (dev && !ata_write_device_sectors(dev, lba, 1, buffer)) return false;
         g_sector_cache[slot].dirty = false;
         return true;
     }
@@ -193,14 +193,14 @@ void vfs_cache_flush(void) {
         if (g_sector_cache[i].valid && g_sector_cache[i].dirty) {
             const ata_device_t* dev = (g_sector_cache[i].dev_id == 0) ? ata_get_primary_master() : ata_get_device((int)g_sector_cache[i].dev_id);
             if (dev) {
-                ata_write_sectors(g_sector_cache[i].lba, 1, g_sector_cache[i].data);
+                ata_write_device_sectors(dev, g_sector_cache[i].lba, 1, g_sector_cache[i].data);
             }
             g_sector_cache[i].dirty = false;
         }
     }
 }
 
-bool vfs_dentry_lookup(char drive_letter, const char* clean_path, uint32_t* out_cluster, uint32_t* out_size, uint16_t* out_attr, bool* out_is_dir) {
+bool vfs_dentry_lookup(char drive_letter, const char* clean_path, uint32_t* out_cluster, uint64_t* out_size, uint16_t* out_attr, bool* out_is_dir) {
     if (!clean_path) return false;
 
     for (int i = 0; i < VFS_DENTRY_CACHE_MAX; i++) {
@@ -218,7 +218,7 @@ bool vfs_dentry_lookup(char drive_letter, const char* clean_path, uint32_t* out_
     return false;
 }
 
-void vfs_dentry_insert(char drive_letter, const char* clean_path, uint32_t cluster, uint32_t size, uint16_t attr, bool is_dir) {
+void vfs_dentry_insert(char drive_letter, const char* clean_path, uint32_t cluster, uint64_t size, uint16_t attr, bool is_dir) {
     if (!clean_path) return;
 
     int target_idx = -1;

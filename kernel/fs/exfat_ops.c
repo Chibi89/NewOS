@@ -37,9 +37,10 @@ bool exfat_ops_link_clusters(uint32_t prev_cluster, uint32_t next_cluster) {
     const exfat_vbr_t* vbr = exfat_get_vbr();
     if (!vbr) return false;
 
-    uint32_t fat_lba = EXFAT_PARTITION_LBA + vbr->fat_offset;
-    uint32_t sec = fat_lba + (prev_cluster * 4) / 512;
-    uint32_t off = (prev_cluster * 4) % 512;
+    uint64_t part_lba = vbr->partition_offset ? vbr->partition_offset : EXFAT_PARTITION_LBA;
+    uint64_t fat_lba = part_lba + (uint64_t)vbr->fat_offset;
+    uint64_t sec = fat_lba + ((uint64_t)prev_cluster * 4ULL) / 512ULL;
+    uint32_t off = (uint32_t)(((uint64_t)prev_cluster * 4ULL) % 512ULL);
 
     uint8_t sec_buf[512];
     if (!vfs_cache_read_sector(0, sec, sec_buf)) {
@@ -57,9 +58,10 @@ uint32_t exfat_ops_allocate_cluster(void) {
     uint32_t cl = exfat_find_free_cluster();
     if (cl < 2) return 0;
 
-    uint32_t fat_lba = EXFAT_PARTITION_LBA + vbr->fat_offset;
-    uint32_t sec = fat_lba + (cl * 4) / 512;
-    uint32_t off = (cl * 4) % 512;
+    uint64_t part_lba = vbr->partition_offset ? vbr->partition_offset : EXFAT_PARTITION_LBA;
+    uint64_t fat_lba = part_lba + (uint64_t)vbr->fat_offset;
+    uint64_t sec = fat_lba + ((uint64_t)cl * 4ULL) / 512ULL;
+    uint32_t off = (uint32_t)(((uint64_t)cl * 4ULL) % 512ULL);
     uint8_t sec_buf[512];
     if (vfs_cache_read_sector(0, sec, sec_buf)) {
         *(uint32_t*)(sec_buf + off) = 0xFFFFFFFF;
@@ -68,7 +70,7 @@ uint32_t exfat_ops_allocate_cluster(void) {
 
     // Inizializza a zero il cluster allocato
     uint32_t spc = 1 << vbr->sectors_per_cluster_shift;
-    uint32_t cl_lba = exfat_cluster_to_lba(cl);
+    uint64_t cl_lba = exfat_cluster_to_lba(cl);
     uint8_t zero_sec[512];
     memset(zero_sec, 0, 512);
     for (uint32_t s = 0; s < spc; s++) {
@@ -80,7 +82,7 @@ uint32_t exfat_ops_allocate_cluster(void) {
     return cl;
 }
 
-bool exfat_ops_create_entry(uint32_t dir_cluster, const char* name, uint32_t first_cluster, uint32_t initial_size, uint16_t attributes) {
+bool exfat_ops_create_entry(uint32_t dir_cluster, const char* name, uint32_t first_cluster, uint64_t initial_size, uint16_t attributes) {
     if (!name || !*name || dir_cluster < 2) return false;
 
     const exfat_vbr_t* vbr = exfat_get_vbr();
@@ -91,7 +93,7 @@ bool exfat_ops_create_entry(uint32_t dir_cluster, const char* name, uint32_t fir
     uint8_t* cl_buf = (uint8_t*)kmalloc(cl_size);
     if (!cl_buf) return false;
 
-    uint32_t lba = exfat_cluster_to_lba(dir_cluster);
+    uint64_t lba = exfat_cluster_to_lba(dir_cluster);
 
     for (uint32_t s = 0; s < spc; s++) {
         vfs_cache_read_sector(0, lba + s, cl_buf + s * 512);
@@ -173,7 +175,7 @@ bool exfat_ops_create_entry(uint32_t dir_cluster, const char* name, uint32_t fir
     return true;
 }
 
-bool exfat_ops_update_file_entry(uint32_t dir_cluster, const char* name, uint32_t new_size, uint32_t first_cluster, bool no_fat_chain) {
+bool exfat_ops_update_file_entry(uint32_t dir_cluster, const char* name, uint64_t new_size, uint32_t first_cluster, bool no_fat_chain) {
     if (!name || !*name || dir_cluster < 2) return false;
 
     const exfat_vbr_t* vbr = exfat_get_vbr();
@@ -188,7 +190,7 @@ bool exfat_ops_update_file_entry(uint32_t dir_cluster, const char* name, uint32_
     bool updated = false;
 
     while (cur_dir_cl >= 2 && cur_dir_cl < 0xFFFFFFF8 && !updated) {
-        uint32_t lba = exfat_cluster_to_lba(cur_dir_cl);
+        uint64_t lba = exfat_cluster_to_lba(cur_dir_cl);
 
         for (uint32_t s = 0; s < spc; s++) {
             vfs_cache_read_sector(0, lba + s, cl_buf + s * 512);
@@ -256,7 +258,7 @@ bool exfat_ops_update_file_entry(uint32_t dir_cluster, const char* name, uint32_
     return updated;
 }
 
-bool exfat_ops_update_file_size(uint32_t dir_cluster, const char* name, uint32_t new_size) {
+bool exfat_ops_update_file_size(uint32_t dir_cluster, const char* name, uint64_t new_size) {
     return exfat_ops_update_file_entry(dir_cluster, name, new_size, 0, false);
 }
 
@@ -275,7 +277,7 @@ bool exfat_ops_delete_entry(uint32_t dir_cluster, const char* name) {
     bool deleted = false;
 
     while (cur_dir_cl >= 2 && cur_dir_cl < 0xFFFFFFF8 && !deleted) {
-        uint32_t lba = exfat_cluster_to_lba(cur_dir_cl);
+        uint64_t lba = exfat_cluster_to_lba(cur_dir_cl);
 
         for (uint32_t s = 0; s < spc; s++) {
             vfs_cache_read_sector(0, lba + s, cl_buf + s * 512);
@@ -316,11 +318,12 @@ bool exfat_ops_delete_entry(uint32_t dir_cluster, const char* name) {
                             uint32_t cl_cnt = (uint32_t)((file_sz + cl_size - 1) / cl_size);
                             if (cl_cnt == 0 && cl >= 2) cl_cnt = 1;
 
-                            uint32_t fat_lba = EXFAT_PARTITION_LBA + vbr->fat_offset;
+                            uint64_t part_lba = vbr->partition_offset ? vbr->partition_offset : EXFAT_PARTITION_LBA;
+                            uint64_t fat_lba = part_lba + (uint64_t)vbr->fat_offset;
                             while (cl >= 2 && cl < 0xFFFFFFF8 && cl_cnt > 0) {
                                 uint32_t next = exfat_get_next_cluster(cl, no_chain);
-                                uint32_t fat_sec = fat_lba + (cl * 4) / 512;
-                                uint32_t fat_off = (cl * 4) % 512;
+                                uint64_t fat_sec = fat_lba + ((uint64_t)cl * 4ULL) / 512ULL;
+                                uint32_t fat_off = (uint32_t)(((uint64_t)cl * 4ULL) % 512ULL);
                                 uint8_t fbuf[512];
                                 if (vfs_cache_read_sector(0, fat_sec, fbuf)) {
                                     *(uint32_t*)(fbuf + fat_off) = 0x00000000;
@@ -475,17 +478,28 @@ static bool exfat_vfs_mount(vfs_mount_t* mnt) {
 
     const exfat_vbr_t* vbr = exfat_get_vbr();
     uint32_t used_mb = exfat_get_used_mb();
+    uint64_t used_bytes = (uint64_t)exfat_get_allocated_clusters() * (uint64_t)exfat_cluster_size();
 
-    // 1. Lettura dal chip del disco HD / SSD del valore reale totale
-    if (dev && dev->present && dev->size_mb > 0) {
-        mnt->total_mb = dev->size_mb;
-    } else if (vbr && vbr->volume_length > 0) {
-        mnt->total_mb = (uint32_t)((vbr->volume_length * 512ULL) / (1024ULL * 1024ULL));
-    } else {
-        mnt->total_mb = 128;
+    // 1. Lettura reale dal volume exFAT / chip disco (nessun limite fittizio)
+    uint64_t total_bytes = 0;
+    if (vbr && vbr->volume_length > 0) {
+        uint32_t sec_sz = (vbr->bytes_per_sector_shift >= 9 && vbr->bytes_per_sector_shift <= 12)
+                              ? (1U << vbr->bytes_per_sector_shift) : 512U;
+        total_bytes = vbr->volume_length * (uint64_t)sec_sz;
+    } else if (dev && dev->present && dev->size_bytes > 0) {
+        total_bytes = dev->size_bytes;
     }
 
-    // 2. Lettura e calcolo memoria disponibile reale dal chip
+    if (total_bytes > 0) {
+        mnt->total_bytes = total_bytes;
+        mnt->total_mb = (uint32_t)(total_bytes / (1024ULL * 1024ULL));
+    } else if (dev && dev->present && dev->size_mb > 0) {
+        mnt->total_mb = dev->size_mb;
+        mnt->total_bytes = (uint64_t)dev->size_mb * 1024ULL * 1024ULL;
+    }
+
+    // 2. Calcolo spazio disponibile reale a 64-bit
+    mnt->free_bytes = (mnt->total_bytes > used_bytes) ? (mnt->total_bytes - used_bytes) : 0;
     mnt->free_mb = mnt->total_mb > used_mb ? (mnt->total_mb - used_mb) : 0;
     return true;
 }
@@ -706,23 +720,23 @@ static void exfat_vfs_close(vfs_mount_t* mnt, vfs_file_t* file) {
     }
 }
 
-static int32_t exfat_vfs_seek(vfs_mount_t* mnt, vfs_file_t* file, int32_t offset, int whence) {
+static int64_t exfat_vfs_seek(vfs_mount_t* mnt, vfs_file_t* file, int64_t offset, int whence) {
     (void)mnt;
     if (!file) return -1;
 
-    int32_t new_pos = (int32_t)file->current_pos;
+    int64_t new_pos = (int64_t)file->current_pos;
     if (whence == VFS_SEEK_SET) {
         new_pos = offset;
     } else if (whence == VFS_SEEK_CUR) {
         new_pos += offset;
     } else if (whence == VFS_SEEK_END) {
-        new_pos = (int32_t)file->size + offset;
+        new_pos = (int64_t)file->size + offset;
     }
 
     if (new_pos < 0) new_pos = 0;
-    if ((uint32_t)new_pos > file->size) new_pos = (int32_t)file->size;
+    if ((uint64_t)new_pos > file->size) new_pos = (int64_t)file->size;
 
-    file->current_pos = (uint32_t)new_pos;
+    file->current_pos = (uint64_t)new_pos;
     return new_pos;
 }
 

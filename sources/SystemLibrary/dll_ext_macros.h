@@ -268,6 +268,10 @@
 #define nvme_is_present()        g_ext_api->nvme_is_present()
 #define nvme_get_model()         g_ext_api->nvme_get_model()
 #define nvme_get_capacity_sectors() g_ext_api->nvme_get_capacity_sectors()
+#define launcher_open(t,a)       g_ext_api->launcher_open((t),(a))
+#define uistyle_open_explorer(p) g_ext_api->uistyle_open_explorer(p)
+#define app_installer_launch()   g_ext_api->app_installer_launch()
+#define app_seccpl_launch()      g_ext_api->app_seccpl_launch()
 
 void *memset(void *dst, int c, size_t n) { return dll_memset(dst, c, n); }
 void *memcpy(void *dst, const void *src, size_t n) { return dll_memcpy(dst, src, n); }

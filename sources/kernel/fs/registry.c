@@ -126,6 +126,36 @@ static void build_default_tree(void) {
     add_value_dword(hklm_sys, "MemTotalMB", 128);
     add_value_dword(hklm_sys, "DebugSerial", 1);
 
+    // Ramo profondo ed isolato per le policy critiche del kernel (lontano dalle chiavi in superficie)
+    reg_key_t* hklm_ccs  = alloc_key("CurrentControlSet", "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet", REG_RISK_CRITICAL, hklm_sys);
+    reg_key_t* hklm_ctrl = alloc_key("Control", "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control", REG_RISK_CRITICAL, hklm_ccs);
+    reg_key_t* hklm_lsa  = alloc_key("Lsa", "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Lsa", REG_RISK_CRITICAL, hklm_ctrl);
+    reg_key_t* hklm_kpol = alloc_key("KernelSecurityPolicy", "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Lsa\\KernelSecurityPolicy", REG_RISK_CRITICAL, hklm_lsa);
+
+    reg_key_t* kpol_exec = alloc_key("ExecutionControl", "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Lsa\\KernelSecurityPolicy\\ExecutionControl", REG_RISK_CRITICAL, hklm_kpol);
+    add_value_dword(kpol_exec, "VerifyMode", 1);
+    add_value_dword(kpol_exec, "ProtectSystemDirs", 1);
+    add_value_dword(kpol_exec, "EnforcePreDesktopReadOnly", 1);
+    add_value_dword(kpol_exec, "EnforceSyscallIsolation", 1);
+
+    reg_key_t* kpol_acl = alloc_key("FileSystemACL", "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Lsa\\KernelSecurityPolicy\\FileSystemACL", REG_RISK_CRITICAL, hklm_kpol);
+    add_value_dword(kpol_acl, "NewOS_Perm", 13);
+    add_value_dword(kpol_acl, "SystemLibrary_Perm", 13);
+    add_value_dword(kpol_acl, "ProgramFile_Perm", 7);
+    add_value_dword(kpol_acl, "UserProfile_Perm", 7);
+    add_value_dword(kpol_acl, "AllowNewOSDelete", 0);
+    add_value_dword(kpol_acl, "RequireAdminForNewOS", 1);
+
+    reg_key_t* kpol_app = alloc_key("AppSandbox", "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Lsa\\KernelSecurityPolicy\\AppSandbox", REG_RISK_CRITICAL, hklm_kpol);
+    add_value_dword(kpol_app, "BrowserNetTLS", 1);
+    add_value_dword(kpol_app, "BrowserVFS", 1);
+    add_value_dword(kpol_app, "JsEngineSandbox", 1);
+    add_value_dword(kpol_app, "ThirdPartyLaunch", 1);
+
+    reg_key_t* kpol_aud = alloc_key("Audit", "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Lsa\\KernelSecurityPolicy\\Audit", REG_RISK_CRITICAL, hklm_kpol);
+    add_value_dword(kpol_aud, "PolicyLockActive", 1);
+    add_value_dword(kpol_aud, "PolicyCommitCount", 0);
+
     reg_key_t* hklm_drv = alloc_key("DRIVERS", "HKEY_LOCAL_MACHINE\\DRIVERS", REG_RISK_CRITICAL, hklm);
     add_value_sz(hklm_drv, "VGA", "C:\\NewOS\\Driver\\VGA.SYS");
     add_value_sz(hklm_drv, "AC97", "C:\\NewOS\\Driver\\AC97.SYS");
@@ -382,9 +412,15 @@ void registry_logon_load_readonly_preferences(void) {
     }
 }
 
+static bool g_kernel_policy_gate = false;
+
 bool registry_set_value_sz(const char* path, const char* val_name, const char* new_val) {
     if (g_registry_read_only) {
         registry_audit_log("ACCESSO_NEGATO", path, val_name, "-", "Modifica bloccata: permessi di sola lettura pre-desktop", REG_RISK_MEDIUM);
+        return false;
+    }
+    if (path && strstr(path, "KernelSecurityPolicy") && !g_kernel_policy_gate) {
+        registry_audit_log("ACCESSO_NEGATO", path, val_name, "-", "Scrittura diretta su KernelSecurityPolicy vietata", REG_RISK_CRITICAL);
         return false;
     }
 
@@ -422,6 +458,10 @@ bool registry_set_value_sz(const char* path, const char* val_name, const char* n
 bool registry_set_value_dword(const char* path, const char* val_name, uint32_t new_val) {
     if (g_registry_read_only) {
         registry_audit_log("ACCESSO_NEGATO", path, val_name, "-", "Modifica bloccata: permessi di sola lettura pre-desktop", REG_RISK_MEDIUM);
+        return false;
+    }
+    if (path && strstr(path, "KernelSecurityPolicy") && !g_kernel_policy_gate) {
+        registry_audit_log("ACCESSO_NEGATO", path, val_name, "-", "Scrittura diretta su KernelSecurityPolicy vietata", REG_RISK_CRITICAL);
         return false;
     }
 
@@ -647,4 +687,26 @@ bool registry_load_from_disk(void) {
 bool registry_save_to_disk(void) {
     registry_audit_log("SALVA", "HKEY_LOCAL_MACHINE\\NEWOS", "*", "-", "Sincronizzato C:\\NewOS\\Registry\\REGISTRY.DAT", REG_RISK_LOW);
     return true;
+}
+
+bool registry_commit_kernel_policy(const char* subkey, const char* val_name, uint32_t new_val) {
+    if (g_registry_read_only || !subkey || !val_name) return false;
+
+    char full_path[REG_MAX_PATH_LEN];
+    mini_snprintf(full_path, sizeof(full_path),
+                  "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Lsa\\KernelSecurityPolicy\\%s",
+                  subkey);
+
+    g_kernel_policy_gate = true;
+    bool ok = registry_set_value_dword(full_path, val_name, new_val);
+    if (ok && strcmp(subkey, "Audit") != 0) {
+        uint32_t cnt = 0;
+        const char* aud_path = "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Lsa\\KernelSecurityPolicy\\Audit";
+        registry_get_value_dword(aud_path, "PolicyCommitCount", &cnt);
+        registry_set_value_dword(aud_path, "PolicyCommitCount", cnt + 1);
+    }
+    g_kernel_policy_gate = false;
+
+    if (ok) registry_save_to_disk();
+    return ok;
 }

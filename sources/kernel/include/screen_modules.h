@@ -187,7 +187,7 @@ typedef struct {
   int32_t (*vfs_read)(void *file, void *buf, uint32_t count);
   int32_t (*vfs_write)(void *file, const void *buf, uint32_t count);
   void (*vfs_close)(void *file);
-  uint32_t (*vfs_file_size)(const char *path);
+  uint64_t (*vfs_file_size)(const char *path);
   void (*vfs_flush)(void);
   bool (*vfs_get_drive_bus_info)(char drive_letter, vfs_bus_info_t *out_info);
 

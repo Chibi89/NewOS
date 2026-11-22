@@ -38,6 +38,9 @@ void app_net_props_launch(void);
 // Applet Proprietà Tastiera Out-of-Kernel (KEYBOARD.CPL -> KEYBCPL.DLL)
 void app_keyboard_props_launch(void);
 
+// Applet Centro Sicurezza e Permessi Out-of-Kernel (SECCPL.CPL -> SECCPL.DLL)
+void app_seccpl_launch(void);
+
 // Applet Informazioni su NewOS (WINVER.EXE / SYSDM.CPL)
 void app_about_launch(void);
 

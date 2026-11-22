@@ -41,9 +41,9 @@ uint32_t exfat_get_next_cluster(uint32_t cluster, bool no_fat_chain) {
     if (no_fat_chain) {
         return cluster + 1;
     }
-    // Lettura da tabella FAT su disco (con verifica in cache per coerenza immediata)
-    uint32_t fat_sector = g_fat_lba + (cluster * 4) / 512;
-    uint32_t fat_offset = (cluster * 4) % 512;
+    // Lettura da tabella FAT su disco (con verifica in cache per coerenza immediata, LBA 64-bit)
+    uint64_t fat_sector = g_fat_lba + ((uint64_t)cluster * 4ULL) / 512ULL;
+    uint32_t fat_offset = (uint32_t)(((uint64_t)cluster * 4ULL) % 512ULL);
 
     uint8_t sec_buf[512];
     if (!vfs_cache_read_sector(0, fat_sector, sec_buf)) {
@@ -57,12 +57,12 @@ uint32_t exfat_get_next_cluster(uint32_t cluster, bool no_fat_chain) {
 
 void exfat_set_bitmap_bit(uint32_t cluster, bool allocated) {
     if (!g_mounted || g_bm_cluster < 2 || cluster < 2) return;
-    uint32_t bit_idx = cluster - 2;
-    uint32_t byte_off = bit_idx / 8;
+    uint64_t bit_idx = (uint64_t)(cluster - 2);
+    uint64_t byte_off = bit_idx / 8ULL;
     if (byte_off >= g_bm_length) return;
 
-    uint32_t cl_idx = byte_off / g_cluster_size;
-    uint32_t cl_rem = byte_off % g_cluster_size;
+    uint32_t cl_idx = (uint32_t)(byte_off / (uint64_t)g_cluster_size);
+    uint32_t cl_rem = (uint32_t)(byte_off % (uint64_t)g_cluster_size);
     uint32_t sec_in_cl = cl_rem / 512;
     uint32_t off_in_sec = cl_rem % 512;
 
@@ -72,7 +72,7 @@ void exfat_set_bitmap_bit(uint32_t cluster, bool allocated) {
         if (cur_bm_cl < 2 || cur_bm_cl >= 0xFFFFFFF8) return;
     }
 
-    uint32_t sec_lba = exfat_cluster_to_lba(cur_bm_cl) + sec_in_cl;
+    uint64_t sec_lba = exfat_cluster_to_lba(cur_bm_cl) + sec_in_cl;
     uint8_t sec_buf[512];
     if (!vfs_cache_read_sector(0, sec_lba, sec_buf)) {
         if (!exfat_read_sec(sec_lba, 1, sec_buf)) return;
@@ -187,7 +187,7 @@ bool exfat_mount(uint64_t partition_lba) {
 
     // Scansione e calcolo reale dei cluster allocati dalla tabella Allocation Bitmap
     g_allocated_clusters = 0;
-    uint32_t root_lba = exfat_cluster_to_lba(g_vbr.root_dir_cluster);
+    uint64_t root_lba = exfat_cluster_to_lba(g_vbr.root_dir_cluster);
     uint8_t root_sec[512];
     uint32_t bm_cluster = 0;
     uint64_t bm_length = 0;
@@ -208,15 +208,15 @@ bool exfat_mount(uint64_t partition_lba) {
 
     if (bm_cluster >= 2 && bm_length > 0) {
         uint32_t count = 0;
-        uint32_t rem_bytes = (uint32_t)bm_length;
+        uint64_t rem_bytes = bm_length;
         uint32_t cur_bm_cl = bm_cluster;
         uint8_t bm_sec[512];
 
         while (rem_bytes > 0 && cur_bm_cl >= 2 && cur_bm_cl < 0xFFFFFFF8) {
-            uint32_t cl_lba = exfat_cluster_to_lba(cur_bm_cl);
+            uint64_t cl_lba = exfat_cluster_to_lba(cur_bm_cl);
             for (uint32_t s = 0; s < g_sectors_per_cluster && rem_bytes > 0; s++) {
                 if (!exfat_read_sec(cl_lba + s, 1, bm_sec)) break;
-                uint32_t b_in_sec = (rem_bytes > 512) ? 512 : rem_bytes;
+                uint32_t b_in_sec = (rem_bytes > 512) ? 512 : (uint32_t)rem_bytes;
                 for (uint32_t b = 0; b < b_in_sec; b++) {
                     count += __builtin_popcount(bm_sec[b]);
                 }
@@ -287,7 +287,7 @@ int32_t exfat_list_dir(uint32_t dir_cluster, exfat_item_info_t* out_items, int32
     if (!cl_buf) return 0;
 
     while (cur_cl >= 2 && cur_cl < 0xFFFFFFF8 && count < max_items) {
-        uint32_t lba = exfat_cluster_to_lba(cur_cl);
+        uint64_t lba = exfat_cluster_to_lba(cur_cl);
         if (!exfat_read_sec(lba, g_sectors_per_cluster, cl_buf)) {
             break;
         }
@@ -338,7 +338,7 @@ int32_t exfat_list_dir(uint32_t dir_cluster, exfat_item_info_t* out_items, int32
                         // Salva nel risultato se abbiamo un nome valido
                         if (name_pos > 0) {
                             strncpy(out_items[count].name, name, sizeof(out_items[count].name) - 1);
-                            out_items[count].size = (uint32_t)file_size;
+                            out_items[count].size = file_size;
                             out_items[count].first_cluster = first_cl;
                             out_items[count].attributes = attr;
                             out_items[count].is_directory = (attr & EXFAT_ATTR_DIRECTORY) != 0;
@@ -387,16 +387,16 @@ bool exfat_find_in_dir(uint32_t dir_cluster, const char* name, exfat_item_info_t
     return res;
 }
 
-int32_t exfat_read_file(const exfat_item_info_t* file_info, uint32_t offset, void* buf, uint32_t count) {
+int32_t exfat_read_file(const exfat_item_info_t* file_info, uint64_t offset, void* buf, uint32_t count) {
     if (!g_mounted || !file_info || !buf || count == 0) return 0;
     if (offset >= file_info->size) return 0;
 
-    if (offset + count > file_info->size) {
-        count = file_info->size - offset;
+    if (offset + (uint64_t)count > file_info->size) {
+        count = (uint32_t)(file_info->size - offset);
     }
 
-    uint32_t cluster_idx = offset / g_cluster_size;
-    uint32_t cluster_offset = offset % g_cluster_size;
+    uint32_t cluster_idx = (uint32_t)(offset / (uint64_t)g_cluster_size);
+    uint32_t cluster_offset = (uint32_t)(offset % (uint64_t)g_cluster_size);
 
     uint32_t cur_cl = file_info->first_cluster;
 
@@ -418,7 +418,7 @@ int32_t exfat_read_file(const exfat_item_info_t* file_info, uint32_t offset, voi
     uint8_t* dest = (uint8_t*)buf;
 
     while (bytes_read < count && cur_cl >= 2 && cur_cl < 0xFFFFFFF8) {
-        uint32_t lba = exfat_cluster_to_lba(cur_cl);
+        uint64_t lba = exfat_cluster_to_lba(cur_cl);
         if (!exfat_read_sec(lba, g_sectors_per_cluster, cl_buf)) {
             break;
         }
@@ -438,16 +438,16 @@ int32_t exfat_read_file(const exfat_item_info_t* file_info, uint32_t offset, voi
     return (int32_t)bytes_read;
 }
 
-int32_t exfat_write_file_inplace(const exfat_item_info_t* file_info, uint32_t offset, const void* buf, uint32_t count) {
+int32_t exfat_write_file_inplace(const exfat_item_info_t* file_info, uint64_t offset, const void* buf, uint32_t count) {
     if (!g_mounted || !file_info || file_info->first_cluster < 2 || !buf || count == 0) return 0;
     if (offset >= file_info->size) return 0;
 
-    if (offset + count > file_info->size) {
-        count = file_info->size - offset;
+    if (offset + (uint64_t)count > file_info->size) {
+        count = (uint32_t)(file_info->size - offset);
     }
 
-    uint32_t cluster_idx = offset / g_cluster_size;
-    uint32_t cluster_offset = offset % g_cluster_size;
+    uint32_t cluster_idx = (uint32_t)(offset / (uint64_t)g_cluster_size);
+    uint32_t cluster_offset = (uint32_t)(offset % (uint64_t)g_cluster_size);
 
     uint32_t cur_cl = file_info->first_cluster;
 
@@ -467,7 +467,7 @@ int32_t exfat_write_file_inplace(const exfat_item_info_t* file_info, uint32_t of
     const uint8_t* src = (const uint8_t*)buf;
 
     while (bytes_written < count && cur_cl >= 2 && cur_cl < 0xFFFFFFF8) {
-        uint32_t lba = exfat_cluster_to_lba(cur_cl);
+        uint64_t lba = exfat_cluster_to_lba(cur_cl);
         // Legge il cluster corrente per preservare i byte non modificati
         if (!exfat_read_sec(lba, g_sectors_per_cluster, cl_buf)) {
             break;

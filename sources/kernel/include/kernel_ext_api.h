@@ -68,7 +68,7 @@ typedef struct {
     int (*vfs_list_drives)(char *out_letters, int max_drives);
     bool (*vfs_wildcard_match)(const char *pattern, const char *str);
     bool (*vfs_mount_drive)(char letter, const char *fs_name, const char *label, uint32_t mb, uint64_t lba, bool rw, void *ops);
-    int32_t (*vfs_seek)(void *file, uint32_t offset, int whence);
+    int64_t (*vfs_seek)(void *file, int64_t offset, int whence);
     bool (*vfs_is_protected)(const char *path);
     bool (*exfat_check_boot_integrity)(void *out_info);
     uint32_t (*exfat_get_used_mb)(void);
@@ -202,6 +202,10 @@ typedef struct {
     bool (*nvme_is_present)(void);
     const char *(*nvme_get_model)(void);
     uint64_t (*nvme_get_capacity_sectors)(void);
+    bool (*launcher_open)(const char *target, const char *args);
+    bool (*uistyle_open_explorer)(const char *path);
+    void (*app_installer_launch)(void);
+    void (*app_seccpl_launch)(void);
 } kernel_ext_api_t;
 
 const kernel_ext_api_t *screen_mgr_get_ext_api(void);

@@ -52,6 +52,9 @@
 #include <gpu3d.h>
 #include <drivers/usb/usb_msc.h>
 #include <gui/uistyle_loader.h>
+#include <apps/installer.h>
+#include <control_panel.h>
+#include <launcher.h>
 #include <settings.h>
 #include <kernel_ext_api.h>
 
@@ -529,7 +532,7 @@ void screen_mgr_init(void) {
   g_kernel_ext_api.vfs_list_drives = vfs_list_drives;
   g_kernel_ext_api.vfs_wildcard_match = vfs_wildcard_match;
   g_kernel_ext_api.vfs_mount_drive = (bool (*)(char, const char *, const char *, uint32_t, uint64_t, bool, void *))vfs_mount_drive;
-  g_kernel_ext_api.vfs_seek = (int32_t (*)(void *, uint32_t, int))vfs_seek;
+  g_kernel_ext_api.vfs_seek = (int64_t (*)(void *, int64_t, int))vfs_seek;
   g_kernel_ext_api.vfs_is_protected = vfs_is_protected;
   g_kernel_ext_api.exfat_check_boot_integrity = (bool (*)(void *))exfat_check_boot_integrity;
   g_kernel_ext_api.exfat_get_used_mb = exfat_get_used_mb;
@@ -655,6 +658,10 @@ void screen_mgr_init(void) {
   g_kernel_ext_api.nvme_is_present = nvme_is_present;
   g_kernel_ext_api.nvme_get_model = nvme_get_model;
   g_kernel_ext_api.nvme_get_capacity_sectors = nvme_get_capacity_sectors;
+  g_kernel_ext_api.launcher_open = launcher_open;
+  g_kernel_ext_api.uistyle_open_explorer = uistyle_open_explorer;
+  g_kernel_ext_api.app_installer_launch = app_installer_launch;
+  g_kernel_ext_api.app_seccpl_launch = app_seccpl_launch;
   g_kernel_api.ext_api = &g_kernel_ext_api;
 
   g_api_initialized = true;

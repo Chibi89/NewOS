@@ -796,10 +796,12 @@ static void explorer_load_items(explorer_state_t *state) {
         {"Caratteri", ICON_FONT, "Tipi di carattere bitmap e TrueType"},
         {"Gestione periferiche", ICON_MAINTENANCE,
          "Stato driver hardware (.SYS) e configurazioni (.INI)"},
+        {"Sicurezza e Permessi", ICON_INFO,
+         "Privilegi, ACL File System e Policy Kernel (SECCPL.CPL)"},
         {"Editor del Registro", ICON_MAINTENANCE,
          "Database delle configurazioni di sistema (REGEDIT.EXE)"}};
 
-    for (int i = 0; i < 13; i++) {
+    for (int i = 0; i < 14; i++) {
       explorer_item_t *it = &state->items[state->num_items++];
       strcpy(it->name, cp_list[i].name);
       strcpy(it->desc, cp_list[i].desc);
@@ -2910,6 +2912,8 @@ static void explorer_execute_selected(explorer_state_t *state) {
             app_power_props_launch();
           else if (strcasecmp(it->name, "DEVMGMT.CPL") == 0)
             app_devmgmt_launch();
+          else if (strcasecmp(it->name, "SECCPL.CPL") == 0)
+            app_seccpl_launch();
           else if (strcasecmp(it->name, "REGEDIT.CPL") == 0)
             app_regedit_launch();
           else
@@ -3022,6 +3026,8 @@ static void explorer_execute_selected(explorer_state_t *state) {
       app_timedate_props_launch();
     } else if (strcmp(it->name, "Connessioni di rete") == 0) {
       app_net_props_launch();
+    } else if (strcmp(it->name, "Sicurezza e Permessi") == 0) {
+      app_seccpl_launch();
     } else if (strcmp(it->name, "Editor del Registro") == 0) {
       app_regedit_launch();
     } else {

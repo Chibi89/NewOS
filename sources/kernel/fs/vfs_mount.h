@@ -27,7 +27,7 @@ typedef struct vfs_driver {
     int32_t  (*read)(struct vfs_mount* mnt, vfs_file_t* file, void* buf, uint32_t count);
     int32_t  (*write)(struct vfs_mount* mnt, vfs_file_t* file, const void* buf, uint32_t count);
     void     (*close)(struct vfs_mount* mnt, vfs_file_t* file);
-    int32_t  (*seek)(struct vfs_mount* mnt, vfs_file_t* file, int32_t offset, int whence);
+    int64_t  (*seek)(struct vfs_mount* mnt, vfs_file_t* file, int64_t offset, int whence);
 
     int32_t  (*readdir)(struct vfs_mount* mnt, const char* rel_path, vfs_dirent_t* entries, int32_t max_entries);
     bool     (*create)(struct vfs_mount* mnt, const char* rel_path, uint16_t attributes);
@@ -45,6 +45,8 @@ typedef struct vfs_mount {
     char                label[32];
     uint32_t            total_mb;
     uint32_t            free_mb;
+    uint64_t            total_bytes;
+    uint64_t            free_bytes;
     uint32_t            device_id;      // Indice periferica (ATA master = 0, slave = 1, ecc.)
     uint64_t            partition_lba;  // LBA di partenza sul disco (64-bit per GPT)
     const vfs_driver_t* driver;         // Driver assegnato dinamicamente
@@ -59,6 +61,8 @@ typedef struct {
     bool     read_only;
     uint32_t total_mb;
     uint32_t free_mb;
+    uint64_t total_bytes;
+    uint64_t free_bytes;
 } vfs_drive_info_t;
 
 // Inizializza il sottosistema di montaggio dinamico

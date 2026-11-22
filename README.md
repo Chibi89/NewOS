@@ -2,7 +2,7 @@
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 [![Arch](https://img.shields.io/badge/architecture-x86__64%20(Long%20Mode)-blue.svg)]()
-[![Kernel Size](https://img.shields.io/badge/kernel%20size-174%20KB%20%2F%20480%20KB-brightgreen.svg)]()
+[![Kernel Size](https://img.shields.io/badge/kernel%20size-180%20KB%20%2F%20480%20KB-brightgreen.svg)]()
 [![Dual Boot](https://img.shields.io/badge/boot-BIOS%20MBR%20%2B%20UEFI%2064--bit-blueviolet.svg)]()
 [![Filesystem](https://img.shields.io/badge/filesystems-exFAT%20%7C%20NTFS--3G%20%7C%20ISO%209660%20%7C%20UDF%20%7C%20RamFS-purple.svg)]()
 [![UI](https://img.shields.io/badge/GUI-Liquid%20Glass%20%7C%20Mica%20%7C%20Classic%202000-lightgrey.svg)]()
@@ -21,6 +21,17 @@
 
 <details>
 <summary><strong>Espandi per visualizzare gli aggiornamenti e i fix recenti</strong></summary>
+
+### 22 Novembre 2026
+- **Servizio di Avvio Unificato Out-of-Kernel (`LAUNCHER.DLL` + `launcher_loader.c`)**:
+  - Centralizzato il lancio di programmi, applet `.CPL`, documenti, script e moduli critici in [launcher_dll.c](file:///c:/Users/morga/Desktop/MyOS/SystemLibrary/launcher_dll.c) e [launcher_loader.c](file:///c:/Users/morga/Desktop/MyOS/kernel/apps/launcher_loader.c), con verifica firma `NOSM` + `CRC32` e integrazione in [cmd.c](file:///c:/Users/morga/Desktop/MyOS/kernel/apps/cmd.c), [wm.c](file:///c:/Users/morga/Desktop/MyOS/kernel/gui/wm.c) ed [explorer.c](file:///c:/Users/morga/Desktop/MyOS/explorer/explorer.c).
+- **Centro Sicurezza e Permessi (`SECCPL.CPL`) & Registro Isolato LSA**:
+  - Aggiunta la suite di sicurezza out-of-kernel [seccpl.c](file:///c:/Users/morga/Desktop/MyOS/SystemLibrary/seccpl.c) con traslucidità allineata al tema (`surface_alpha`) e gestione policy kernel nel ramo isolato `HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Lsa\KernelSecurityPolicy` ([registry.c](file:///c:/Users/morga/Desktop/MyOS/kernel/fs/registry.c)), protetto da `g_kernel_policy_gate` e aggiornabile solo via `registry_commit_kernel_policy()`.
+  - Implementato enforcement VFS (`vfs_check_acl`, `vfs_is_admin_authenticated`) in [vfs.c](file:///c:/Users/morga/Desktop/MyOS/kernel/fs/vfs.c): l'eliminazione/rinomina in `C:\NewOS\*` richiede autenticazione amministratore (verifica password inline in `SECCPL.CPL`) e `AllowNewOSDelete=1` nel Registro isolato, oltre alla protezione dei file critici (`REGISTRY.DAT`, `NewOS/Boot/*`, `BSOD.DLL`, `LAUNCHER.DLL`, `SECCPL.DLL`).
+- **Estensione File System a 64-bit (`> 4 GB`) & Supporto HD/SSD/NVMe senza limiti fittizi**:
+  - Convertiti a `uint64_t`/`int64_t` dimensioni file, offset `vfs_seek`/`vfs_tell`/`vfs_file_size`, dentry cache e indirizzamento LBA/FAT/Bitmap in [vfs.h](file:///c:/Users/morga/Desktop/MyOS/kernel/fs/vfs.h), [vfs.c](file:///c:/Users/morga/Desktop/MyOS/kernel/fs/vfs.c), [vfs_cache.c](file:///c:/Users/morga/Desktop/MyOS/kernel/fs/vfs_cache.c), [exfat.c](file:///c:/Users/morga/Desktop/MyOS/kernel/fs/exfat.c) ed [exfat_ops.c](file:///c:/Users/morga/Desktop/MyOS/kernel/fs/exfat_ops.c), rimuovendo l'offset hardcoded `EXFAT_PARTITION_LBA` in favore di `vbr->partition_offset`.
+  - Rimossi i fallback fittizi (`128 MB`, `650 MB`, `16 MB`) in [vfs_mount.c](file:///c:/Users/morga/Desktop/MyOS/kernel/fs/vfs_mount.c) ed [exfat_ops.c](file:///c:/Users/morga/Desktop/MyOS/kernel/fs/exfat_ops.c) con calcolo reale `total_bytes`/`free_bytes` a 64-bit.
+  - Integrato il controller **NVMe** (`NVME.DLL`) nel VFS tramite `ata_register_nvme_device()` in [ata.c](file:///c:/Users/morga/Desktop/MyOS/kernel/drivers/ata.c) e `VFS_BUS_NVME`, con probing GPT/MBR automatico fino alla capienza massima del namespace.
 
 ### 20 Novembre 2026
 - **BSOD Liquid Glass Out-of-Kernel (`BSOD.DLL` + `KERNEL.SYM`)**:
@@ -72,8 +83,8 @@
 
 ---
 
-### 2. Kernel Core Protetto (~170 KB / 480 KB)
-- **Budget Kernel Rispettato**: Dimensione di `kernel.bin` ridotta a **173.996 byte (~170 KB)** grazie allo scorporo sistematico dei sottosistemi, driver avanzati, browser e librerie dinamiche in `C:\NewOS\SystemLibrary\`, ben al di sotto del vincolo di 480 KB (491.520 byte).
+### 2. Kernel Core Protetto (~180 KB / 480 KB)
+- **Budget Kernel Rispettato**: Dimensione di `kernel.bin` ridotta a **184.252 byte (~180 KB)** grazie allo scorporo sistematico dei sottosistemi, driver avanzati, browser e librerie dinamiche in `C:\NewOS\SystemLibrary\`, ben al di sotto del vincolo di 480 KB (491.520 byte).
 - **Separazione Privilegi Ring 0 / Ring 3**:
   - Istruzioni native `SYSCALL` e `SYSRET` per le chiamate di sistema (`kernel/arch/x86_64/syscall.c`).
   - Protezione della memoria virtuale con Supervisor bit nelle tabelle PML4 (`kernel/mm/paging.c`).

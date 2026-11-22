@@ -19,7 +19,7 @@ typedef struct {
     char     drive_letter;
     char     path[128];
     uint32_t cluster;
-    uint32_t size;
+    uint64_t size;
     uint16_t attributes;
     bool     is_dir;
     bool     valid;
@@ -42,8 +42,8 @@ bool vfs_cache_is_write_back(void);
 void vfs_cache_prefetch(uint32_t dev_id, uint64_t lba, uint32_t count);
 
 // Ricerca e inserimento nella Dentry Path Cache
-bool vfs_dentry_lookup(char drive_letter, const char* clean_path, uint32_t* out_cluster, uint32_t* out_size, uint16_t* out_attr, bool* out_is_dir);
-void vfs_dentry_insert(char drive_letter, const char* clean_path, uint32_t cluster, uint32_t size, uint16_t attr, bool is_dir);
+bool vfs_dentry_lookup(char drive_letter, const char* clean_path, uint32_t* out_cluster, uint64_t* out_size, uint16_t* out_attr, bool* out_is_dir);
+void vfs_dentry_insert(char drive_letter, const char* clean_path, uint32_t cluster, uint64_t size, uint16_t attr, bool is_dir);
 void vfs_dentry_invalidate(char drive_letter, const char* clean_path);
 
 #endif // FS_VFS_CACHE_H

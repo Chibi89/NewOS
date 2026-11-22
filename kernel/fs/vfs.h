@@ -18,7 +18,7 @@
 
 typedef struct {
     char     name[VFS_MAX_FILENAME];
-    uint32_t size;
+    uint64_t size;
     uint16_t attributes;
     bool     is_directory;
 } vfs_dirent_t;
@@ -34,7 +34,8 @@ typedef enum {
     VFS_BUS_USB_UHCI  = 6,
     VFS_BUS_FDC       = 7,
     VFS_BUS_RAMFS     = 8,
-    VFS_BUS_NET_ETH   = 9
+    VFS_BUS_NET_ETH   = 9,
+    VFS_BUS_NVME      = 10
 } vfs_bus_type_t;
 
 typedef struct {
@@ -47,9 +48,9 @@ typedef struct {
 
 typedef struct {
     char     name[VFS_MAX_FILENAME];
-    uint32_t size;
+    uint64_t size;
     uint32_t first_cluster;
-    uint32_t current_pos;
+    uint64_t current_pos;
     bool     is_directory;
     bool     no_fat_chain;
     bool     is_open;
@@ -70,11 +71,11 @@ int32_t vfs_read(vfs_file_t* file, void* buf, uint32_t count);
 // Scrive 'count' byte sul file corrente
 int32_t vfs_write(vfs_file_t* file, const void* buf, uint32_t count);
 
-// Sposta il cursore di lettura/scrittura all'interno del file
-int32_t vfs_seek(vfs_file_t* file, int32_t offset, int whence);
+// Sposta il cursore di lettura/scrittura all'interno del file (supporto > 4GB)
+int64_t vfs_seek(vfs_file_t* file, int64_t offset, int whence);
 
 // Restituisce la posizione corrente del cursore
-uint32_t vfs_tell(vfs_file_t* file);
+uint64_t vfs_tell(vfs_file_t* file);
 
 // Chiude il file aperto
 void vfs_close(vfs_file_t* file);
@@ -85,8 +86,8 @@ int32_t vfs_readdir(const char* dir_path, vfs_dirent_t* entries, int32_t max_ent
 // Verifica se un file o cartella esiste
 bool vfs_exists(const char* path);
 
-// Restituisce la dimensione del file in byte (0 se non esiste)
-uint32_t vfs_file_size(const char* path);
+// Restituisce la dimensione del file in byte (0 se non esiste, supporto > 4GB)
+uint64_t vfs_file_size(const char* path);
 
 // Crea un nuovo file vuoto
 bool vfs_create(const char* path);
