@@ -94,6 +94,44 @@
 
 </details>
 
+<details>
+<summary><strong>🗺️ Prossimi Step & Funzionalità Pianificate (Roadmap Residua)</strong></summary>
+
+Elenco delle funzionalità ancora da implementare dalla [`ROADMAP_MIGLIORIE.md`](ROADMAP_MIGLIORIE.md):
+
+1. **Shell & Esplora Risorse**:
+   - **Drag & Drop reale**: trascinamento file/cartelle su un'altra cartella, su un disco nella sidebar o sul Desktop per spostare o copiare.
+2. **UI & Libreria `COMCTL.DLL`**:
+   - **Migrazione completa delle app a `COMCTL.DLL`**: convertire `Task Manager`, `Regedit`, `Notepad`, `Calcolatrice` e le applet `.CPL` ai controlli standard `comctl_*`.
+   - **Controlli `COMCTL` interattivi completi**: navigazione focus con `Tab`, frecce su `ListView`/`TreeView`/`ComboBox`, `PgUp`/`PgDn`, selezione testo con mouse/`Shift` e `Ctrl+C`/`Ctrl+V` nei campi input.
+   - **Scaling DPI dinamico**: adattamento automatico di font, icone e padding per `1280x720`, `1600x900` e `1920x1080`.
+   - **Animazioni leggere opzionali**: transizioni apertura/chiusura menu e minimizzazione finestre (disattivabili in modalità Classic 2000).
+3. **File System & Storage (`FS_EXT.DLL`)**:
+   - **Scrittura completa su `EXT4` e `FAT32`**: consolidamento R/W sicuro su `FAT32` (USB e partizione ESP) ed `EXT4`.
+   - **Write-back cache & Flush periodico sicuro**: flush automatico in background dei settori dirty e **"Rimozione sicura dell'hardware"** USB nella tray bar.
+   - **Archivi `.ZIP` / `.TAR`**: apertura ed estrazione come cartelle virtuali in `FS_EXT.DLL` ed Explorer.
+4. **Sicurezza & Multi-Utente**:
+   - **Gestione multi-account reale (`USERACCT.CPL`)**: creazione di più utenti locali in `C:\User\<Nome>\` con password hashata, ruoli Standard/Amministratore e selezione utente in `LOGIN.MOD`.
+   - **Dialogo UAC / Elevazione inline**: prompt password amministratore per operazioni protette da utenti Standard (`C:\NewOS\`, `HKLM` in `Regedit`, policy).
+5. **Kernel, Processi & Memoria**:
+   - **Eseguibili User-Mode Ring 3 reali (`.EXE` / ELF64)**: isolamento nello spazio `PML4` con dialogo terminazione processo al posto del BSOD.
+   - **Preemptive Multitasking & SMP Bilanciato**: distribuzione thread sui core AP via `smp.c` con spinlock/mutex granulari su VFS, Heap e WM.
+   - **Slab / Buddy Allocator o Free-List Coalescing avanzato**: ottimizzazione `kmalloc`/`kfree` e statistiche dettagliate per `Task Manager`.
+   - **Page Fault Demand Paging**: lazy allocation su richiesta per file grandi e moduli browser pesanti (`WEBBROWSER.DLL` / `JSENGINE.DLL`).
+6. **Hardware Reale Bare-Metal & Driver**:
+   - **EDID & Impostazione Risoluzione Reale**: lettura blocchi EDID da VBE/GOP in `DESK.CPL` per proporre le risoluzioni supportate dal monitor fisico.
+   - **MSI / MSI-X Interrupts**: supporto su PCIe per **NVMe**, **xHCI**, **Intel HDA** ed **E1000/RTL8169**.
+   - **Gestione Risparmio Energetico ACPI completa**: lettura batteria (laptop) e stati `S3` (Sospensione RAM) / `S5` (Spegnimento) su silicio fisico.
+   - **Touchpad PS/2 / I2C HID & Layout Tastiera Multipli**: scroll a due dita, layout dinamici `IT/US/UK/DE/FR` in `KEYBCPL.CPL` e tasti multimediali.
+7. **Rete & Web Browser (`WEBBROWSER.DLL`)**:
+   - **Cache HTTP su disco & Cookie/Cronologia**: salvataggio persistente in `C:\User\<Utente>\AppData\`.
+   - **Browser Multi-Tab & Download Manager**: schede multiple in `WEBBROWSER.DLL` e download in `C:\User\<Utente>\Downloads\` con progress bar `COMCTL`.
+   - **DHCPv6 / DNS Caching & Strumenti Rete**: cache DNS con TTL, `traceroute` e diagnostica schede in `NETCPL.CPL`.
+8. **Multimedia**:
+   - **NewOS Media Player (`player/`)**: completamento decodifica/riproduzione reale `.MP3` / `.FLAC` (codec `.CDC`) e seek bar interattiva.
+
+</details>
+
 ---
 
 ## Novità della Settimana (16 – 19 Novembre 2026)
@@ -411,6 +449,44 @@ tools\qemu-system-x86_64.exe -cdrom NewOS_V1.iso -m 256M -vga std -device AC97 -
 - **Logout Screen Reconnection (`LOGOUT.MOD`) & PIC Fix**:
   - Reconnected the Start Menu **"Shut down..."** action in [wm.c](kernel/gui/wm.c) to `screen_mgr_run_logoutscreen()` with full support for ACPI Power Off, Reboot, Standby/Sleep, Sign Out (returning to `LOGIN.MOD`), and Cancel.
   - Fixed option string addressing in [logoutscreen.c](logoutscreen/logoutscreen.c) using 100% `RIP`-relative PIC code for proper text rendering inside the flat `LOGOUT.MOD` binary.
+
+</details>
+
+<details>
+<summary><strong>🗺️ Next Steps & Planned Features (Remaining Roadmap)</strong></summary>
+
+Pending features to be implemented from [`ROADMAP_MIGLIORIE.md`](ROADMAP_MIGLIORIE.md):
+
+1. **Shell & File Explorer**:
+   - **Real Drag & Drop**: dragging files/folders onto another folder, a sidebar drive, or the Desktop to move or copy.
+2. **UI & `COMCTL.DLL` Library**:
+   - **Full App Migration to `COMCTL.DLL`**: migrate `Task Manager`, `Regedit`, `Notepad`, `Calculator`, and `.CPL` applets to standard `comctl_*` controls.
+   - **Full Interactive `COMCTL` Controls**: `Tab` focus traversal, arrow keys on `ListView`/`TreeView`/`ComboBox`, `PgUp`/`PgDn`, mouse/`Shift` text selection, and `Ctrl+C`/`Ctrl+V` in inputs.
+   - **Dynamic DPI Scaling**: automatic font, icon, and padding scaling for `1280x720`, `1600x900`, and `1920x1080`.
+   - **Optional Lightweight Animations**: menu open/close and window minimize transitions (toggleable off in Classic 2000 mode).
+3. **File System & Storage (`FS_EXT.DLL`)**:
+   - **Full R/W on `EXT4` & `FAT32`**: harden safe read/write support for `FAT32` (USB drives and ESP) and `EXT4`.
+   - **Write-back Cache & Safe Periodic Flush**: background dirty-sector flushing and USB **"Safely Remove Hardware"** tray indicator.
+   - **`.ZIP` / `.TAR` Archives**: open and extract archives as virtual folders in `FS_EXT.DLL` and Explorer.
+4. **Security & Multi-User**:
+   - **Real Multi-Account Management (`USERACCT.CPL`)**: create multiple local users in `C:\User\<Name>\` with hashed passwords, Standard/Administrator roles, and user selection in `LOGIN.MOD`.
+   - **Inline UAC / Elevation Dialog**: administrator password prompt when a Standard user attempts protected actions (`C:\NewOS\`, `HKLM` in `Regedit`, policies).
+5. **Kernel, Processes & Memory**:
+   - **Real Ring 3 User-Mode Executables (`.EXE` / ELF64)**: isolated `PML4` address spaces with app crash termination dialogs instead of system BSOD.
+   - **Preemptive Multitasking & Balanced SMP**: distribute threads across AP cores via `smp.c` with granular VFS, Heap, and WM locks.
+   - **Slab / Buddy Allocator or Advanced Free-List Coalescing**: optimize `kmalloc`/`kfree` and add detailed stats for `Task Manager`.
+   - **Page Fault Demand Paging**: lazy allocation on demand for large files and heavy browser modules (`WEBBROWSER.DLL` / `JSENGINE.DLL`).
+6. **Bare-Metal Real Hardware & Drivers**:
+   - **EDID & Real Resolution Switching**: parse EDID blocks from VBE/GOP in `DESK.CPL` to offer physical monitor resolutions.
+   - **MSI / MSI-X Interrupts**: PCIe MSI/MSI-X support for **NVMe**, **xHCI**, **Intel HDA**, and **E1000/RTL8169**.
+   - **Full ACPI Power Management**: laptop battery reporting and reliable `S3` (Suspend to RAM) / `S5` (Power Off) on physical silicon.
+   - **PS/2 Touchpad / I2C HID & Multi-Layout Keyboards**: two-finger scrolling, dynamic `IT/US/UK/DE/FR` layouts in `KEYBCPL.CPL`, and media keys.
+7. **Networking & Web Browser (`WEBBROWSER.DLL`)**:
+   - **Disk HTTP Cache, Cookies & History**: persistent storage in `C:\User\<User>\AppData\`.
+   - **Multi-Tab Browser & Download Manager**: multiple tabs in `WEBBROWSER.DLL` and downloads to `C:\User\<User>\Downloads\` with `COMCTL` progress bar.
+   - **DHCPv6 / DNS Caching & Network Diagnostics**: local TTL DNS cache, `traceroute`, and adapter diagnostics in `NETCPL.CPL`.
+8. **Multimedia**:
+   - **NewOS Media Player (`player/`)**: complete real `.MP3` / `.FLAC` decoding/playback (`.CDC` codecs) and interactive seek bar.
 
 </details>
 
