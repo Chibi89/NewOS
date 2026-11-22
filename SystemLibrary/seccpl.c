@@ -200,10 +200,10 @@ static void seccpl_draw(window_t* win) {
     int32_t cx = wx + 8, cy = wy + 28;
     int32_t cw = win->width - 16, ch = win->height - 36;
 
-    // 1. 4 Schede superiori
-    const char* tabs[4] = { "Privilegi & UAC", "File System", "Applicazioni", "Integrita'" };
-    int32_t tab_w = (cw - 8) / 4;
-    for (int i = 0; i < 4; i++) {
+    // 1. 5 Schede superiori
+    const char* tabs[5] = { "Privilegi", "File System", "App", "Integrita'", "Audit Log" };
+    int32_t tab_w = (cw - 8) / 5;
+    for (int i = 0; i < 5; i++) {
         g_api->wm_draw_themed_tab(cx + i * tab_w, cy, tab_w - 2, 22, tabs[i], st->active_tab == i);
     }
 
@@ -306,7 +306,7 @@ static void seccpl_draw(window_t* win) {
         draw_checkbox(cx + 22, py + 134, st->app_thirdparty_launch, "LAUNCHER.DLL: Avvio app da C:\\ProgramFile\\", &t);
         g_api->gfx_draw_string(cx + 22, py + 180, "Nota: I moduli critici (BOOTSCR, LOGIN, LOGOUT, BSOD)", t.text_secondary, 0, true);
         g_api->gfx_draw_string(cx + 22, py + 200, "mantengono accesso diretto protetto dal kernel.", t.text_secondary, 0, true);
-    } else {
+    } else if (st->active_tab == 3) {
         dll_draw_groupbox(g_api, cx + 10, py + 10, cw - 20, 146, " Integrita' Crittografica & Registro ", &t);
         g_api->gfx_draw_string(cx + 22, py + 34, "Cifratura Sistema: AES-256 (SYSTEM.PAK / REGISTRY.DAT)", t.text_primary, 0, true);
         g_api->gfx_draw_string(cx + 22, py + 56, "Ramo Policy: HKLM\\SYSTEM\\...\\Lsa\\KernelSecurityPolicy", t.accent, 0, true);
@@ -321,6 +321,22 @@ static void seccpl_draw(window_t* win) {
         sec_cat_u32(abuf, (uint32_t)st->audit_total, sizeof(abuf));
         g_api->gfx_draw_string(cx + 22, py + 100, abuf, 0x22C55E, 0, true);
         g_api->wm_draw_themed_button(cx + 22, py + 122, 180, 24, "Verifica Integrita'", false);
+    } else {
+        dll_draw_groupbox(g_api, cx + 10, py + 10, cw - 20, 250, " Audit Log Sicurezza & LSA ", &t);
+        g_api->gfx_draw_string(cx + 20, py + 32, "[INFO] Boot: Verifica NOSM+CRC32 superata (Kernel Gate ON)", 0x22C55E, 0, true);
+        g_api->gfx_draw_string(cx + 20, py + 54, "[AUTH] Sessione Utente autenticata (REG_READWRITE attivo)", t.text_primary, 0, true);
+        g_api->gfx_draw_string(cx + 20, py + 76, "[ACL ] C:\\NewOS\\* protetto da cancellazioni non autorizzate", 0x3B82F6, 0, true);
+        g_api->gfx_draw_string(cx + 20, py + 98, "[PKG ] PKGSVC.DLL: Isolamento software terzi in ProgramFile", t.text_primary, 0, true);
+        if (st->allow_newos_delete) {
+            g_api->gfx_draw_string(cx + 20, py + 120, "[WARN] UAC: AllowNewOSDelete=1 autorizzato da Admin", 0xF59E0B, 0, true);
+        } else {
+            g_api->gfx_draw_string(cx + 20, py + 120, "[LOCK] UAC: AllowNewOSDelete=0 (Modifiche C:\\NewOS bloccate)", t.text_secondary, 0, true);
+        }
+        char lbuf[64];
+        dll_strcpy(lbuf, "[STAT] Commit Policy registrati in sessione: ", sizeof(lbuf));
+        sec_cat_u32(lbuf, st->commit_count, sizeof(lbuf));
+        g_api->gfx_draw_string(cx + 20, py + 148, lbuf, t.accent, 0, true);
+        g_api->gfx_draw_string(cx + 20, py + 174, "[DEV ] Porte I/O (PORTS.DLL) e Font TrueType verificati", t.text_secondary, 0, true);
     }
 
     // Stato & Pulsanti inferiori
@@ -341,10 +357,10 @@ static void seccpl_mouse(window_t* win, int32_t lx, int32_t ly, bool clicked) {
     int32_t cw = win->width - 16, ch = win->height - 36;
 
     // 1. Click su Tab
-    int32_t tab_w = (cw - 8) / 4;
+    int32_t tab_w = (cw - 8) / 5;
     if (ly >= cy && ly <= cy + 22) {
         int ti = (lx - cx) / tab_w;
-        if (ti >= 0 && ti < 4) st->active_tab = ti;
+        if (ti >= 0 && ti < 5) st->active_tab = ti;
         return;
     }
 

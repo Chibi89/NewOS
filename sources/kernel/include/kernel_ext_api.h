@@ -212,6 +212,7 @@ typedef struct {
     void (*app_fonts_props_launch)(void);
     void (*app_pkgsvc_launch)(void);
     void (*app_ports_props_launch)(void);
+    void (*app_bench_props_launch)(void);
     void (*wm_set_start_menu_mode)(int mode);
     int  (*wm_get_start_menu_mode)(void);
 } kernel_ext_api_t;

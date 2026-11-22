@@ -196,6 +196,12 @@ static bool launch_by_alias(launcher_params_t* p, const char* name, const char* 
         set_handler(p, "PORTS.DLL");
         return true;
     }
+    if (strcasecmp(name, "bench") == 0 || strcasecmp(name, "bench.cpl") == 0 ||
+        strcasecmp(name, "diag") == 0) {
+        app_bench_props_launch();
+        set_handler(p, "BENCH.DLL");
+        return true;
+    }
     if (strcasecmp(name, "seccpl") == 0 || strcasecmp(name, "secpol.cpl") == 0 ||
         strcasecmp(name, "security") == 0 || strcasecmp(name, "sicurezza") == 0) {
         app_seccpl_launch();

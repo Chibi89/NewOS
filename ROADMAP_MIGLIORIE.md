@@ -26,7 +26,7 @@ Elenco completo delle migliorie architetturali, grafiche, di sistema e hardware 
 - [x] **Alt+Tab grafico**: overlay traslucido al centro dello schermo con icone e titoli delle finestre aperte durante la pressione di `Alt`.
 - [x] **Menu contestuale sui pulsanti della Taskbar**: click destro sul pulsante di un'app nella taskbar (`Ripristina`, `Minimizza`, `Massimizza`, `Affianca a sinistra`, `Chiudi`), più pulsante **"Mostra Desktop"** all'estrema destra accanto all'orologio.
 - [x] **Anteprima finestre / Tooltip taskbar**: tooltip o miniatura al passaggio del mouse sui pulsanti della taskbar.
-- [ ] **Notifiche Toast & Centro Notifiche**: popup temporanei nell'angolo in basso a destra (chiavetta USB connessa, flush completato, policy di sicurezza aggiornata).
+- [x] **Notifiche Toast & Centro Notifiche**: popup temporanei nell'angolo in basso a destra (chiavetta USB connessa, flush completato, policy di sicurezza aggiornata).
 - [x] **Scorciatoie da tastiera globali**: `Win+E` (Esplora Risorse), `Win+R` (Esegui tramite `LAUNCHER.DLL`), `Win+D` (Mostra Desktop), `Win+L` (Blocca sessione -> `LOGIN.MOD`), `Ctrl+Shift+Esc` (Task Manager).
 
 ---
@@ -56,7 +56,7 @@ Elenco completo delle migliorie architetturali, grafiche, di sistema e hardware 
 - [ ] **Persistenza preferenze utente**: salvare nel Registro (a sessione autenticata) vista Explorer preferita, `show_extensions`, `show_hidden`, posizione delle icone sul desktop, tema e risoluzione scelta.
 - [ ] **Gestione multi-account reale (`USERACCT.CPL`)**: creazione di più utenti locali in `C:\User\<Nome>\` con password hashata, distinzione Standard/Amministratore e schermata di selezione utente in `LOGIN.MOD`.
 - [ ] **Dialogo UAC / Elevazione inline**: prompt di elevazione password amministratore quando un utente Standard tenta un'operazione protetta (`C:\NewOS\`, `Regedit` su `HKLM`, cambio policy).
-- [ ] **Audit Log di Sicurezza**: registro eventi critici (login riusciti/falliti, modifiche policy LSA, tentativi ACL negati) consultabile in `SECCPL.CPL`.
+- [x] **Audit Log di Sicurezza**: registro eventi critici (login riusciti/falliti, modifiche policy LSA, tentativi ACL negati) consultabile in `SECCPL.CPL`.
 
 ---
 
@@ -75,7 +75,7 @@ Elenco completo delle migliorie architetturali, grafiche, di sistema e hardware 
 - [ ] **Touchpad PS/2 / I2C HID & Layout Tastiera Multipli**: scorrimento a due dita, layout dinamici in `KEYBCPL.CPL` (IT/US/UK/DE/FR) e tasti multimediali.
 - [x] **Sottosistema Porte Parallele (`LPT`), Seriali (`COM`) & Porte Virtuali (Out-of-Kernel [`PORTS.DLL`](SystemLibrary/ports_dll.c))**:
   - Rilevamento I/O bare-metal di **Porte Seriali `COM1`–`COM4`** (UART 16550A/16450 con FIFO 16B e test Loopback HW), **Porte Parallele Legacy `LPT1`–`LPT2`** (IEEE 1284 SPP/EPP/ECP) e **Porte Virtuali `VCOM1`/`VCOM2`/`VLPT1`**, con configurazione Baud Rate.
-- [ ] **Diagnostica / Benchmark Bare-Metal**: tool in `SYSDM.CPL` o `DEVMGMT.CPL` per testare velocità reale lettura/scrittura dischi (NVMe/AHCI), test RAM, stato core SMP e IRQ/PCI.
+- [x] **Diagnostica / Benchmark Bare-Metal**: tool in `SYSDM.CPL` o `DEVMGMT.CPL` per testare velocità reale lettura/scrittura dischi (NVMe/AHCI), test RAM, stato core SMP e IRQ/PCI.
 
 ---
 

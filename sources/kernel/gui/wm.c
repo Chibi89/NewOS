@@ -65,6 +65,39 @@ static int32_t tb_ctx_x = 0;
 static int32_t tb_ctx_y = 0;
 static bool show_desktop_active = false;
 
+// Notifiche Toast & Centro Notifiche
+#define WM_MAX_TOASTS 6
+typedef struct {
+  char title[32];
+  char msg[64];
+  char time_str[10];
+  icon_id_t icon;
+} wm_toast_t;
+
+static wm_toast_t g_toasts[WM_MAX_TOASTS];
+static int g_toast_count = 0;
+static int g_toast_banner_ticks = 0;
+static bool g_notif_center_open = false;
+
+void wm_push_toast(const char *title, const char *msg, int icon) {
+  if (!title || !msg) return;
+  if (g_toast_count >= WM_MAX_TOASTS) {
+    for (int i = 0; i < WM_MAX_TOASTS - 1; i++) {
+      g_toasts[i] = g_toasts[i + 1];
+    }
+    g_toast_count = WM_MAX_TOASTS - 1;
+  }
+  wm_toast_t *t = &g_toasts[g_toast_count++];
+  memset(t, 0, sizeof(wm_toast_t));
+  strncpy(t->title, title, sizeof(t->title) - 1);
+  strncpy(t->msg, msg, sizeof(t->msg) - 1);
+  t->icon = (icon_id_t)icon;
+  rtc_time_t now;
+  rtc_get_time(&now);
+  mini_snprintf(t->time_str, sizeof(t->time_str), "%02d:%02d", now.hour, now.minute);
+  g_toast_banner_ticks = 220;
+}
+
 static void wm_snap_window(window_t *w, int zone, int32_t sw, int32_t ty) {
   if (!w || zone <= 0)
     return;
@@ -327,6 +360,8 @@ void wm_init(void) {
   for (int i = 0; i < MAX_WINDOWS; i++) {
     windows[i] = NULL;
   }
+  wm_push_toast("Sicurezza LSA", "Protezione C:\\NewOS attiva", ICON_INFO);
+  wm_push_toast("NewOS V1", "Desktop 64-bit e servizi pronti", ICON_DESKTOP);
   active_window_id = -1;
   start_menu_open = false;
   ctx_menu_open = false;
@@ -1522,6 +1557,21 @@ void wm_render(void) {
   }
   gfx_draw_string(tray_x + 28, tray_y + 4, time_str, clk_col, 0, true);
 
+  // Pulsante Centro Notifiche (a sinistra della pillola tray)
+  int32_t bell_x = tray_x - 28;
+  if (current_theme == THEME_CLASSIC && !g_active_theme_props.modern_controls) {
+    gfx_fill_rect(bell_x, tray_y, 24, 22, COLOR_BTNFACE);
+    gfx_draw_bevel_rect(bell_x, tray_y, 24, 22, g_notif_center_open);
+  } else {
+    gfx_fill_rounded_alpha(bell_x, tray_y, 24, 22, 4, g_notif_center_open ? 0x3B82F6 : 0xFFFFFF,
+                           g_notif_center_open ? 180 : 95);
+    gfx_draw_rounded_rect(bell_x, tray_y, 24, 22, 4, 0x94A3B8);
+  }
+  gfx_draw_icon_16(bell_x + 4, tray_y + 3, ICON_INFO);
+  if (g_toast_count > 0) {
+    gfx_fill_rounded_rect(bell_x + 15, tray_y + 1, 8, 8, 4, 0xEF4444);
+  }
+
   // Pulsante Mostra Desktop all'estrema destra della Taskbar
   if (current_theme == THEME_CLASSIC && !g_active_theme_props.modern_controls) {
     gfx_fill_rect(sw - 10, tray_y, 8, 22, COLOR_BTNFACE);
@@ -1608,6 +1658,50 @@ void wm_render(void) {
         tshort[14] = '\0';
         gfx_draw_string(cx_c + 8, oy + 74, tshort, 0xFFFFFF, 0, true);
         cx_c += card_w + 8;
+      }
+    }
+  }
+
+  // Popup Toast temporaneo (angolo in basso a destra)
+  if (g_toast_banner_ticks > 0 && g_toast_count > 0 && !g_notif_center_open) {
+    g_toast_banner_ticks--;
+    wm_toast_t *lt = &g_toasts[g_toast_count - 1];
+    int32_t tw = 310, th = 62;
+    int32_t tx_b = (int32_t)sw - tw - 12;
+    int32_t ty_b = ty - th - 10;
+    gfx_draw_drop_shadow(tx_b, ty_b, tw, th, 8);
+    gfx_fill_rounded_alpha(tx_b, ty_b, tw, th, 8, 0x1E293B, 232);
+    gfx_draw_rounded_rect(tx_b, ty_b, tw, th, 8, 0x60A5FA);
+    gfx_draw_icon_32(tx_b + 10, ty_b + 15, lt->icon);
+    gfx_draw_string(tx_b + 50, ty_b + 12, lt->title, 0xF8FAFC, 0, true);
+    gfx_draw_string(tx_b + 50, ty_b + 32, lt->msg, 0xCBD5E1, 0, true);
+  }
+
+  // Centro Notifiche (aperto dal campanellino nella System Tray)
+  if (g_notif_center_open) {
+    int32_t nw = 304, nh = 264;
+    int32_t nx = (int32_t)sw - nw - 10;
+    int32_t ny = ty - nh - 8;
+    gfx_draw_drop_shadow(nx, ny, nw, nh, 10);
+    gfx_fill_rounded_alpha(nx, ny, nw, nh, 10, 0xF8FAFC, 240);
+    gfx_draw_rounded_rect(nx, ny, nw, nh, 10, 0x94A3B8);
+    gfx_draw_string(nx + 12, ny + 10, "Centro Notifiche", 0x0F172A, 0, true);
+    gfx_fill_rounded_rect(nx + nw - 68, ny + 7, 56, 20, 4, 0xE2E8F0);
+    gfx_draw_string(nx + nw - 60, ny + 10, "Svuota", 0x334155, 0, true);
+    gfx_fill_rect(nx + 10, ny + 32, nw - 20, 1, 0xCBD5E1);
+    if (g_toast_count == 0) {
+      gfx_draw_string(nx + 64, ny + 120, "Nessuna nuova notifica", 0x64748B, 0, true);
+    } else {
+      for (int i = g_toast_count - 1; i >= 0; i--) {
+        int slot = (g_toast_count - 1) - i;
+        if (slot >= 4) break;
+        int32_t cy_n = ny + 40 + slot * 54;
+        gfx_fill_rounded_rect(nx + 10, cy_n, nw - 20, 48, 6, 0xFFFFFF);
+        gfx_draw_rounded_rect(nx + 10, cy_n, nw - 20, 48, 6, 0xE2E8F0);
+        gfx_draw_icon_16(nx + 18, cy_n + 8, g_toasts[i].icon);
+        gfx_draw_string(nx + 40, cy_n + 7, g_toasts[i].title, 0x0F172A, 0, true);
+        gfx_draw_string(nx + nw - 54, cy_n + 7, g_toasts[i].time_str, 0x64748B, 0, true);
+        gfx_draw_string(nx + 40, cy_n + 26, g_toasts[i].msg, 0x475569, 0, true);
       }
     }
   }
@@ -2165,6 +2259,26 @@ void wm_update(mouse_state_t *mouse, char key) {
       }
     }
 
+    // Clic sul Centro Notifiche aperto (pulsante Svuota o area interna)
+    if (g_notif_center_open) {
+      int32_t nw = 304, nh = 264;
+      int32_t nx = (int32_t)sw - nw - 10;
+      int32_t ny = ty - nh - 8;
+      if (mouse->x >= nx + nw - 68 && mouse->x <= nx + nw - 12 &&
+          mouse->y >= ny + 7 && mouse->y <= ny + 27) {
+        g_toast_count = 0;
+        g_toast_banner_ticks = 0;
+        prev_mouse_left = mouse->left_button;
+        prev_mouse_right = mouse->right_button;
+        return;
+      }
+      if (mouse->x >= nx && mouse->x <= nx + nw && mouse->y >= ny && mouse->y <= ny + nh) {
+        prev_mouse_left = mouse->left_button;
+        prev_mouse_right = mouse->right_button;
+        return;
+      }
+    }
+
     // Clic sul pulsante Mostra Desktop (estrema destra della Taskbar)
     if (mouse->x >= (int32_t)sw - 11 && mouse->x <= (int32_t)sw && mouse->y >= ty) {
       wm_toggle_show_desktop();
@@ -2173,9 +2287,17 @@ void wm_update(mouse_state_t *mouse, char key) {
       return;
     }
 
-    // Clic sulla System Tray (icona alimentazione o orologio)
+    // Clic sulla System Tray (campanella Centro Notifiche o alimentazione/orologio)
     int32_t tray_w = 110;
     int32_t tray_x = sw - tray_w - 14;
+    int32_t bell_x = tray_x - 28;
+    if (mouse->x >= bell_x && mouse->x < tray_x && mouse->y >= ty) {
+      g_notif_center_open = !g_notif_center_open;
+      g_toast_banner_ticks = 0;
+      prev_mouse_left = mouse->left_button;
+      prev_mouse_right = mouse->right_button;
+      return;
+    }
     if (mouse->x >= tray_x && mouse->x <= (int32_t)sw && mouse->y >= ty) {
       app_power_props_launch();
       prev_mouse_left = mouse->left_button;

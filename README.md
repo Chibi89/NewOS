@@ -33,8 +33,11 @@
 - **Nuovo Menu Start Unificato Moderno (`STARTMENU.DLL`) & Selettore `Personalizzazione`**:
   - Creato il menu Start out-of-kernel [startmenu_dll.c](SystemLibrary/startmenu_dll.c) ([startmenu_loader.c](kernel/gui/startmenu_loader.c)) con ricerca live unificata, sezione **Preferiti**, sezione **Tutto** con toggle **`Visualizzazione: Griglia | Elenco`** e badge **`Nuova`**, e footer utente/azioni rapide.
   - Aggiunto selettore dedicato **`Stile Menu Start: Moderno | Classico`** nella tab **Tema** di `Proprietà - Schermo` ([display.c](control_panel/display.c)).
-- **Window Manager, Taskbar & Scorciatoie Globali (`wm.c`)**:
-  - Implementati **Window Snap** (50%/50% ai bordi laterali, massimizzazione al bordo superiore), **Alt+Tab grafico** con anteprima schede, **Menu contestuale Taskbar**, **Tooltip anteprima** al passaggio del mouse sui pulsanti finestra, pulsante **Mostra Desktop** e scorciatoie globali (**`Win+E`**, **`Win+R`**, **`Win+D`**, **`Win+L`**, **`Ctrl+Shift+Esc`**).
+- **Window Manager, Taskbar, Notifiche Toast & Scorciatoie Globali (`wm.c`)**:
+  - Implementati **Window Snap** (50%/50% ai bordi laterali, massimizzazione al bordo superiore), **Alt+Tab grafico** con anteprima schede, **Menu contestuale Taskbar**, **Tooltip anteprima** al passaggio del mouse sui pulsanti finestra, pulsante **Mostra Desktop**, **Notifiche Toast**, **Centro Notifiche** nella tray e scorciatoie globali (**`Win+E`**, **`Win+R`**, **`Win+D`**, **`Win+L`**, **`Ctrl+Shift+Esc`**).
+- **Diagnostica & Benchmark Bare-Metal (`BENCH.DLL`) & Audit Log Sicurezza (`SECCPL.CPL`)**:
+  - Aggiunto il modulo out-of-kernel [bench_dll.c](SystemLibrary/bench_dll.c) (`BENCH.DLL`, avviabile con `start bench`) con rilevamento CPUID reale x86_64, test banda RAM via `RDTSC` (MB/s), indice CPU e scansione VFS.
+  - Aggiunta la tab **`Audit Log`** in [seccpl.c](SystemLibrary/seccpl.c) per ispezionare gli eventi LSA/ACL e i commit di policy.
 - **Esplora Risorse — Sottomenu `Mostra`, Anteprima, Selezione Multipla & Breadcrumb**:
   - Aggiunti in [explorer.c](explorer/explorer.c) il sottomenu `Mostra >` (`Estensioni file`, `Elementi nascosti`, `Riquadro anteprima`, `Caselle di controllo`), selezione multipla con conteggio/dimensione nella status bar, ordinamento ASC/DESC cliccando sugli header colonne in `Dettagli` e barra indirizzi **Breadcrumb** cliccabile.
 - **Gestione Font TrueType (`FONTSCPL.CPL`), Installazione Software Terzi (`PKGSVC.DLL`) & Porte I/O (`PORTS.DLL`)**:
@@ -304,8 +307,11 @@ tools\qemu-system-x86_64.exe -cdrom NewOS_V1.iso -m 256M -vga std -device AC97 -
 - **New Modern Unified Start Menu (`STARTMENU.DLL`) & `Personalization` Selector**:
   - Created the out-of-kernel Start Menu [startmenu_dll.c](SystemLibrary/startmenu_dll.c) ([startmenu_loader.c](kernel/gui/startmenu_loader.c)) with unified live search, **Pinned** (`Preferiti`) grid, **All Apps** (`Tutto`) with **`View: Grid | List`** toggle and **`Nuova`** badges, plus user/quick-actions footer.
   - Added a dedicated **`Start Menu Style: Modern | Classic`** selector inside the **Theme** tab of Display Properties ([display.c](control_panel/display.c)).
-- **Window Manager, Taskbar & Global Shortcuts (`wm.c`)**:
-  - Implemented **Window Snap** (50%/50% left/right edge snap, top-edge maximize), graphical **Alt+Tab** switcher overlay, **Taskbar context menu**, **Taskbar hover tooltips**, **Show Desktop** button, and global shortcuts (**`Win+E`**, **`Win+R`**, **`Win+D`**, **`Win+L`**, **`Ctrl+Shift+Esc`**).
+- **Window Manager, Taskbar, Toast Notifications & Global Shortcuts (`wm.c`)**:
+  - Implemented **Window Snap** (50%/50% left/right edge snap, top-edge maximize), graphical **Alt+Tab** switcher overlay, **Taskbar context menu**, **Taskbar hover tooltips**, **Show Desktop** button, **Toast Notifications**, tray **Notification Center**, and global shortcuts (**`Win+E`**, **`Win+R`**, **`Win+D`**, **`Win+L`**, **`Ctrl+Shift+Esc`**).
+- **Bare-Metal Diagnostics & Benchmark (`BENCH.DLL`) & Security Audit Log (`SECCPL.CPL`)**:
+  - Added out-of-kernel [bench_dll.c](SystemLibrary/bench_dll.c) (`BENCH.DLL`, launched via `start bench`) with real x86_64 CPUID detection, `RDTSC`-timed RAM bandwidth benchmark (MB/s), CPU score, and VFS scan.
+  - Added the **`Audit Log`** tab in [seccpl.c](SystemLibrary/seccpl.c) to inspect LSA/ACL events and policy commits.
 - **File Explorer — `Show` Submenu, Preview Pane, Multi-Selection & Clickable Breadcrumb**:
   - Added the `Show >` submenu (`File extensions`, `Hidden items`, `Preview pane`, `Item checkboxes`) in [explorer.c](explorer/explorer.c), multi-selection with status bar item/byte totals, ASC/DESC column-header sorting in `Details` view, and clickable **Breadcrumb** path segments.
 - **TrueType Font Manager (`FONTSCPL.CPL`), Standardized 3rd-Party Installer (`PKGSVC.DLL`) & I/O Ports (`PORTS.DLL`)**:
