@@ -50,6 +50,7 @@ void app_pkgsvc_launch(void);
 // Sottosistema Porte Parallele Legacy, Seriali COM e Porte Virtuali (PORTS.DLL)
 void app_ports_props_launch(void);
 void app_bench_props_launch(void);
+void app_imgview_props_launch(void);
 
 // Applet Informazioni su NewOS (WINVER.EXE / SYSDM.CPL)
 void app_about_launch(void);

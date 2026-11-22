@@ -31,7 +31,7 @@ typedef struct {
   uint8_t *cached_buf;
 } cpl_dll_slot_t;
 
-static cpl_dll_slot_t g_cpl_slots[8] = {
+static cpl_dll_slot_t g_cpl_slots[9] = {
     {"USERACCT.DLL", "USERACCT", "Account Utente e Profilo (USERACCT.CPL)", 470,
      400, APP_USERACCT, NULL, NULL},
     {"TIMEDATE.DLL", "TIMEDATE", "Data, Ora e Lingua (TIMEDATE.CPL)", 470, 400,
@@ -47,7 +47,9 @@ static cpl_dll_slot_t g_cpl_slots[8] = {
     {"PORTS.DLL", "PORTS", "Porte (COM, LPT e Virtuali) (PORTS.CPL)", 560, 430,
      APP_DEVMGMT, NULL, NULL},
     {"BENCH.DLL", "BENCH", "Diagnostica & Benchmark Bare-Metal", 520, 360,
-     APP_DEVMGMT, NULL, NULL}};
+     APP_DEVMGMT, NULL, NULL},
+    {"IMGVIEW.DLL", "IMGVIEW", "Visualizzatore Immagini (IMGVIEW)", 560, 400,
+     APP_NOTEPAD, NULL, NULL}};
 
 static bool load_cpl_dll_slot(cpl_dll_slot_t *slot) {
   if (!slot)
@@ -134,6 +136,7 @@ void app_pkgsvc_launch(void) { launch_cpl_slot(5); }
 
 void app_ports_props_launch(void) { launch_cpl_slot(6); }
 void app_bench_props_launch(void) { launch_cpl_slot(7); }
+void app_imgview_props_launch(void) { launch_cpl_slot(8); }
 
 typedef struct {
   uint32_t cmd;

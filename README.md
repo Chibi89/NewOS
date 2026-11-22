@@ -46,6 +46,9 @@
   - Aggiunta applet out-of-kernel [fontscpl.c](SystemLibrary/fontscpl.c) con scansione `.TTF`, anteprima live TrueType via `FONTMGR.DLL` e salvataggio nel Registro.
   - Aggiunto servizio obbligatorio [pkgsvc.c](SystemLibrary/pkgsvc.c) per l'installazione isolata di software terzi in `C:\ProgramFile\<App>\` (blocco ACL su `C:\NewOS\`, manifest `APP.INI` e registrazione in `HKLM`).
   - Aggiunto sottosistema [ports_dll.c](SystemLibrary/ports_dll.c) con probing bare-metal UART `16550A` (`COM1`–`COM4`), porte parallele legacy IEEE 1284 (`LPT1`–`LPT2`), porte virtuali (`VCOM1/2`, `VLPT1`) e test Loopback HW.
+- **Visualizzatore Immagini (`IMGVIEW.DLL`) & Suite di Regressione (`test_all.js`)**:
+  - Aggiunto il visualizzatore out-of-kernel [imgview_dll.c](SystemLibrary/imgview_dll.c) (`IMGVIEW.DLL`, avviabile con `start imgview`) con zoom `50%–150%`, rotazione `90°/180°/270°`, adattamento e navigazione libreria `.BMP`.
+  - Aggiunta la suite automatizzata [test_all.js](tools/test_all.js) (`node tools/test_all.js`, 16 check PASS/FAIL su budget kernel, firme `NOSM`, ISO/IMG e boot QEMU).
 - **Task Manager (`Moduli DLL`), Blocco Note (`Trova` / `Righe`) & Controllo Budget Kernel**:
   - Aggiunto in [taskmgr.c](taskmgr/taskmgr.c) il tab **Moduli DLL** con scansione dinamica di `C:\NewOS\SystemLibrary\`.
   - Potenziato [notepad.c](notepad/notepad.c) con ricerca live **`Trova` (`Ctrl+F`)**, **`Annulla` (`Ctrl+Z`)** e **numeri di riga opzionali**.
@@ -322,6 +325,9 @@ tools\qemu-system-x86_64.exe -cdrom NewOS_V1.iso -m 256M -vga std -device AC97 -
   - Added out-of-kernel [fontscpl.c](SystemLibrary/fontscpl.c) scanning `.TTF` fonts with live `FONTMGR.DLL` TrueType preview and Registry persistence.
   - Added mandatory [pkgsvc.c](SystemLibrary/pkgsvc.c) package service enforcing isolated installs under `C:\ProgramFile\<App>\` (ACL block on `C:\NewOS\`, `APP.INI` manifest, and `HKLM` registration).
   - Added [ports_dll.c](SystemLibrary/ports_dll.c) with bare-metal `16550A` UART probing (`COM1`–`COM4`), IEEE 1284 legacy parallel ports (`LPT1`–`LPT2`), virtual ports (`VCOM1/2`, `VLPT1`), and HW Loopback test.
+- **Dedicated Image Viewer (`IMGVIEW.DLL`) & Regression Suite (`test_all.js`)**:
+  - Added out-of-kernel [imgview_dll.c](SystemLibrary/imgview_dll.c) (`IMGVIEW.DLL`, launched via `start imgview`) supporting `50%–150%` zoom, `90°/180°/270°` rotation, fit-to-window, and `.BMP` library browsing.
+  - Added the automated regression suite [test_all.js](tools/test_all.js) (`node tools/test_all.js`, 16 PASS/FAIL checks covering kernel budget, `NOSM` signatures, ISO/IMG artifacts, and QEMU boot).
 - **Task Manager (`Moduli DLL`), Notepad (`Find` / `Line Numbers`) & Kernel Budget Guard**:
   - Added the **Moduli DLL** tab in [taskmgr.c](taskmgr/taskmgr.c) scanning `C:\NewOS\SystemLibrary\`.
   - Enhanced [notepad.c](notepad/notepad.c) with live **`Find` (`Ctrl+F`)** highlighting, **`Undo` (`Ctrl+Z`)**, and **optional line numbers**.

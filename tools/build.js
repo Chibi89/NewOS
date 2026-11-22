@@ -559,6 +559,7 @@ const systemLibraries = [
     { src: 'SystemLibrary/pkgsvc.c', ini: 'SystemLibrary/PKGSVC.INI', out: 'PKGSVC.DLL', iniOut: 'PKGSVC.INI' },
     { src: 'SystemLibrary/ports_dll.c', ini: 'SystemLibrary/PORTS.INI', out: 'PORTS.DLL', iniOut: 'PORTS.INI' },
     { src: 'SystemLibrary/bench_dll.c', ini: 'SystemLibrary/BENCH.INI', out: 'BENCH.DLL', iniOut: 'BENCH.INI' },
+    { src: 'SystemLibrary/imgview_dll.c', ini: 'SystemLibrary/IMGVIEW.INI', out: 'IMGVIEW.DLL', iniOut: 'IMGVIEW.INI' },
     { src: 'SystemLibrary/comdlg.c', ini: 'SystemLibrary/COMDLG.INI', out: 'COMDLG.DLL', iniOut: 'COMDLG.INI' },
     { src: 'SystemLibrary/recycle.c', ini: 'SystemLibrary/RECYCLE.INI', out: 'RECYCLE.DLL', iniOut: 'RECYCLE.INI' },
     { src: 'SystemLibrary/uistyle_copenhagen.c', ini: 'SystemLibrary/COPENHAGEN.INI', out: 'COPENHAGEN.DLL', iniOut: 'COPENHAGEN.INI', destSubDir: ['NewOS', 'Resources', 'UIStyle'] },

@@ -202,6 +202,12 @@ static bool launch_by_alias(launcher_params_t* p, const char* name, const char* 
         set_handler(p, "BENCH.DLL");
         return true;
     }
+    if (strcasecmp(name, "imgview") == 0 || strcasecmp(name, "foto") == 0 ||
+        strcasecmp(name, "immagini") == 0) {
+        app_imgview_props_launch();
+        set_handler(p, "IMGVIEW.DLL");
+        return true;
+    }
     if (strcasecmp(name, "seccpl") == 0 || strcasecmp(name, "secpol.cpl") == 0 ||
         strcasecmp(name, "security") == 0 || strcasecmp(name, "sicurezza") == 0) {
         app_seccpl_launch();

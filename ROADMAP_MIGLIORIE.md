@@ -89,7 +89,7 @@ Elenco completo delle migliorie architetturali, grafiche, di sistema e hardware 
 
 ## 9. Applicazioni di Sistema & Multimedia
 - [x] **Blocco Note (`notepad/`)**: supporto file grandi (>64 KB), `Trova / Sostituisci` (`Ctrl+F`), `Annulla` (`Ctrl+Z`), numeri di riga opzionali e apertura multipla.
-- [ ] **Visualizzatore Immagini dedicato (`IMGVIEW`)**: zoom, rotazione e presentazione per `.BMP`, `.PNG`, `.JPG`, `.WEBP` tramite `IMGCODEC.DLL`.
+- [x] **Visualizzatore Immagini dedicato (`IMGVIEW`)**: zoom, rotazione e presentazione per `.BMP`, `.PNG`, `.JPG`, `.WEBP` tramite `IMGCODEC.DLL`.
 - [ ] **NewOS Media Player (`player/`)**: completare la decodifica e riproduzione reale di `.MP3` / `.FLAC` (codec `.CDC`) e seek bar interattiva.
 - [x] **Task Manager (`taskmgr/`)**: tab **Prestazioni** (grafici storici CPU/RAM/Disk I/O/Network I/O) e tab **Moduli DLL** caricati con consumo memoria e CRC32.
 - [x] **Terminale `CMD` potenziato**: cronologia comandi con frecce `Su/Giù`, completamento percorsi con `Tab`, redirect output (`>` e `>>`) e scrollback con rotella del mouse.
@@ -97,5 +97,5 @@ Elenco completo delle migliorie architetturali, grafiche, di sistema e hardware 
 ---
 
 ## 10. Build, Test & Qualità ([`tools/`](tools/))
-- [ ] **Suite di Regressione Automatica Unificata**: script `node tools/test_all.js` per testare in sequenza boot BIOS, boot UEFI (`OVMF`), `SECCPL`, `EXPLORER`, `COMCTL`, `WEBBROWSER` e rete con report PASS/FAIL.
+- [x] **Suite di Regressione Automatica Unificata**: script `node tools/test_all.js` per testare in sequenza boot BIOS, boot UEFI (`OVMF`), `SECCPL`, `EXPLORER`, `COMCTL`, `WEBBROWSER` e rete con report PASS/FAIL.
 - [x] **Controllo automatico Budget Kernel**: alert in `tools/build.js` con percentuale di occupazione `kernel.bin` rispetto a `491.520` byte (480 KB) e verifica `0 warning` sui moduli core.

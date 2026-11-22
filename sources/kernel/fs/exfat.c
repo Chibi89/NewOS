@@ -435,86 +435,98 @@ uint32_t exfat_cluster_size(void) {
     return g_cluster_size;
 }
 
+static bool exfat_dir_next_entry(uint32_t* cur_cl, uint32_t* idx_in_cl,
+                                 uint32_t entries_per_cl, uint8_t* cl_buf,
+                                 uint8_t out_entry[32]) {
+    if (*idx_in_cl >= entries_per_cl) {
+        *cur_cl = exfat_get_next_cluster(*cur_cl, false);
+        if (*cur_cl < 2 || *cur_cl >= 0xFFFFFFF8) return false;
+        if (!exfat_read_sec(exfat_cluster_to_lba(*cur_cl), g_sectors_per_cluster, cl_buf)) {
+            *cur_cl = 0xFFFFFFFF;
+            return false;
+        }
+        *idx_in_cl = 0;
+    }
+    memcpy(out_entry, cl_buf + (*idx_in_cl) * 32, 32);
+    (*idx_in_cl)++;
+    return true;
+}
+
 int32_t exfat_list_dir(uint32_t dir_cluster, exfat_item_info_t* out_items, int32_t max_items) {
     if (!g_mounted || dir_cluster < 2 || !out_items || max_items <= 0) return 0;
 
     int32_t count = 0;
     uint32_t cur_cl = dir_cluster;
+    uint32_t entries_per_cl = g_cluster_size / 32;
+    uint32_t idx_in_cl = 0;
     uint8_t* cl_buf = (uint8_t*)kmalloc(g_cluster_size);
     if (!cl_buf) return 0;
 
-    while (cur_cl >= 2 && cur_cl < 0xFFFFFFF8 && count < max_items) {
-        uint64_t lba = exfat_cluster_to_lba(cur_cl);
-        if (!exfat_read_sec(lba, g_sectors_per_cluster, cl_buf)) {
+    if (!exfat_read_sec(exfat_cluster_to_lba(cur_cl), g_sectors_per_cluster, cl_buf)) {
+        kfree(cl_buf);
+        return 0;
+    }
+
+    uint8_t entry[32];
+    while (count < max_items && exfat_dir_next_entry(&cur_cl, &idx_in_cl, entries_per_cl, cl_buf, entry)) {
+        uint8_t entry_type = entry[0];
+
+        if (entry_type == EXFAT_ENTRY_EOD) {
             break;
         }
 
-        uint32_t entries_per_cl = g_cluster_size / 32;
-        uint32_t i = 0;
+        // Entry 0x85 (File/Directory) con supporto attraversamento confini di cluster
+        if (entry_type == EXFAT_ENTRY_FILE) {
+            uint8_t secondary_count = entry[1];
+            uint16_t attr = *(uint16_t*)(entry + 4);
+            uint32_t mtime = *(uint32_t*)(entry + 12);
 
-        while (i < entries_per_cl && count < max_items) {
-            uint8_t* entry = cl_buf + i * 32;
-            uint8_t entry_type = entry[0];
+            if (secondary_count >= 1) {
+                uint8_t stream[32];
+                if (!exfat_dir_next_entry(&cur_cl, &idx_in_cl, entries_per_cl, cl_buf, stream)) break;
 
-            if (entry_type == EXFAT_ENTRY_EOD) {
-                // Fine cartella
-                kfree(cl_buf);
-                return count;
-            }
+                if (stream[0] == EXFAT_ENTRY_STREAM) {
+                    uint8_t stream_flags = stream[1];
+                    uint32_t first_cl = *(uint32_t*)(stream + 20);
+                    uint64_t file_size = *(uint64_t*)(stream + 24);
 
-            // Entry 0x85 (File/Directory)
-            if (entry_type == EXFAT_ENTRY_FILE) {
-                uint8_t secondary_count = entry[1];
-                uint16_t attr = *(uint16_t*)(entry + 4);
+                    uint16_t u16_buf[255];
+                    int u16_pos = 0;
 
-                // Deve esserci almeno la Stream Extension entry
-                if (secondary_count >= 1 && (i + 1 < entries_per_cl)) {
-                    uint8_t* stream = cl_buf + (i + 1) * 32;
-                    if (stream[0] == EXFAT_ENTRY_STREAM) {
-                        uint8_t stream_flags = stream[1];
-                        uint32_t first_cl = *(uint32_t*)(stream + 20);
-                        uint64_t file_size = *(uint64_t*)(stream + 24);
-
-                        // Leggi il nome UTF-16 dalle entry 0xC1 successive e converti in UTF-8
-                        uint16_t u16_buf[255];
-                        int u16_pos = 0;
-                        uint32_t mtime = *(uint32_t*)(entry + 12);
-
-                        for (uint8_t s = 2; s <= secondary_count && (i + s < entries_per_cl); s++) {
-                            uint8_t* name_entry = cl_buf + (i + s) * 32;
-                            if (name_entry[0] == EXFAT_ENTRY_NAME) {
-                                for (int c = 0; c < 15 && u16_pos < 255; c++) {
-                                    uint16_t ch = *(uint16_t*)(name_entry + 2 + c * 2);
-                                    if (ch == 0) break;
-                                    u16_buf[u16_pos++] = ch;
-                                }
+                    for (uint8_t s = 2; s <= secondary_count; s++) {
+                        uint8_t name_entry[32];
+                        if (!exfat_dir_next_entry(&cur_cl, &idx_in_cl, entries_per_cl, cl_buf, name_entry)) break;
+                        if (name_entry[0] == EXFAT_ENTRY_NAME) {
+                            for (int c = 0; c < 15 && u16_pos < 255; c++) {
+                                uint16_t ch = *(uint16_t*)(name_entry + 2 + c * 2);
+                                if (ch == 0) break;
+                                u16_buf[u16_pos++] = ch;
                             }
                         }
+                    }
 
-                        char name[128];
-                        int name_pos = exfat_utf16_to_utf8(u16_buf, u16_pos, name, sizeof(name));
+                    char name[128];
+                    int name_pos = exfat_utf16_to_utf8(u16_buf, u16_pos, name, sizeof(name));
 
-                        // Salva nel risultato se abbiamo un nome valido
-                        if (name_pos > 0) {
-                            strncpy(out_items[count].name, name, sizeof(out_items[count].name) - 1);
-                            out_items[count].size = file_size;
-                            out_items[count].first_cluster = first_cl;
-                            out_items[count].attributes = attr;
-                            out_items[count].mtime = mtime;
-                            out_items[count].is_directory = (attr & EXFAT_ATTR_DIRECTORY) != 0;
-                            out_items[count].no_fat_chain = (stream_flags & EXFAT_FLAG_NO_FAT_CHAIN) != 0;
-                            count++;
-                        }
+                    if (name_pos > 0) {
+                        strncpy(out_items[count].name, name, sizeof(out_items[count].name) - 1);
+                        out_items[count].name[sizeof(out_items[count].name) - 1] = '\0';
+                        out_items[count].size = file_size;
+                        out_items[count].first_cluster = first_cl;
+                        out_items[count].attributes = attr;
+                        out_items[count].mtime = mtime;
+                        out_items[count].is_directory = (attr & EXFAT_ATTR_DIRECTORY) != 0;
+                        out_items[count].no_fat_chain = (stream_flags & EXFAT_FLAG_NO_FAT_CHAIN) != 0;
+                        count++;
+                    }
+                } else {
+                    for (uint8_t s = 2; s <= secondary_count; s++) {
+                        uint8_t skip[32];
+                        if (!exfat_dir_next_entry(&cur_cl, &idx_in_cl, entries_per_cl, cl_buf, skip)) break;
                     }
                 }
-                i += 1 + secondary_count;
-            } else {
-                i++;
             }
         }
-
-        // Passa al prossimo cluster della directory (le directory possono usare FAT)
-        cur_cl = exfat_get_next_cluster(cur_cl, false);
     }
 
     kfree(cl_buf);
@@ -524,11 +536,11 @@ int32_t exfat_list_dir(uint32_t dir_cluster, exfat_item_info_t* out_items, int32
 bool exfat_find_in_dir(uint32_t dir_cluster, const char* name, exfat_item_info_t* out_info) {
     if (!name || !*name) return false;
 
-    // Allocazione heap dinamica per proteggere lo stack kernel Ring 0
-    exfat_item_info_t* items = (exfat_item_info_t*)kmalloc(sizeof(exfat_item_info_t) * 64);
+    // Allocazione heap dinamica per proteggere lo stack kernel Ring 0 (supporto fino a 256 file per directory exFAT)
+    exfat_item_info_t* items = (exfat_item_info_t*)kmalloc(sizeof(exfat_item_info_t) * 256);
     if (!items) return false;
 
-    int32_t found = exfat_list_dir(dir_cluster, items, 64);
+    int32_t found = exfat_list_dir(dir_cluster, items, 256);
     bool res = false;
 
     for (int32_t i = 0; i < found; i++) {

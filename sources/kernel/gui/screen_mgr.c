@@ -670,6 +670,7 @@ void screen_mgr_init(void) {
   g_kernel_ext_api.app_pkgsvc_launch = app_pkgsvc_launch;
   g_kernel_ext_api.app_ports_props_launch = app_ports_props_launch;
   g_kernel_ext_api.app_bench_props_launch = app_bench_props_launch;
+  g_kernel_ext_api.app_imgview_props_launch = app_imgview_props_launch;
   g_kernel_ext_api.wm_set_start_menu_mode = wm_set_start_menu_mode;
   g_kernel_ext_api.wm_get_start_menu_mode = wm_get_start_menu_mode;
   g_kernel_api.ext_api = &g_kernel_ext_api;
