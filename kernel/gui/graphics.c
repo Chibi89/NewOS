@@ -1109,16 +1109,17 @@ void gfx_draw_drop_shadow(int32_t x, int32_t y, int32_t w, int32_t h,
                           int32_t spread) {
   const theme_info_t *th = wm_get_current_theme_props();
   int32_t r = (th && th->corner_radius > 0) ? th->corner_radius : 8;
-  // 3 layer progressivamente piu' leggeri con angoli arrotondati anti-artefatto
+  // 3 layer leggeri e morbidi con angoli arrotondati anti-artefatto
+  int32_t eff_spread = (spread > 6) ? 6 : spread;
   static const struct {
     int32_t off;
     uint8_t a;
-  } layers[] = {{3, 70}, {5, 40}, {8, 18}};
+  } layers[] = {{2, 26}, {4, 15}, {6, 7}};
   for (int li = 0; li < 3; li++) {
-    int32_t sx = x + layers[li].off;
-    int32_t sy = y + layers[li].off;
-    int32_t sw_box = w + spread;
-    int32_t sh_box = h + spread;
+    int32_t sx = x + layers[li].off - eff_spread / 3;
+    int32_t sy = y + layers[li].off - eff_spread / 3;
+    int32_t sw_box = w + eff_spread;
+    int32_t sh_box = h + eff_spread;
     int32_t x1 = sx < 0 ? 0 : sx;
     int32_t y1 = sy < 0 ? 0 : sy;
     int32_t x2 = (sx + sw_box > (int32_t)scr_width) ? (int32_t)scr_width
