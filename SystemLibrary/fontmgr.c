@@ -216,6 +216,28 @@ static void fm_dbg(const char *s) {
     }
 }
 
+static bool fontmgr_try_load_ttf_path(const kernel_api_t *api, const char *path) {
+    if (!api || !api->vfs_read_entire_file || !path || !path[0]) return false;
+    uint32_t sz = 0;
+    uint8_t *buf = api->vfs_read_entire_file(path, &sz);
+    if (buf && sz > 1024) {
+        stbtt_fontinfo new_info;
+        if (stbtt_InitFont(&new_info, buf, stbtt_GetFontOffsetForIndex(buf, 0))) {
+            if (g_ttf_data && api->kfree) api->kfree(g_ttf_data);
+            g_ttf_data = buf;
+            g_ttf_info = new_info;
+            g_ttf_ready = true;
+            if (!g_ttf_cache) {
+                g_ttf_cache = (ttf_cache_slot_t *)api->kmalloc(sizeof(ttf_cache_slot_t) * TTF_CACHE_SLOTS);
+            }
+            if (g_ttf_cache) fm_memset(g_ttf_cache, 0, sizeof(ttf_cache_slot_t) * TTF_CACHE_SLOTS);
+            return true;
+        }
+    }
+    if (buf && api->kfree) api->kfree(buf);
+    return false;
+}
+
 static void fontmgr_load_ttf(const kernel_api_t *api) {
     if (g_ttf_tried || !api || !api->vfs_read_entire_file) return;
     g_ttf_tried = true;
@@ -226,21 +248,10 @@ static void fontmgr_load_ttf(const kernel_api_t *api) {
         "C:\\NewOS\\Fonts\\SANS.TTF"
     };
     for (int i = 0; i < 3; i++) {
-        uint32_t sz = 0;
-        uint8_t *buf = api->vfs_read_entire_file(paths[i], &sz);
-        if (buf && sz > 1024) {
-            fm_dbg("[FM] ttf_read_ok\n");
-            if (stbtt_InitFont(&g_ttf_info, buf, stbtt_GetFontOffsetForIndex(buf, 0))) {
-                fm_dbg("[FM] ttf_init_ok\n");
-                g_ttf_data = buf;
-                g_ttf_ready = true;
-                g_ttf_cache = (ttf_cache_slot_t *)api->kmalloc(sizeof(ttf_cache_slot_t) * TTF_CACHE_SLOTS);
-                if (g_ttf_cache) fm_memset(g_ttf_cache, 0, sizeof(ttf_cache_slot_t) * TTF_CACHE_SLOTS);
-                fm_dbg("[FM] ttf_ready\n");
-                return;
-            }
+        if (fontmgr_try_load_ttf_path(api, paths[i])) {
+            fm_dbg("[FM] ttf_ready\n");
+            return;
         }
-        if (buf && api->kfree) api->kfree(buf);
     }
 }
 
@@ -270,6 +281,11 @@ static int fontmgr_dispatch(const kernel_api_t *api, fontmgr_params_t *p) {
         fontmgr_load_ufnt(api);
         fontmgr_load_ttf(api);
         return 0;
+    }
+
+    if (p->cmd == FONTMGR_CMD_SET_TTF) {
+        g_ttf_tried = true;
+        return fontmgr_try_load_ttf_path(api, p->ttf_path) ? 0 : -1;
     }
 
     if (p->cmd == FONTMGR_CMD_GET_TTF_GLYPH) {

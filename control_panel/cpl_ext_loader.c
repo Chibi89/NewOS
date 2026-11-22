@@ -30,11 +30,14 @@ typedef struct {
     uint8_t*         cached_buf;
 } cpl_dll_slot_t;
 
-static cpl_dll_slot_t g_cpl_slots[4] = {
+static cpl_dll_slot_t g_cpl_slots[7] = {
     { "USERACCT.DLL", "USERACCT", "Account Utente e Profilo (USERACCT.CPL)",       470, 400, APP_USERACCT, NULL, NULL },
     { "TIMEDATE.DLL", "TIMEDATE", "Data, Ora e Lingua (TIMEDATE.CPL)",             470, 400, APP_TIMEDATE, NULL, NULL },
     { "NETCPL.DLL",   "NETCPL",   "Connessioni di Rete e Diagnostica (NCPA.CPL)",  480, 410, APP_NETCPL,   NULL, NULL },
-    { "KEYBCPL.DLL",  "KEYBCPL",  "Proprieta' Tastiera (KEYBOARD.CPL)",            460, 400, APP_KEYBCPL,  NULL, NULL }
+    { "KEYBCPL.DLL",  "KEYBCPL",  "Proprieta' Tastiera (KEYBOARD.CPL)",            460, 400, APP_KEYBCPL,  NULL, NULL },
+    { "FONTSCPL.DLL", "FONTSCPL", "Caratteri e Font TrueType (FONTS.CPL)",         540, 430, APP_FONTSCPL, NULL, NULL },
+    { "PKGSVC.DLL",   "PKGSVC",   "Installazione Software Terzi (PKGSVC.CPL)",     540, 440, APP_INSTALLER, NULL, NULL },
+    { "PORTS.DLL",    "PORTS",    "Porte (COM, LPT e Virtuali) (PORTS.CPL)",       560, 430, APP_DEVMGMT,  NULL, NULL }
 };
 
 static bool load_cpl_dll_slot(cpl_dll_slot_t* slot) {
@@ -58,10 +61,16 @@ static bool load_cpl_dll_slot(cpl_dll_slot_t* slot) {
         uint8_t* buf = (uint8_t*)vfs_read_entire_file(full_path, &sz);
         if (buf && sz >= sizeof(module_header_t)) {
             if (screen_mgr_verify_module(buf, sz, MODULE_TYPE_SYSTEM_LIBRARY, slot->module_tag)) {
-                const module_header_t* h = (const module_header_t*)buf;
-                slot->cached_entry = (cpl_dll_entry_fn)(buf + h->entry_offset);
-                slot->cached_buf = buf;
-                return true;
+                uint8_t* exec_buf = (uint8_t*)kmalloc(sz + 32768);
+                if (exec_buf) {
+                    memcpy(exec_buf, buf, sz);
+                    memset(exec_buf + sz, 0, 32768);
+                    kfree(buf);
+                    const module_header_t* h = (const module_header_t*)exec_buf;
+                    slot->cached_entry = (cpl_dll_entry_fn)(exec_buf + h->entry_offset);
+                    slot->cached_buf = exec_buf;
+                    return true;
+                }
             }
             kfree(buf);
         }
@@ -70,7 +79,7 @@ static bool load_cpl_dll_slot(cpl_dll_slot_t* slot) {
 }
 
 static void launch_cpl_slot(int idx) {
-    if (idx < 0 || idx >= 4) return;
+    if (idx < 0 || idx >= (int)(sizeof(g_cpl_slots) / sizeof(g_cpl_slots[0]))) return;
     cpl_dll_slot_t* slot = &g_cpl_slots[idx];
 
     if (!load_cpl_dll_slot(slot)) {
@@ -109,6 +118,18 @@ void app_net_props_launch(void) {
 
 void app_keyboard_props_launch(void) {
     launch_cpl_slot(3);
+}
+
+void app_fonts_props_launch(void) {
+    launch_cpl_slot(4);
+}
+
+void app_pkgsvc_launch(void) {
+    launch_cpl_slot(5);
+}
+
+void app_ports_props_launch(void) {
+    launch_cpl_slot(6);
 }
 
 typedef struct {

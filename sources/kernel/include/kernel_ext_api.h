@@ -208,6 +208,12 @@ typedef struct {
     void (*app_seccpl_launch)(void);
     const void *(*comctl_get_api)(void);
     bool (*keyboard_is_ctrl_pressed)(void);
+    bool (*fontmgr_set_ttf)(const char *path);
+    void (*app_fonts_props_launch)(void);
+    void (*app_pkgsvc_launch)(void);
+    void (*app_ports_props_launch)(void);
+    void (*wm_set_start_menu_mode)(int mode);
+    int  (*wm_get_start_menu_mode)(void);
 } kernel_ext_api_t;
 
 const kernel_ext_api_t *screen_mgr_get_ext_api(void);

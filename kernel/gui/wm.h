@@ -32,7 +32,8 @@ typedef enum {
     APP_TIMEDATE,
     APP_NETCPL,
     APP_KEYBCPL,
-    APP_COMDLG
+    APP_COMDLG,
+    APP_FONTSCPL
 } app_type_t;
 
 typedef struct window window_t;
@@ -103,6 +104,8 @@ void wm_toggle_maximize(int32_t id);
 void wm_set_background_type(int bg_type);
 int  wm_get_background_type(void);
 void wm_set_theme(int theme);
+void wm_set_start_menu_mode(int mode);
+int  wm_get_start_menu_mode(void);
 int  wm_get_theme(void);
 void wm_apply_theme_props(const theme_info_t* props);
 const theme_info_t* wm_get_current_theme_props(void);

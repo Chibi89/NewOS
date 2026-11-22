@@ -274,6 +274,12 @@
 #define uistyle_open_explorer(p) g_ext_api->uistyle_open_explorer(p)
 #define app_installer_launch()   g_ext_api->app_installer_launch()
 #define app_seccpl_launch()      g_ext_api->app_seccpl_launch()
+#define fontmgr_set_ttf(p)       g_ext_api->fontmgr_set_ttf(p)
+#define app_fonts_props_launch() g_ext_api->app_fonts_props_launch()
+#define app_pkgsvc_launch()      g_ext_api->app_pkgsvc_launch()
+#define app_ports_props_launch() g_ext_api->app_ports_props_launch()
+#define wm_set_start_menu_mode(m) g_ext_api->wm_set_start_menu_mode(m)
+#define wm_get_start_menu_mode()  g_ext_api->wm_get_start_menu_mode()
 
 void *memset(void *dst, int c, size_t n) { return dll_memset(dst, c, n); }
 void *memcpy(void *dst, const void *src, size_t n) { return dll_memcpy(dst, src, n); }

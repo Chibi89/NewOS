@@ -19,6 +19,7 @@
 #include <gui/uistyle_loader.h>
 #include <include/comdlg.h>
 #include <include/clipboard.h>
+#include <gui/startmenu.h>
 #include <mm/heap.h>
 #include <string.h>
 #include <user.h>
@@ -27,6 +28,15 @@
 static window_t *windows[MAX_WINDOWS];
 static int32_t active_window_id = -1;
 static bool start_menu_open = false;
+static int g_start_menu_mode = STARTMENU_MODE_MODERN;
+
+void wm_set_start_menu_mode(int mode) {
+  g_start_menu_mode = (mode == STARTMENU_MODE_CLASSIC) ? STARTMENU_MODE_CLASSIC : STARTMENU_MODE_MODERN;
+}
+
+int wm_get_start_menu_mode(void) {
+  return g_start_menu_mode;
+}
 
 // Sfondo del desktop corrente
 static int current_bg_type = BG_TEAL_2000;
@@ -45,6 +55,71 @@ static bool ctx_menu_open = false;
 static int32_t ctx_x = 0;
 static int32_t ctx_y = 0;
 static bool ctx_submenu_open = false;
+
+// Window Snap, Alt+Tab grafico, Mostra Desktop & Menu Contestuale Taskbar
+static int snap_zone = 0; // 0=none, 1=left, 2=right, 3=maximize
+static int alt_tab_overlay_ticks = 0;
+static bool tb_ctx_open = false;
+static int32_t tb_ctx_win_id = -1;
+static int32_t tb_ctx_x = 0;
+static int32_t tb_ctx_y = 0;
+static bool show_desktop_active = false;
+
+static void wm_snap_window(window_t *w, int zone, int32_t sw, int32_t ty) {
+  if (!w || zone <= 0)
+    return;
+  if (!w->is_maximized) {
+    w->saved_x = w->x;
+    w->saved_y = w->y;
+    w->saved_w = w->width;
+    w->saved_h = w->height;
+  }
+  if (zone == 1) {
+    w->x = 0;
+    w->y = 0;
+    w->width = sw / 2;
+    w->height = ty;
+    w->is_maximized = false;
+  } else if (zone == 2) {
+    w->x = sw / 2;
+    w->y = 0;
+    w->width = sw - (sw / 2);
+    w->height = ty;
+    w->is_maximized = false;
+  } else if (zone == 3) {
+    w->x = 0;
+    w->y = 0;
+    w->width = sw;
+    w->height = ty;
+    w->is_maximized = true;
+  }
+}
+
+static void wm_toggle_show_desktop(void) {
+  bool any_visible = false;
+  for (int i = 0; i < MAX_WINDOWS; i++) {
+    if (windows[i] && !windows[i]->is_minimized) {
+      any_visible = true;
+      break;
+    }
+  }
+  if (any_visible) {
+    for (int i = 0; i < MAX_WINDOWS; i++) {
+      if (windows[i])
+        windows[i]->is_minimized = true;
+    }
+    active_window_id = -1;
+    show_desktop_active = true;
+  } else if (show_desktop_active) {
+    for (int i = 0; i < MAX_WINDOWS; i++) {
+      if (windows[i]) {
+        windows[i]->is_minimized = false;
+        wm_focus_window(windows[i]->id);
+      }
+    }
+    show_desktop_active = false;
+  }
+}
 
 // Stato mouse precedente per rilevare transizioni di click
 static bool prev_mouse_left = false;
@@ -1364,15 +1439,37 @@ void wm_render(void) {
           (g_active_theme_props.surface_alpha < 200) ? ty + 5 : ty + 6;
       gfx_draw_string(btn_x + 6, t_y, short_title, t_col, 0, true);
 
+      // Tooltip anteprima titolo completo al passaggio del mouse sul pulsante Taskbar
+      mouse_state_t m_hov;
+      mouse_get_state(&m_hov);
+      if (!start_menu_open && !tb_ctx_open &&
+          m_hov.x >= btn_x && m_hov.x < btn_x + bw &&
+          m_hov.y >= ty && m_hov.y < (int32_t)sh) {
+        char tip[64];
+        if (windows[i]->is_minimized) {
+          mini_snprintf(tip, sizeof(tip), "%s [Minimizzata]", windows[i]->title);
+        } else {
+          mini_snprintf(tip, sizeof(tip), "%s", windows[i]->title);
+        }
+        int32_t tip_w = (int32_t)strlen(tip) * 8 + 16;
+        int32_t tip_x = btn_x;
+        if (tip_x + tip_w > (int32_t)sw - 4) tip_x = (int32_t)sw - tip_w - 4;
+        int32_t tip_y = ty - 24;
+        gfx_draw_drop_shadow(tip_x, tip_y, tip_w, 20, 4);
+        gfx_fill_rounded_alpha(tip_x, tip_y, tip_w, 20, 4, 0x1E293B, 235);
+        gfx_draw_rounded_rect(tip_x, tip_y, tip_w, 20, 4, 0x60A5FA);
+        gfx_draw_string(tip_x + 8, tip_y + 3, tip, 0xF8FAFC, 0, true);
+      }
+
       btn_x += bw + 4;
       if (btn_x + bw > (int32_t)sw - 100)
         break;
     }
   }
 
-  // System Tray con icona batteria/alimentazione e orologio CMOS in tempo reale
+  // System Tray con icona batteria/alimentazione, orologio e pulsante Mostra Desktop
   int32_t tray_w = 110;
-  int32_t tray_x = sw - tray_w - 4;
+  int32_t tray_x = sw - tray_w - 14;
   int32_t tray_y = ty + 3;
   if (current_theme == THEME_CLASSIC && !g_active_theme_props.modern_controls) {
     gfx_fill_rect(tray_x, tray_y, tray_w, 22, COLOR_BTNFACE);
@@ -1425,9 +1522,94 @@ void wm_render(void) {
   }
   gfx_draw_string(tray_x + 28, tray_y + 4, time_str, clk_col, 0, true);
 
+  // Pulsante Mostra Desktop all'estrema destra della Taskbar
+  if (current_theme == THEME_CLASSIC && !g_active_theme_props.modern_controls) {
+    gfx_fill_rect(sw - 10, tray_y, 8, 22, COLOR_BTNFACE);
+    gfx_draw_bevel_rect(sw - 10, tray_y, 8, 22, false);
+  } else {
+    gfx_fill_rounded_alpha(sw - 10, tray_y, 8, 22, 3, 0xFFFFFF, 85);
+    gfx_draw_rounded_rect(sw - 10, tray_y, 8, 22, 3, 0xC8D8EC);
+  }
+
+  // Anteprima Window Snap durante il trascinamento
+  if (snap_zone > 0) {
+    int32_t sx = (snap_zone == 2) ? (sw / 2) : 0;
+    int32_t sy = 0;
+    int32_t sw_z = (snap_zone == 3) ? sw : ((snap_zone == 2) ? (sw - sw / 2) : (sw / 2));
+    int32_t sh_z = ty;
+    gfx_fill_rounded_alpha(sx + 4, sy + 4, sw_z - 8, sh_z - 8, 8, 0x3A82F6, 70);
+    gfx_draw_rounded_rect(sx + 4, sy + 4, sw_z - 8, sh_z - 8, 8, 0x60A5FA);
+  }
+
   // 5. Menu Start (se aperto)
   if (start_menu_open) {
-    draw_start_menu(sw, sh);
+    if (g_start_menu_mode == STARTMENU_MODE_MODERN &&
+        !(current_theme == THEME_CLASSIC && !g_active_theme_props.modern_controls)) {
+      startmenu_draw(sw, sh);
+    } else {
+      draw_start_menu(sw, sh);
+    }
+  }
+
+  // Menu Contestuale pulsante Taskbar
+  if (tb_ctx_open) {
+    int32_t mw = 172, mh = 82;
+    gfx_draw_drop_shadow(tb_ctx_x, tb_ctx_y, mw, mh, 6);
+    gfx_fill_rounded_alpha(tb_ctx_x, tb_ctx_y, mw, mh, 6, 0xF8FAFC, 240);
+    gfx_draw_rounded_rect(tb_ctx_x, tb_ctx_y, mw, mh, 6, 0xB8C4D4);
+    window_t *tw = NULL;
+    for (int i = 0; i < MAX_WINDOWS; i++) {
+      if (windows[i] && windows[i]->id == tb_ctx_win_id) { tw = windows[i]; break; }
+    }
+    gfx_draw_string(tb_ctx_x + 10, tb_ctx_y + 6, (tw && tw->is_minimized) ? "Ripristina" : "Minimizza", 0x1E293B, 0, true);
+    gfx_draw_string(tb_ctx_x + 10, tb_ctx_y + 25, "Massimizza", 0x1E293B, 0, true);
+    gfx_draw_string(tb_ctx_x + 10, tb_ctx_y + 44, "Affianca a sinistra", 0x1E293B, 0, true);
+    gfx_draw_string(tb_ctx_x + 10, tb_ctx_y + 63, "Chiudi", 0xB91C1C, 0, true);
+  }
+
+  // Overlay Alt+Tab Grafico
+  if (alt_tab_overlay_ticks > 0) {
+    alt_tab_overlay_ticks--;
+    int wcount = 0;
+    for (int i = 0; i < MAX_WINDOWS; i++) {
+      if (windows[i]) wcount++;
+    }
+    if (wcount > 0) {
+      int32_t card_w = 132, card_h = 84;
+      int32_t ow = wcount * (card_w + 8) + 16;
+      if (ow > (int32_t)sw - 32) ow = (int32_t)sw - 32;
+      int32_t oh = card_h + 32;
+      int32_t ox = ((int32_t)sw - ow) / 2;
+      int32_t oy = ((int32_t)sh - oh) / 2;
+      gfx_draw_drop_shadow(ox, oy, ow, oh, 10);
+      gfx_fill_rounded_alpha(ox, oy, ow, oh, 12, 0x182234, 225);
+      gfx_draw_rounded_rect(ox, oy, ow, oh, 12, 0x60A5FA);
+      gfx_draw_string(ox + 12, oy + 8, "Finestre aperte (Alt+Tab)", 0xE2E8F0, 0, true);
+      int32_t cx_c = ox + 12;
+      for (int i = 0; i < MAX_WINDOWS; i++) {
+        if (!windows[i]) continue;
+        if (cx_c + card_w > ox + ow - 8) break;
+        bool is_cur = (windows[i]->id == active_window_id);
+        gfx_fill_rounded_alpha(cx_c, oy + 26, card_w, card_h - 8, 8,
+                               is_cur ? 0x2563EB : 0x273549, is_cur ? 210 : 170);
+        gfx_draw_rounded_rect(cx_c, oy + 26, card_w, card_h - 8, 8,
+                              is_cur ? 0x93C5FD : 0x475569);
+        icon_id_t w_ico = ICON_DESKTOP;
+        if (windows[i]->app_type == APP_EXPLORER) w_ico = ICON_THIS_PC;
+        else if (windows[i]->app_type == APP_CMD) w_ico = ICON_RUN;
+        else if (windows[i]->app_type == APP_NOTEPAD) w_ico = ICON_DOCUMENT;
+        else if (windows[i]->app_type == APP_CALC) w_ico = ICON_MAINTENANCE;
+        else if (windows[i]->app_type == APP_PLAYER) w_ico = ICON_PLAY;
+        else if (windows[i]->app_type == APP_BROWSER) w_ico = ICON_NET;
+        else if (windows[i]->app_type == APP_TASKMGR) w_ico = ICON_CONTROL_PANEL;
+        gfx_draw_icon_32(cx_c + card_w / 2 - 16, oy + 34, w_ico);
+        char tshort[16];
+        strncpy(tshort, windows[i]->title, 14);
+        tshort[14] = '\0';
+        gfx_draw_string(cx_c + 8, oy + 74, tshort, 0xFFFFFF, 0, true);
+        cx_c += card_w + 8;
+      }
+    }
   }
 
   // 5.5 Overlay UI Style modulare (es. Copenhagen Glass UI da NewOS\Resources\UIStyle)
@@ -1570,6 +1752,14 @@ void wm_update(mouse_state_t *mouse, char key) {
         if (w->y > ty - 20)
           w->y = ty - 20;
         w->is_maximized = false;
+        if (mouse->x <= 8)
+          snap_zone = 1;
+        else if (mouse->x >= (int32_t)sw - 9)
+          snap_zone = 2;
+        else if (mouse->y <= 6)
+          snap_zone = 3;
+        else
+          snap_zone = 0;
       }
     }
 
@@ -1607,11 +1797,15 @@ void wm_update(mouse_state_t *mouse, char key) {
   if (mouse_released) {
     for (int i = 0; i < MAX_WINDOWS; i++) {
       if (windows[i]) {
+        if (windows[i]->is_dragging && snap_zone > 0) {
+          wm_snap_window(windows[i], snap_zone, (int32_t)sw, ty);
+        }
         windows[i]->is_dragging = false;
         windows[i]->is_resizing = false;
         windows[i]->resize_edge = RESIZE_NONE;
       }
     }
+    snap_zone = 0;
 
     // Rilascio del trascinamento icona o esecuzione al clic
     if (dragging_icon_idx >= 0 && dragging_icon_idx < num_desktop_icons) {
@@ -1690,8 +1884,28 @@ void wm_update(mouse_state_t *mouse, char key) {
       prev_mouse_right = mouse->right_button;
       return;
     } else if (!on_win && mouse->y >= ty) {
-      // Clic destro sulla barra delle applicazioni -> Avvia Gestione attivita'
-      // (Task Manager)
+      // Controlla se il clic destro e' su un pulsante finestra nella Taskbar
+      int32_t btn_x = 68;
+      for (int i = 0; i < MAX_WINDOWS; i++) {
+        if (windows[i]) {
+          int32_t bw = 130;
+          if (mouse->x >= btn_x && mouse->x <= btn_x + bw) {
+            tb_ctx_open = true;
+            tb_ctx_win_id = windows[i]->id;
+            tb_ctx_x = btn_x;
+            tb_ctx_y = ty - 84;
+            if (tb_ctx_x + 152 > (int32_t)sw)
+              tb_ctx_x = (int32_t)sw - 156;
+            ctx_menu_open = false;
+            start_menu_open = false;
+            prev_mouse_left = mouse->left_button;
+            prev_mouse_right = mouse->right_button;
+            return;
+          }
+          btn_x += bw + 4;
+        }
+      }
+      // Altrimenti apre Gestione attivita' (Task Manager)
       app_taskmgr_launch();
       prev_mouse_left = mouse->left_button;
       prev_mouse_right = mouse->right_button;
@@ -1722,6 +1936,39 @@ void wm_update(mouse_state_t *mouse, char key) {
   }
 
   if (mouse_clicked) {
+    // Interazione con Menu Contestuale Taskbar se aperto
+    if (tb_ctx_open) {
+      int32_t mw = 172, mh = 82;
+      if (mouse->x >= tb_ctx_x && mouse->x <= tb_ctx_x + mw &&
+          mouse->y >= tb_ctx_y && mouse->y <= tb_ctx_y + mh) {
+        int32_t ry = mouse->y - tb_ctx_y;
+        window_t *tw = NULL;
+        for (int i = 0; i < MAX_WINDOWS; i++) {
+          if (windows[i] && windows[i]->id == tb_ctx_win_id) { tw = windows[i]; break; }
+        }
+        if (tw) {
+          if (ry < 22) {
+            wm_toggle_minimize(tw->id);
+          } else if (ry < 41) {
+            wm_snap_window(tw, 3, (int32_t)sw, ty);
+            tw->is_minimized = false;
+            wm_focus_window(tw->id);
+          } else if (ry < 60) {
+            wm_snap_window(tw, 1, (int32_t)sw, ty);
+            tw->is_minimized = false;
+            wm_focus_window(tw->id);
+          } else {
+            wm_destroy_window(tw->id);
+          }
+        }
+        tb_ctx_open = false;
+        prev_mouse_left = mouse->left_button;
+        prev_mouse_right = mouse->right_button;
+        return;
+      }
+      tb_ctx_open = false;
+    }
+
     // Interazione con Menu Contestuale se aperto
     if (ctx_menu_open) {
       int32_t sm_x = ctx_x + 156;
@@ -1814,6 +2061,43 @@ void wm_update(mouse_state_t *mouse, char key) {
 
     // Clic dentro il menu Start se aperto
     if (start_menu_open) {
+      if (g_start_menu_mode == STARTMENU_MODE_MODERN &&
+          !(current_theme == THEME_CLASSIC && !g_active_theme_props.modern_controls)) {
+        int sm_res = startmenu_handle_mouse(sw, sh, mouse->x, mouse->y, true);
+        if (sm_res == 3) {
+          start_menu_open = false;
+          logoutscreen_result_t act = screen_mgr_run_logoutscreen();
+          if (act == LOGOUT_ACTION_SHUTDOWN) power_shutdown();
+          else if (act == LOGOUT_ACTION_REBOOT) power_reboot();
+          else if (act == LOGOUT_ACTION_SUSPEND) power_enter_screen_standby();
+          else if (act == LOGOUT_ACTION_DISCONNECT) {
+            for (int wi = 0; wi < MAX_WINDOWS; wi++) {
+              if (windows[wi]) wm_destroy_window(windows[wi]->id);
+            }
+            loginscreen_result_t lres = screen_mgr_run_loginscreen();
+            if (lres == LOGIN_SHUTDOWN) power_shutdown();
+            else if (lres == LOGIN_REBOOT) power_reboot();
+            registry_logon_load_readonly_preferences();
+          }
+          gfx_draw_background(current_bg_type);
+          wm_render();
+          gfx_flip();
+          prev_mouse_left = mouse->left_button;
+          prev_mouse_right = mouse->right_button;
+          return;
+        } else if (sm_res == 2) {
+          start_menu_open = false;
+          prev_mouse_left = mouse->left_button;
+          prev_mouse_right = mouse->right_button;
+          return;
+        } else if (sm_res == 1) {
+          prev_mouse_left = mouse->left_button;
+          prev_mouse_right = mouse->right_button;
+          return;
+        } else {
+          start_menu_open = false;
+        }
+      } else {
       int32_t mw = 200, mh = 336, mx = 2, my = sh - 28 - mh;
       if (mouse->x >= mx && mouse->x <= mx + mw && mouse->y >= my &&
           mouse->y <= my + mh) {
@@ -1878,11 +2162,20 @@ void wm_update(mouse_state_t *mouse, char key) {
       } else {
         start_menu_open = false;
       }
+      }
+    }
+
+    // Clic sul pulsante Mostra Desktop (estrema destra della Taskbar)
+    if (mouse->x >= (int32_t)sw - 11 && mouse->x <= (int32_t)sw && mouse->y >= ty) {
+      wm_toggle_show_desktop();
+      prev_mouse_left = mouse->left_button;
+      prev_mouse_right = mouse->right_button;
+      return;
     }
 
     // Clic sulla System Tray (icona alimentazione o orologio)
     int32_t tray_w = 110;
-    int32_t tray_x = sw - tray_w - 4;
+    int32_t tray_x = sw - tray_w - 14;
     if (mouse->x >= tray_x && mouse->x <= (int32_t)sw && mouse->y >= ty) {
       app_power_props_launch();
       prev_mouse_left = mouse->left_button;
@@ -2066,6 +2359,45 @@ void wm_update(mouse_state_t *mouse, char key) {
         wm_focus_window(windows[idx]->id);
         break;
       }
+    }
+    alt_tab_overlay_ticks = 90;
+    prev_mouse_left = mouse->left_button;
+    prev_mouse_right = mouse->right_button;
+    return;
+  } else if (key == KEY_TASKMGR) {
+    app_taskmgr_launch();
+    prev_mouse_left = mouse->left_button;
+    prev_mouse_right = mouse->right_button;
+    return;
+  } else if (key == KEY_WIN_E) {
+    launcher_open("thispc", NULL);
+    prev_mouse_left = mouse->left_button;
+    prev_mouse_right = mouse->right_button;
+    return;
+  } else if (key == KEY_WIN_R) {
+    launcher_open("cmd", NULL);
+    prev_mouse_left = mouse->left_button;
+    prev_mouse_right = mouse->right_button;
+    return;
+  } else if (key == KEY_WIN_D) {
+    wm_toggle_show_desktop();
+    prev_mouse_left = mouse->left_button;
+    prev_mouse_right = mouse->right_button;
+    return;
+  } else if (key == KEY_WIN_L) {
+    start_menu_open = false;
+    screen_mgr_run_loginscreen();
+    prev_mouse_left = mouse->left_button;
+    prev_mouse_right = mouse->right_button;
+    return;
+  }
+
+  // Inoltro tasti alla barra di ricerca del Menu Start Moderno se aperto
+  if (key != 0 && start_menu_open && g_start_menu_mode == STARTMENU_MODE_MODERN) {
+    if (key == 27) {
+      start_menu_open = false;
+    } else {
+      startmenu_handle_key(key);
     }
     prev_mouse_left = mouse->left_button;
     prev_mouse_right = mouse->right_button;

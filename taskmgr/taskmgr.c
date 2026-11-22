@@ -6,6 +6,7 @@
 #include <gui/graphics.h>
 #include <gui/icons.h>
 #include <mm/heap.h>
+#include <fs/vfs.h>
 #include <string.h>
 
 #define TASKMGR_WIDTH   480
@@ -55,11 +56,11 @@ static void taskmgr_draw(window_t* win) {
 
     // 1. Barra delle Schede / Tab (Stile Win2000)
     int32_t tab_y = cy + 6;
-    const char* tab_names[3] = { "Processi", "Prestazioni", "SMP / Core" };
-    int32_t tab_xs[3] = { cx + 8, cx + 96, cx + 196 };
-    int32_t tab_ws[3] = { 84, 94, 94 };
+    const char* tab_names[4] = { "Processi", "Prestazioni", "SMP / Core", "Moduli DLL" };
+    int32_t tab_xs[4] = { cx + 8, cx + 92, cx + 190, cx + 286 };
+    int32_t tab_ws[4] = { 80, 94, 92, 96 };
 
-    for (int t = 0; t < 3; t++) {
+    for (int t = 0; t < 4; t++) {
         bool is_cur = (state->active_tab == t);
         uint32_t tcol = is_cur ? 0xFFFFFF : COLOR_BTNFACE;
         int32_t th = is_cur ? 24 : 20;
@@ -67,7 +68,7 @@ static void taskmgr_draw(window_t* win) {
 
         gfx_fill_rect(tab_xs[t], ty_pos, tab_ws[t], th, tcol);
         gfx_draw_bevel_rect(tab_xs[t], ty_pos, tab_ws[t], th, false);
-        gfx_draw_string(tab_xs[t] + 12, ty_pos + (is_cur ? 5 : 3), tab_names[t], 0x000000, 0, true);
+        gfx_draw_string(tab_xs[t] + 8, ty_pos + (is_cur ? 5 : 3), tab_names[t], 0x000000, 0, true);
     }
 
     // Cornice del contenuto della scheda attiva
@@ -269,22 +270,88 @@ static void taskmgr_draw(window_t* win) {
         gfx_draw_string(box_x + 10, box_y + 185, "Scheduler: Preemptive Round-Robin con bilanciamento quanti", 0x333333, 0, true);
         gfx_draw_string(box_x + 10, box_y + 203, "Isolamento Memoria: Segmenti Ring 0 (0x18/0x20) e Ring 3 (0x33/0x2B)", 0x333333, 0, true);
     }
+    // -------------------------------------------------------------
+    // TAB 3: MODULI DLL OUT-OF-KERNEL (SystemLibrary)
+    // -------------------------------------------------------------
+    else if (state->active_tab == 3) {
+        int32_t tbl_x = box_x + 6;
+        int32_t tbl_y = box_y + 6;
+        int32_t tbl_w = box_w - 12;
+        int32_t tbl_h = box_h - 32;
+
+        gfx_fill_rect(tbl_x, tbl_y, tbl_w, 20, 0xD4D0C8);
+        gfx_draw_bevel_rect(tbl_x, tbl_y, tbl_w, 20, false);
+        gfx_draw_string(tbl_x + 6,   tbl_y + 3, "Modulo DLL", 0x000000, 0, true);
+        gfx_draw_string(tbl_x + 165, tbl_y + 3, "Dim. (KB)", 0x000000, 0, true);
+        gfx_draw_string(tbl_x + 255, tbl_y + 3, "Stato / Architettura", 0x000000, 0, true);
+
+        int32_t list_y = tbl_y + 22;
+        int32_t list_h = tbl_h - 22;
+        gfx_fill_rect(tbl_x, list_y, tbl_w, list_h, 0xFFFFFF);
+        gfx_draw_bevel_rect(tbl_x, list_y, tbl_w, list_h, true);
+
+        int max_rows = list_h / 17;
+        int shown = 0;
+        int total_dlls = 0;
+        uint32_t total_bytes = 0;
+
+        vfs_dirent_t* ents = (vfs_dirent_t*)kmalloc(sizeof(vfs_dirent_t) * 64);
+        if (ents) {
+            int cnt = vfs_readdir("C:\\NewOS\\SystemLibrary", ents, 64);
+            for (int i = 0; i < cnt; i++) {
+                if (ents[i].is_directory) continue;
+                int len = (int)strlen(ents[i].name);
+                if (len <= 4) continue;
+                char c0 = ents[i].name[len - 4], c1 = ents[i].name[len - 3];
+                char c2 = ents[i].name[len - 2], c3 = ents[i].name[len - 1];
+                bool is_dll = (c0 == '.' && (c1 == 'd' || c1 == 'D') &&
+                               (c2 == 'l' || c2 == 'L') && (c3 == 'l' || c3 == 'L'));
+                if (!is_dll) continue;
+                total_dlls++;
+                total_bytes += (uint32_t)ents[i].size;
+                if (shown < max_rows) {
+                    int32_t ry = list_y + 3 + shown * 17;
+                    char kb_buf[24];
+                    uint32_t kb = ((uint32_t)ents[i].size + 1023) / 1024;
+                    mini_snprintf(kb_buf, sizeof(kb_buf), "%u KB", kb);
+                    gfx_draw_string(tbl_x + 6, ry, ents[i].name, 0x0A246A, 0, true);
+                    gfx_draw_string(tbl_x + 165, ry, kb_buf, 0x333333, 0, true);
+                    gfx_draw_string(tbl_x + 255, ry, "Firmato (Out-of-Kernel)", 0x007700, 0, true);
+                    shown++;
+                }
+            }
+            kfree(ents);
+        }
+
+        char sum[80];
+        mini_snprintf(sum, sizeof(sum), "Moduli DLL in C:\\NewOS\\SystemLibrary: %d (%u KB totali)",
+                      total_dlls, (total_bytes + 1023) / 1024);
+        gfx_draw_string(box_x + 8, box_y + box_h - 20, sum, 0x1E293B, 0, true);
+    }
 }
 
 static void taskmgr_mouse(window_t* win, int32_t local_x, int32_t local_y, bool clicked) {
     taskmgr_state_t* state = (taskmgr_state_t*)win->app_data;
     if (!state || !clicked) return;
 
+    // wm.c passa local_x = mouse->x - win->x e local_y = mouse->y - win->y
+    // Il corpo della finestra inizia a cx = +4, cy = +24
+    int32_t rel_x = local_x - 4;
+    int32_t rel_y = local_y - 24;
+
     // 1. Cambio scheda Tab
-    if (local_y >= 6 && local_y <= 30) {
-        if (local_x >= 8 && local_x <= 92) {
+    if (rel_y >= 6 && rel_y <= 30) {
+        if (rel_x >= 8 && rel_x <= 88) {
             state->active_tab = 0;
             return;
-        } else if (local_x >= 96 && local_x <= 190) {
+        } else if (rel_x >= 92 && rel_x <= 186) {
             state->active_tab = 1;
             return;
-        } else if (local_x >= 196 && local_x <= 290) {
+        } else if (rel_x >= 190 && rel_x <= 282) {
             state->active_tab = 2;
+            return;
+        } else if (rel_x >= 286 && rel_x <= 382) {
+            state->active_tab = 3;
             return;
         }
     }
@@ -298,9 +365,9 @@ static void taskmgr_mouse(window_t* win, int32_t local_x, int32_t local_y, bool 
 
         // Selezione riga processo
         int32_t list_y = box_y + 28;
-        if (local_x >= box_x + 6 && local_x <= box_x + box_w - 6 &&
-            local_y >= list_y && local_y < list_y + 200) {
-            int clicked_idx = (local_y - list_y) / 18;
+        if (rel_x >= box_x + 6 && rel_x <= box_x + box_w - 6 &&
+            rel_y >= list_y && rel_y < list_y + 200) {
+            int clicked_idx = (rel_y - list_y) / 18;
             int cur_idx = 0;
             for (int i = 0; i < MAX_TASKS; i++) {
                 const task_t* t = sched_get_task(i);
@@ -318,8 +385,8 @@ static void taskmgr_mouse(window_t* win, int32_t local_x, int32_t local_y, bool 
         int32_t btn_x = box_x + box_w - btn_w - 8;
         int32_t btn_y = box_y + box_h - 30;
 
-        if (local_x >= btn_x && local_x <= btn_x + btn_w &&
-            local_y >= btn_y && local_y <= btn_y + btn_h) {
+        if (rel_x >= btn_x && rel_x <= btn_x + btn_w &&
+            rel_y >= btn_y && rel_y <= btn_y + btn_h) {
             const task_t* t = sched_get_task(state->selected_task_idx);
             if (t && t->pid != 0) {
                 task_kill(t->pid);

@@ -202,6 +202,83 @@ static void explorer_add_item(explorer_state_t *state, const char *name,
   }
 }
 
+static void explorer_format_display_name(const explorer_state_t *state,
+                                         const explorer_item_t *item,
+                                         char *out, size_t max_len) {
+  if (!out || max_len < 2 || !item)
+    return;
+  strncpy(out, item->name, max_len - 1);
+  out[max_len - 1] = '\0';
+  if (!state->show_extensions && !item->is_folder && !item->is_drive) {
+    char *dot = strrchr(out, '.');
+    if (dot && dot != out) {
+      *dot = '\0';
+    }
+  }
+}
+
+static bool explorer_is_hidden_item(const explorer_item_t *item) {
+  if (!item || item->is_drive)
+    return false;
+  if (item->name[0] == '.')
+    return true;
+  if (strcasecmp(item->name, "Recycle.Bin") == 0 ||
+      strcasecmp(item->name, "BootSetup") == 0 ||
+      strcasecmp(item->name, "EFI") == 0 ||
+      strcasecmp(item->name, "NewOS") == 0 ||
+      strcasecmp(item->name, "REGISTRY.DAT") == 0) {
+    return true;
+  }
+  return false;
+}
+
+static void explorer_update_selection_stats(explorer_state_t *state) {
+  state->selected_count = 0;
+  state->selected_bytes = 0;
+  for (int i = 0; i < state->num_items; i++) {
+    if (state->item_selected[i]) {
+      state->selected_count++;
+      if (!state->items[i].is_folder && !state->items[i].is_drive)
+        state->selected_bytes += state->items[i].size_bytes;
+    }
+  }
+  if (state->selected_count == 0 && state->selected_item >= 0 &&
+      state->selected_item < state->num_items) {
+    state->item_selected[state->selected_item] = true;
+    state->selected_count = 1;
+    if (!state->items[state->selected_item].is_folder &&
+        !state->items[state->selected_item].is_drive)
+      state->selected_bytes = state->items[state->selected_item].size_bytes;
+  }
+}
+
+static void explorer_select_single(explorer_state_t *state, int idx) {
+  for (int i = 0; i < MAX_EXPLORER_ITEMS; i++)
+    state->item_selected[i] = false;
+  state->selected_item = idx;
+  if (idx >= 0 && idx < state->num_items)
+    state->item_selected[idx] = true;
+  explorer_update_selection_stats(state);
+}
+
+static void explorer_toggle_selection(explorer_state_t *state, int idx) {
+  if (idx < 0 || idx >= state->num_items)
+    return;
+  state->item_selected[idx] = !state->item_selected[idx];
+  if (state->item_selected[idx]) {
+    state->selected_item = idx;
+  } else if (state->selected_item == idx) {
+    state->selected_item = -1;
+    for (int i = 0; i < state->num_items; i++) {
+      if (state->item_selected[i]) {
+        state->selected_item = i;
+        break;
+      }
+    }
+  }
+  explorer_update_selection_stats(state);
+}
+
 static void explorer_sort_items(explorer_state_t *state, int mode) {
   if (!state || state->num_items <= 1)
     return;
@@ -209,36 +286,36 @@ static void explorer_sort_items(explorer_state_t *state, int mode) {
   for (int i = 0; i < state->num_items - 1; i++) {
     for (int j = 0; j < state->num_items - 1 - i; j++) {
       bool swap = false;
-      if (mode == 1) { // Per Nome
-        if (state->items[j].is_folder != state->items[j + 1].is_folder) {
-          swap = !state->items[j].is_folder;
+      if (state->items[j].is_folder != state->items[j + 1].is_folder) {
+        swap = !state->items[j].is_folder;
+      } else if (mode == 1) { // Per Nome
+        int cmp = strcasecmp(state->items[j].name, state->items[j + 1].name);
+        swap = state->sort_desc ? (cmp < 0) : (cmp > 0);
+      } else if (mode == 2) { // Per Dimensione
+        if (state->items[j].size_bytes != state->items[j + 1].size_bytes) {
+          swap = state->sort_desc
+                     ? (state->items[j].size_bytes < state->items[j + 1].size_bytes)
+                     : (state->items[j].size_bytes > state->items[j + 1].size_bytes);
         } else {
-          swap =
-              (strcasecmp(state->items[j].name, state->items[j + 1].name) > 0);
-        }
-      } else if (mode == 2) { // Per Dimensione (decrescente)
-        if (state->items[j].is_folder != state->items[j + 1].is_folder) {
-          swap = !state->items[j].is_folder;
-        } else {
-          swap = (state->items[j].size_bytes < state->items[j + 1].size_bytes);
+          swap = (strcasecmp(state->items[j].name, state->items[j + 1].name) > 0);
         }
       } else if (mode == 3) { // Per Tipo (estensione)
-        if (state->items[j].is_folder != state->items[j + 1].is_folder) {
-          swap = !state->items[j].is_folder;
-        } else {
-          const char *ext1 = strrchr(state->items[j].name, '.');
-          const char *ext2 = strrchr(state->items[j + 1].name, '.');
-          if (!ext1)
-            ext1 = "";
-          if (!ext2)
-            ext2 = "";
-          int cmp = strcasecmp(ext1, ext2);
-          if (cmp != 0)
-            swap = (cmp > 0);
-          else
-            swap = (strcasecmp(state->items[j].name, state->items[j + 1].name) >
-                    0);
-        }
+        const char *ext1 = strrchr(state->items[j].name, '.');
+        const char *ext2 = strrchr(state->items[j + 1].name, '.');
+        if (!ext1) ext1 = "";
+        if (!ext2) ext2 = "";
+        int cmp = strcasecmp(ext1, ext2);
+        if (cmp != 0)
+          swap = state->sort_desc ? (cmp < 0) : (cmp > 0);
+        else
+          swap = (strcasecmp(state->items[j].name, state->items[j + 1].name) > 0);
+      } else if (mode == 4) { // Per Permessi
+        uint16_t p1 = state->items[j].permissions;
+        uint16_t p2 = state->items[j + 1].permissions;
+        if (p1 != p2)
+          swap = state->sort_desc ? (p1 < p2) : (p1 > p2);
+        else
+          swap = (strcasecmp(state->items[j].name, state->items[j + 1].name) > 0);
       }
       if (swap) {
         explorer_item_t tmp = state->items[j];
@@ -904,6 +981,30 @@ static void explorer_load_items(explorer_state_t *state) {
     settings_loader_init();
     break;
   }
+  }
+
+  if (!state->show_hidden && state->mode != EXPLORER_MODE_THIS_PC &&
+      state->mode != EXPLORER_MODE_CONTROL_PANEL) {
+    int out_idx = 0;
+    for (int i = 0; i < state->num_items; i++) {
+      if (!explorer_is_hidden_item(&state->items[i])) {
+        if (out_idx != i)
+          state->items[out_idx] = state->items[i];
+        out_idx++;
+      }
+    }
+    state->num_items = out_idx;
+  }
+
+  for (int i = 0; i < MAX_EXPLORER_ITEMS; i++)
+    state->item_selected[i] = false;
+  state->selected_count = 0;
+  state->selected_bytes = 0;
+  if (state->selected_item >= state->num_items)
+    state->selected_item = (state->num_items > 0) ? 0 : -1;
+  if (state->selected_item >= 0) {
+    state->item_selected[state->selected_item] = true;
+    explorer_update_selection_stats(state);
   }
 
   if (state->sort_mode > 0) {
@@ -1627,6 +1728,37 @@ static void explorer_draw(window_t *win) {
       char addr_disp[140];
       mini_snprintf(addr_disp, sizeof(addr_disp), "%s|", state->address_buf);
       gfx_draw_string(box_addr_x + 24, addr_y + 4, addr_disp, th_acc, 0, true);
+    } else if (state->current_path[1] == ':' && state->current_path[2] == '\\') {
+      // Breadcrumb cliccabile: C:\ > NewOS > SystemLibrary
+      int32_t bx = box_addr_x + 24;
+      char pcopy[128];
+      strncpy(pcopy, state->current_path, sizeof(pcopy) - 1);
+      pcopy[sizeof(pcopy) - 1] = '\0';
+      char drv[4] = { pcopy[0], ':', '\\', '\0' };
+      gfx_draw_string(bx, addr_y + 4, drv, th_acc, 0, true);
+      bx += 24;
+      const char *rest = pcopy + 3;
+      while (*rest && bx < box_addr_x + box_addr_w - 32) {
+        while (*rest == '\\' || *rest == '/') rest++;
+        if (!*rest) break;
+        const char *slash = rest;
+        while (*slash && *slash != '\\' && *slash != '/') slash++;
+        int seg_len = (int)(slash - rest);
+        if (seg_len > 0) {
+          gfx_draw_string(bx, addr_y + 4, ">", 0x707888, 0, true);
+          bx += 12;
+          char seg[32];
+          int copy_len = seg_len < 30 ? seg_len : 30;
+          memcpy(seg, rest, copy_len);
+          seg[copy_len] = '\0';
+          int32_t sw_seg = copy_len * 8;
+          if (bx + sw_seg < box_addr_x + box_addr_w - 4) {
+            gfx_draw_string(bx, addr_y + 4, seg, th_txt, 0, true);
+            bx += sw_seg + 4;
+          }
+        }
+        rest = slash;
+      }
     } else {
       gfx_draw_string(box_addr_x + 24, addr_y + 4, state->current_path, th_txt,
                       0, true);
@@ -2348,8 +2480,10 @@ static void explorer_draw(window_t *win) {
 
   // --- Area Principale dei Contenuti (Sfondo bianco con griglia icone e
   // scrollbar) ---
+  bool has_preview = state->show_preview_pane && (cw - side_w - 6 >= 340);
+  int32_t prev_w = has_preview ? 172 : 0;
   int32_t main_x = cx + side_w + 4;
-  int32_t main_w = cw - side_w - 6;
+  int32_t main_w = cw - side_w - 6 - (has_preview ? (prev_w + 4) : 0);
 
   int v_cols = 4;
   int32_t row_h = 72, top_pad = 8, dyn_col_w = 88;
@@ -2413,14 +2547,23 @@ static void explorer_draw(window_t *win) {
 
   int32_t col_w = dyn_col_w;
 
-  // Header colonne per la vista Dettagli
+  // Header colonne cliccabili per la vista Dettagli
   if (state->view_mode == EXPLORER_VIEW_DETAILS) {
     uint32_t hdr_bg = is_glass ? 0xE6EEF8 : COLOR_BTNFACE;
     gfx_fill_rect(main_x + 4, body_y + 4, content_w - 8, 20, hdr_bg);
-    gfx_draw_string(main_x + 12, body_y + 7, "Nome", th_txt, 0, true);
-    gfx_draw_string(main_x + 185, body_y + 7, "Tipo", 0x606875, 0, true);
-    gfx_draw_string(main_x + 295, body_y + 7, "Dimensione", 0x606875, 0, true);
-    gfx_draw_string(main_x + 378, body_y + 7, "Perm", 0x606875, 0, true);
+    const char *arr = state->sort_desc ? " v" : " ^";
+    char h1[16], h2[16], h3[18], h4[16];
+    mini_snprintf(h1, sizeof(h1), "Nome%s", state->sort_mode == 1 ? arr : "");
+    mini_snprintf(h2, sizeof(h2), "Tipo%s", state->sort_mode == 3 ? arr : "");
+    mini_snprintf(h3, sizeof(h3), "Dimensione%s", state->sort_mode == 2 ? arr : "");
+    mini_snprintf(h4, sizeof(h4), "Perm%s", state->sort_mode == 4 ? arr : "");
+    gfx_draw_string(main_x + 12, body_y + 7, h1, state->sort_mode == 1 ? th_acc : th_txt, 0, true);
+    if (content_w >= 240)
+      gfx_draw_string(main_x + 175, body_y + 7, h2, state->sort_mode == 3 ? th_acc : 0x606875, 0, true);
+    if (content_w >= 340)
+      gfx_draw_string(main_x + 265, body_y + 7, h3, state->sort_mode == 2 ? th_acc : 0x606875, 0, true);
+    if (content_w >= 400)
+      gfx_draw_string(main_x + 365, body_y + 7, h4, state->sort_mode == 4 ? th_acc : 0x606875, 0, true);
   }
 
   for (int r = 0; r < visible_rows; r++) {
@@ -2436,7 +2579,7 @@ static void explorer_draw(window_t *win) {
       if (iy + row_h > body_y + body_h)
         break;
 
-      bool is_sel = (i == state->selected_item);
+      bool is_sel = (i == state->selected_item) || state->item_selected[i];
       int32_t center_x = ix + col_w / 2;
 
       if (is_sel) {
@@ -2454,38 +2597,58 @@ static void explorer_draw(window_t *win) {
         }
       }
 
+      if (state->show_checkboxes) {
+        int32_t cbx = ix + 4;
+        int32_t cby = iy + (state->view_mode >= EXPLORER_VIEW_SMALL &&
+                            state->view_mode <= EXPLORER_VIEW_DETAILS
+                                ? (row_h - 12) / 2
+                                : 4);
+        gfx_fill_rect(cbx, cby, 12, 12, is_sel ? th_acc : 0xFFFFFF);
+        gfx_draw_rect(cbx, cby, 12, 12, is_sel ? th_acc : 0x708090);
+        if (is_sel)
+          gfx_draw_string(cbx + 2, cby - 1, "v", 0xFFFFFF, 0, true);
+      }
+
+      char disp_name[64];
+      explorer_format_display_name(state, &state->items[i], disp_name,
+                                   sizeof(disp_name));
+
       uint32_t item_fg = (!is_glass && is_sel && state->view_mode >= EXPLORER_VIEW_SMALL)
                              ? 0xFFFFFF
                              : (is_glass && is_sel && cur_th->selection_text ? cur_th->selection_text : th_txt);
       uint32_t sub_fg = (!is_glass && is_sel) ? 0xE0E0E0 : 0x606875;
+      int32_t cb_off = state->show_checkboxes ? 16 : 0;
 
       // Viste compatte / tabellari / riquadri / contenuto
       if (state->view_mode == EXPLORER_VIEW_SMALL || state->view_mode == EXPLORER_VIEW_LIST) {
-        gfx_draw_icon_16(ix + 6, iy + (row_h - 16) / 2, state->items[i].icon_id);
+        gfx_draw_icon_16(ix + 6 + cb_off, iy + (row_h - 16) / 2, state->items[i].icon_id);
         char sname[28];
-        strncpy(sname, state->items[i].name, 20);
-        sname[20] = '\0';
-        gfx_draw_string(ix + 26, iy + (row_h - 14) / 2, sname, item_fg, 0, true);
+        strncpy(sname, disp_name, 18);
+        sname[18] = '\0';
+        gfx_draw_string(ix + 26 + cb_off, iy + (row_h - 14) / 2, sname, item_fg, 0, true);
         continue;
       } else if (state->view_mode == EXPLORER_VIEW_DETAILS) {
-        gfx_draw_icon_16(ix + 4, iy + 4, state->items[i].icon_id);
+        gfx_draw_icon_16(ix + 4 + cb_off, iy + 4, state->items[i].icon_id);
         char dname[24], dtype[16], dsz[20];
-        strncpy(dname, state->items[i].name, 20); dname[20] = '\0';
-        strncpy(dtype, state->items[i].is_folder ? "Cartella" : (state->items[i].desc[0] ? state->items[i].desc : "File"), 13); dtype[13] = '\0';
+        strncpy(dname, disp_name, 18); dname[18] = '\0';
+        strncpy(dtype, state->items[i].is_folder ? "Cartella" : (state->items[i].desc[0] ? state->items[i].desc : "File"), 11); dtype[11] = '\0';
         if (state->items[i].is_folder && !state->items[i].is_drive) strcpy(dsz, "<DIR>");
         else explorer_format_bytes(state->items[i].size_bytes, dsz, sizeof(dsz));
         uint16_t pmb = state->items[i].permissions ? state->items[i].permissions : (VFS_PERM_READ | VFS_PERM_WRITE);
         char pstr[4] = { (pmb & VFS_PERM_READ) ? 'R' : '-', (pmb & VFS_PERM_WRITE) ? 'W' : '-', (pmb & VFS_PERM_EXEC) ? 'X' : '-', '\0' };
-        gfx_draw_string(ix + 24, iy + 5, dname, item_fg, 0, true);
-        gfx_draw_string(main_x + 185, iy + 5, dtype, sub_fg, 0, true);
-        gfx_draw_string(main_x + 295, iy + 5, dsz, sub_fg, 0, true);
-        gfx_draw_string(main_x + 378, iy + 5, pstr, sub_fg, 0, true);
+        gfx_draw_string(ix + 24 + cb_off, iy + 5, dname, item_fg, 0, true);
+        if (content_w >= 240)
+          gfx_draw_string(main_x + 175, iy + 5, dtype, sub_fg, 0, true);
+        if (content_w >= 340)
+          gfx_draw_string(main_x + 265, iy + 5, dsz, sub_fg, 0, true);
+        if (content_w >= 400)
+          gfx_draw_string(main_x + 365, iy + 5, pstr, sub_fg, 0, true);
         continue;
       } else if (state->view_mode == EXPLORER_VIEW_TILES || state->view_mode == EXPLORER_VIEW_CONTENT) {
-        gfx_draw_icon_32(ix + 6, iy + (row_h - 32) / 2, state->items[i].icon_id);
-        int max_chars = (state->view_mode == EXPLORER_VIEW_TILES) ? 18 : 44;
+        gfx_draw_icon_32(ix + 6 + cb_off, iy + (row_h - 32) / 2, state->items[i].icon_id);
+        int max_chars = (state->view_mode == EXPLORER_VIEW_TILES) ? 16 : 42;
         char tname[48], tsz[20], tsub[52];
-        strncpy(tname, state->items[i].name, max_chars);
+        strncpy(tname, disp_name, max_chars);
         tname[max_chars] = '\0';
         if (state->items[i].is_folder && !state->items[i].is_drive) {
           strncpy(tsub, state->items[i].desc[0] ? state->items[i].desc : "Cartella", max_chars);
@@ -2496,8 +2659,8 @@ static void explorer_draw(window_t *win) {
                         state->items[i].desc[0] ? state->items[i].desc : "File", tsz);
           tsub[max_chars] = '\0';
         }
-        gfx_draw_string(ix + 44, iy + 6, tname, item_fg, 0, true);
-        gfx_draw_string(ix + 44, iy + 24, tsub, sub_fg, 0, true);
+        gfx_draw_string(ix + 44 + cb_off, iy + 6, tname, item_fg, 0, true);
+        gfx_draw_string(ix + 44 + cb_off, iy + 24, tsub, sub_fg, 0, true);
         continue;
       }
 
@@ -2514,7 +2677,7 @@ static void explorer_draw(window_t *win) {
       char l1[32], l2[32];
       int max_lbl_chars = (col_w - 8) / 8;
       if (max_lbl_chars < 8) max_lbl_chars = 8;
-      explorer_split_name(state->items[i].name, max_lbl_chars, l1, l2);
+      explorer_split_name(disp_name, max_lbl_chars, l1, l2);
 
       int32_t lw1 = (int32_t)strlen(l1) * 8;
       int32_t lx1 = center_x - (lw1 / 2);
@@ -2607,6 +2770,59 @@ static void explorer_draw(window_t *win) {
     }
   }
 
+  // Riquadro di Anteprima a destra (Preview Pane)
+  if (has_preview) {
+    int32_t px = main_x + main_w + 4;
+    int32_t py = body_y;
+    int32_t ph = body_h;
+    if (is_glass) {
+      gfx_fill_rounded_alpha(px, py, prev_w, ph, 8,
+                             cur_th->surface_base ? cur_th->surface_base : 0xF8FAFC, 210);
+      gfx_draw_rounded_rect(px, py, prev_w, ph, 8,
+                            cur_th->control_border_color ? cur_th->control_border_color : 0xC8D8EC);
+    } else {
+      gfx_fill_rect(px, py, prev_w, ph, 0xF8F9FA);
+      gfx_draw_bevel_rect(px, py, prev_w, ph, true);
+    }
+    gfx_draw_string(px + 10, py + 8, "Anteprima", th_acc, 0, true);
+    if (state->selected_item >= 0 && state->selected_item < state->num_items) {
+      const explorer_item_t *pi = &state->items[state->selected_item];
+      gfx_draw_icon_32(px + prev_w / 2 - 16, py + 32, pi->icon_id);
+      char pname[22];
+      strncpy(pname, pi->name, 19); pname[19] = '\0';
+      gfx_draw_string(px + 10, py + 72, pname, th_txt, 0, true);
+      char ptype[22];
+      strncpy(ptype, pi->is_folder ? "Cartella di file" : (pi->desc[0] ? pi->desc : "File"), 19);
+      ptype[19] = '\0';
+      gfx_draw_string(px + 10, py + 90, ptype, 0x606875, 0, true);
+      if (!pi->is_folder) {
+        char psz[24], pinfo[32];
+        explorer_format_bytes(pi->size_bytes, psz, sizeof(psz));
+        mini_snprintf(pinfo, sizeof(pinfo), "Dim: %s", psz);
+        gfx_draw_string(px + 10, py + 106, pinfo, 0x606875, 0, true);
+      }
+      if (pi->content[0] != '\0') {
+        gfx_fill_alpha(px + 8, py + 124, prev_w - 16, 1, 0xC0C8D4, 180);
+        int32_t ly = py + 132;
+        const char *cp = pi->content;
+        while (*cp && ly < py + ph - 18) {
+          char line[21];
+          int k = 0;
+          while (*cp && *cp != '\n' && *cp != '\r' && k < 18) {
+            line[k++] = *cp++;
+          }
+          line[k] = '\0';
+          if (*cp == '\r') cp++;
+          if (*cp == '\n') cp++;
+          gfx_draw_string(px + 10, ly, line, th_txt, 0, true);
+          ly += 15;
+        }
+      }
+    } else {
+      gfx_draw_string(px + 10, py + 36, "Nessun elemento", 0x707885, 0, true);
+    }
+  }
+
   // 5. Barra di Stato in Basso (Status Bar)
   if (state->show_statusbar) {
     int32_t sb_y = cy + ch - 20;
@@ -2639,8 +2855,16 @@ static void explorer_draw(window_t *win) {
     char free_sb_fmt[24];
     explorer_format_bytes(free_sb_bytes, free_sb_fmt, sizeof(free_sb_fmt));
     char sb_text[64];
-    mini_snprintf(sb_text, sizeof(sb_text),
-                  "Oggetti: %d (Spazio libero: %s)", state->num_items, free_sb_fmt);
+    if (state->selected_count > 1) {
+      char sel_fmt[24];
+      explorer_format_bytes(state->selected_bytes, sel_fmt, sizeof(sel_fmt));
+      mini_snprintf(sb_text, sizeof(sb_text),
+                    "Oggetti: %d | Selezionati: %d (%s)",
+                    state->num_items, state->selected_count, sel_fmt);
+    } else {
+      mini_snprintf(sb_text, sizeof(sb_text),
+                    "Oggetti: %d (Spazio libero: %s)", state->num_items, free_sb_fmt);
+    }
     gfx_draw_string(cx + 10, sb_y + 2, sb_text, th_txt, 0, true);
 
     // Riquadro destro con icona PC
@@ -2684,7 +2908,7 @@ static void explorer_draw(window_t *win) {
     } else if (state->active_menu == EXPLORER_MENU_VIEW) {
       m_x = cx + 116;
       m_w = 225;
-      m_h = 266;
+      m_h = 286;
     } else if (state->active_menu == EXPLORER_MENU_TOOLS) {
       m_x = cx + 200;
       m_w = 230;
@@ -2796,6 +3020,43 @@ static void explorer_draw(window_t *win) {
                       true);
 
       gfx_draw_string(m_x + 20, m_y + 244, "Aggiorna (F5)", th_txt, 0, true);
+      if (is_glass)
+        gfx_fill_alpha(m_x + 8, m_y + 261, m_w - 16, 1, m_bdr, 180);
+      else
+        gfx_draw_bevel_rect(m_x + 4, m_y + 261, m_w - 8, 2, true);
+      gfx_draw_string(m_x + 20, m_y + 266, "Mostra", th_txt, 0, true);
+      gfx_draw_string(m_x + m_w - 18, m_y + 266, ">", th_acc, 0, true);
+
+      if (state->view_submenu_open) {
+        int32_t sm_x = m_x + m_w - 2;
+        int32_t sm_y = m_y + 204;
+        int32_t sm_w = 205;
+        int32_t sm_h = 80;
+        if (is_glass) {
+          gfx_draw_drop_shadow(sm_x, sm_y, sm_w, sm_h, 6);
+          gfx_fill_rounded_alpha(sm_x, sm_y, sm_w, sm_h, m_rad, m_bg, 242);
+          gfx_draw_rounded_rect(sm_x, sm_y, sm_w, sm_h, m_rad, m_bdr);
+        } else {
+          gfx_fill_rect(sm_x + 2, sm_y + 2, sm_w, sm_h, 0x808080);
+          gfx_fill_rect(sm_x, sm_y, sm_w, sm_h, COLOR_BTNFACE);
+          gfx_draw_bevel_rect(sm_x, sm_y, sm_w, sm_h, false);
+        }
+        if (state->show_preview_pane)
+          gfx_draw_string(sm_x + 6, sm_y + 6, "v", th_acc, 0, true);
+        gfx_draw_string(sm_x + 20, sm_y + 6, "Riquadro anteprima", th_txt, 0, true);
+
+        if (state->show_checkboxes)
+          gfx_draw_string(sm_x + 6, sm_y + 25, "v", th_acc, 0, true);
+        gfx_draw_string(sm_x + 20, sm_y + 25, "Caselle di controllo", th_txt, 0, true);
+
+        if (state->show_extensions)
+          gfx_draw_string(sm_x + 6, sm_y + 44, "v", th_acc, 0, true);
+        gfx_draw_string(sm_x + 20, sm_y + 44, "Estensioni nomi file", th_txt, 0, true);
+
+        if (state->show_hidden)
+          gfx_draw_string(sm_x + 6, sm_y + 63, "v", th_acc, 0, true);
+        gfx_draw_string(sm_x + 20, sm_y + 63, "Elementi nascosti", th_txt, 0, true);
+      }
     } else if (state->active_menu == EXPLORER_MENU_TOOLS) {
       gfx_draw_string(m_x + 12, m_y + 6, "Sincronizza dischi (Flush)", th_txt,
                       0, true);
@@ -3245,6 +3506,8 @@ static void explorer_execute_selected(explorer_state_t *state) {
       app_net_props_launch();
     } else if (strcmp(it->name, "Sicurezza e Permessi") == 0) {
       app_seccpl_launch();
+    } else if (strcmp(it->name, "Caratteri") == 0) {
+      app_fonts_props_launch();
     } else if (strcmp(it->name, "Editor del Registro") == 0) {
       app_regedit_launch();
     } else {
@@ -3372,7 +3635,29 @@ static void explorer_mouse(window_t *win, int32_t mx, int32_t my,
     } else if (state->active_menu == EXPLORER_MENU_VIEW) {
       m_x = cx + 116;
       m_w = 225;
-      m_h = 266;
+      m_h = 286;
+      if (state->view_submenu_open) {
+        int32_t sm_x = m_x + m_w - 2;
+        int32_t sm_y = m_y + 204;
+        int32_t sm_w = 205;
+        int32_t sm_h = 80;
+        if (mx >= sm_x && mx <= sm_x + sm_w && my >= sm_y && my <= sm_y + sm_h) {
+          int32_t srel_y = my - sm_y;
+          if (srel_y >= 2 && srel_y < 22) {
+            state->show_preview_pane = !state->show_preview_pane;
+          } else if (srel_y >= 22 && srel_y < 41) {
+            state->show_checkboxes = !state->show_checkboxes;
+          } else if (srel_y >= 41 && srel_y < 60) {
+            state->show_extensions = !state->show_extensions;
+          } else if (srel_y >= 60 && srel_y <= 80) {
+            state->show_hidden = !state->show_hidden;
+            explorer_load_items(state);
+          }
+          state->view_submenu_open = false;
+          state->active_menu = EXPLORER_MENU_NONE;
+          return;
+        }
+      }
       if (mx >= m_x && mx <= m_x + m_w && my >= m_y && my <= m_y + m_h) {
         int32_t rel_y = my - m_y;
         if (rel_y >= 4 && rel_y < 140) {
@@ -3388,12 +3673,18 @@ static void explorer_mouse(window_t *win, int32_t mx, int32_t my,
         } else if (rel_y >= 182 && rel_y < 200) {
           state->show_folder_tree = !state->show_folder_tree;
         } else if (rel_y >= 204 && rel_y < 222) {
+          state->sort_desc = (state->sort_mode == 1) ? !state->sort_desc : false;
           explorer_sort_items(state, 1);
         } else if (rel_y >= 222 && rel_y < 240) {
+          state->sort_desc = (state->sort_mode == 2) ? !state->sort_desc : false;
           explorer_sort_items(state, 2);
-        } else if (rel_y >= 240 && rel_y <= 266) {
+        } else if (rel_y >= 240 && rel_y < 261) {
           explorer_load_items(state);
+        } else if (rel_y >= 261 && rel_y <= m_h) {
+          state->view_submenu_open = !state->view_submenu_open;
+          return;
         }
+        state->view_submenu_open = false;
         state->active_menu = EXPLORER_MENU_NONE;
         return;
       }
@@ -3662,12 +3953,46 @@ static void explorer_mouse(window_t *win, int32_t mx, int32_t my,
       return;
     }
 
-    // 5. Clic sulla Barra degli Indirizzi
+    // 5. Clic sulla Barra degli Indirizzi (Breadcrumb o editing)
     int32_t addr_y = cy + 50;
     int32_t box_addr_x = cx + 90;
     int32_t box_addr_w = cw - 138;
     if (mx >= box_addr_x && mx <= box_addr_x + box_addr_w && my >= addr_y + 2 &&
         my <= addr_y + 22) {
+      if (!state->address_editing && state->current_path[1] == ':' &&
+          state->current_path[2] == '\\') {
+        int32_t bx = box_addr_x + 24;
+        if (mx >= bx && mx <= bx + 24) {
+          char root_p[4] = { state->current_path[0], ':', '\\', '\0' };
+          explorer_navigate_address(state, root_p);
+          return;
+        }
+        bx += 24;
+        const char *rest = state->current_path + 3;
+        while (*rest && bx < box_addr_x + box_addr_w - 32) {
+          while (*rest == '\\' || *rest == '/') rest++;
+          if (!*rest) break;
+          const char *slash = rest;
+          while (*slash && *slash != '\\' && *slash != '/') slash++;
+          int seg_len = (int)(slash - rest);
+          if (seg_len > 0) {
+            bx += 12;
+            int copy_len = seg_len < 30 ? seg_len : 30;
+            int32_t sw_seg = copy_len * 8;
+            if (mx >= bx && mx <= bx + sw_seg) {
+              char target_p[128];
+              int plen = (int)(slash - state->current_path);
+              if (plen >= (int)sizeof(target_p)) plen = (int)sizeof(target_p) - 1;
+              memcpy(target_p, state->current_path, plen);
+              target_p[plen] = '\0';
+              explorer_navigate_address(state, target_p);
+              return;
+            }
+            bx += sw_seg + 4;
+          }
+          rest = slash;
+        }
+      }
       state->address_editing = true;
       strncpy(state->address_buf, state->current_path,
               sizeof(state->address_buf) - 1);
@@ -3847,8 +4172,10 @@ static void explorer_mouse(window_t *win, int32_t mx, int32_t my,
   }
 
   // 7. Click nell'Area Principale dei Contenuti
+  bool has_preview = state->show_preview_pane && (cw - side_w - 6 >= 340);
+  int32_t prev_w = has_preview ? 172 : 0;
   int32_t main_x = cx + side_w + 4;
-  int32_t main_w = cw - side_w - 6;
+  int32_t main_w = cw - side_w - 6 - (has_preview ? (prev_w + 4) : 0);
 
   int v_cols = 4;
   int32_t row_h = 72, top_pad = 8, dyn_col_w = 88;
@@ -3861,6 +4188,20 @@ static void explorer_mouse(window_t *win, int32_t mx, int32_t my,
       (total_rows > visible_rows) ? (total_rows - visible_rows) : 0;
   bool show_sb = (total_rows > visible_rows);
   int32_t content_w = show_sb ? (main_w - 16) : main_w;
+
+  // Click sull'header colonne della vista Dettagli per ordinare
+  if (state->view_mode == EXPLORER_VIEW_DETAILS &&
+      mx >= main_x + 4 && mx <= main_x + content_w - 4 &&
+      my >= body_y + 4 && my <= body_y + 24) {
+    int32_t rx = mx - main_x;
+    int col_mode = 1;
+    if (rx >= 360) col_mode = 4;
+    else if (rx >= 260) col_mode = 2;
+    else if (rx >= 170) col_mode = 3;
+    state->sort_desc = (state->sort_mode == col_mode) ? !state->sort_desc : false;
+    explorer_sort_items(state, col_mode);
+    return;
+  }
 
   // Clic sulla scrollbar verticale
   if (show_sb && mx >= main_x + content_w && mx <= main_x + main_w &&
@@ -3891,6 +4232,7 @@ static void explorer_mouse(window_t *win, int32_t mx, int32_t my,
 
   uint64_t now_ticks = timer_get_ticks();
   bool is_double_click = false;
+  bool ctrl_held = keyboard_is_ctrl_pressed();
 
   for (int r = 0; r < visible_rows; r++) {
     int cur_row = state->scroll_row + r;
@@ -3905,12 +4247,18 @@ static void explorer_mouse(window_t *win, int32_t mx, int32_t my,
         break;
 
       if (mx >= ix && mx <= ix + col_w && my >= iy && my <= iy + row_h) {
+        bool cb_hit = state->show_checkboxes && (mx <= ix + 20) && (my <= iy + 22);
+        if (ctrl_held || cb_hit) {
+          explorer_toggle_selection(state, i);
+          state->last_click_time = 0;
+          return;
+        }
         if (state->selected_item == i &&
             (now_ticks - state->last_click_time < 75)) {
           is_double_click = true;
         }
 
-        state->selected_item = i;
+        explorer_select_single(state, i);
         state->last_click_time = now_ticks;
 
         if (is_double_click) {

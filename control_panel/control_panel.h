@@ -41,6 +41,15 @@ void app_keyboard_props_launch(void);
 // Applet Centro Sicurezza e Permessi Out-of-Kernel (SECCPL.CPL -> SECCPL.DLL)
 void app_seccpl_launch(void);
 
+// Applet Gestione Caratteri e Font TrueType Out-of-Kernel (FONTS.CPL -> FONTSCPL.DLL)
+void app_fonts_props_launch(void);
+
+// Servizio Standardizzato Obbligatorio Installazione Software Terzi (PKGSVC.DLL)
+void app_pkgsvc_launch(void);
+
+// Sottosistema Porte Parallele Legacy, Seriali COM e Porte Virtuali (PORTS.DLL)
+void app_ports_props_launch(void);
+
 // Applet Informazioni su NewOS (WINVER.EXE / SYSDM.CPL)
 void app_about_launch(void);
 

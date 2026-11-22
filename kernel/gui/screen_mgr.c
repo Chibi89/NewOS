@@ -665,6 +665,12 @@ void screen_mgr_init(void) {
   extern const void *comctl_get_api(void);
   g_kernel_ext_api.comctl_get_api = comctl_get_api;
   g_kernel_ext_api.keyboard_is_ctrl_pressed = keyboard_is_ctrl_pressed;
+  g_kernel_ext_api.fontmgr_set_ttf = fontmgr_set_ttf;
+  g_kernel_ext_api.app_fonts_props_launch = app_fonts_props_launch;
+  g_kernel_ext_api.app_pkgsvc_launch = app_pkgsvc_launch;
+  g_kernel_ext_api.app_ports_props_launch = app_ports_props_launch;
+  g_kernel_ext_api.wm_set_start_menu_mode = wm_set_start_menu_mode;
+  g_kernel_ext_api.wm_get_start_menu_mode = wm_get_start_menu_mode;
   g_kernel_api.ext_api = &g_kernel_ext_api;
 
   g_api_initialized = true;

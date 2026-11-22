@@ -12,6 +12,8 @@ static volatile int kbd_tail = 0;
 static bool shift_pressed = false;
 static bool ctrl_pressed  = false;
 static bool alt_pressed   = false;
+static bool win_pressed   = false;
+static bool win_combo_used = false;
 static bool e0_prefix     = false;
 static bool caps_lock     = false;
 
@@ -45,9 +47,18 @@ static void keyboard_callback(interrupt_frame_t* frame) {
 
     if (e0_prefix) {
         e0_prefix = false;
-        // Tasto Windows sinistro/destro premuto (0x5B / 0x5C)
+        // Tasto Windows sinistro/destro premuto (0x5B / 0x5C) e rilasciato (0xDB / 0xDC)
         if (scancode == 0x5B || scancode == 0x5C) {
-            keyboard_inject_char(KEY_WIN_START);
+            win_pressed = true;
+            win_combo_used = false;
+            return;
+        }
+        if (scancode == 0xDB || scancode == 0xDC) {
+            win_pressed = false;
+            if (!win_combo_used) {
+                keyboard_inject_char(KEY_WIN_START);
+            }
+            win_combo_used = false;
             return;
         }
         // Tasto Canc / Delete (0x53)
@@ -105,17 +116,32 @@ static void keyboard_callback(interrupt_frame_t* frame) {
 
     // Scorciatoie con Ctrl
     if (ctrl_pressed) {
-        if (scancode == 0x01) { // Ctrl + Esc -> Menu Start
-            keyboard_inject_char(KEY_WIN_START);
+        if (scancode == 0x01) { // Ctrl + Shift + Esc -> Task Manager, Ctrl + Esc -> Start
+            if (shift_pressed) {
+                keyboard_inject_char(KEY_TASKMGR);
+            } else {
+                keyboard_inject_char(KEY_WIN_START);
+            }
             return;
         }
         char base = (scancode < 128) ? kbd_us_lower[scancode] : 0;
         if (base == 'c') { keyboard_inject_char(KEY_CTRL_C); return; }
+        if (base == 'f') { keyboard_inject_char(KEY_CTRL_F); return; }
         if (base == 'v') { keyboard_inject_char(KEY_CTRL_V); return; }
         if (base == 'x') { keyboard_inject_char(KEY_CTRL_X); return; }
+        if (base == 'z') { keyboard_inject_char(KEY_CTRL_Z); return; }
         if (base == 's') { keyboard_inject_char(KEY_CTRL_S); return; }
         if (base == 'o') { keyboard_inject_char(KEY_CTRL_O); return; }
         if (base == 'n') { keyboard_inject_char(KEY_CTRL_N); return; }
+    }
+
+    // Scorciatoie con tasto Windows (Win+E, Win+R, Win+D, Win+L)
+    if (win_pressed && scancode < 128) {
+        char base = kbd_us_lower[scancode];
+        if (base == 'e') { win_combo_used = true; keyboard_inject_char(KEY_WIN_E); return; }
+        if (base == 'r') { win_combo_used = true; keyboard_inject_char(KEY_WIN_R); return; }
+        if (base == 'd') { win_combo_used = true; keyboard_inject_char(KEY_WIN_D); return; }
+        if (base == 'l') { win_combo_used = true; keyboard_inject_char(KEY_WIN_L); return; }
     }
 
     char c = 0;

@@ -415,20 +415,27 @@ static void draw_theme_tab(window_t* win, display_state_t* state) {
     int32_t sb_w = total_w;
     draw_hscrollbar(sb_x, sb_y, sb_w, state->theme_scroll_offset, total_themes, visible_cards);
 
-    // Dettaglio tema selezionato all'interno del box
+    // Dettaglio tema selezionato
     if (sel_th) {
         char sel_info[128];
-        mini_snprintf(sel_info, sizeof(sel_info), "Tema attivo: %s  (%d/%d)",
+        mini_snprintf(sel_info, sizeof(sel_info), "Tema: %s (%d/%d)",
                       sel_th->name, state->selected_theme_idx + 1, total_themes);
         gfx_draw_string(panel_x + 14, panel_y + 124, sel_info, 0x005A9E, 0, true);
     }
 
-    // Footer informativo all'esterno del box
+    // Footer informativo + Selettore Stile Menu Start all'esterno del box
     char footer_msg[128];
     mini_snprintf(footer_msg, sizeof(footer_msg),
                   "Libreria: %d temi rilevati in NewOS\\Resources\\Themes",
                   total_themes);
-    gfx_draw_string(cx + 14, cy + 300, footer_msg, COLOR_BTNSHADOW, 0, true);
+    gfx_draw_string(cx + 14, cy + 298, footer_msg, COLOR_BTNSHADOW, 0, true);
+
+    int sm_mode = wm_get_start_menu_mode();
+    gfx_draw_string(cx + 14, cy + 320, "Stile Menu Start:", COLOR_WINDOWTEXT, 0, true);
+    gfx_fill_rect(cx + 160, cy + 316, 84, 20, sm_mode == 1 ? 0x0078D7 : 0xE2E8F0);
+    gfx_draw_string(cx + 174, cy + 319, "Moderno", sm_mode == 1 ? 0xFFFFFF : 0x1E293B, 0, true);
+    gfx_fill_rect(cx + 252, cy + 316, 84, 20, sm_mode == 0 ? 0x0078D7 : 0xE2E8F0);
+    gfx_draw_string(cx + 262, cy + 319, "Classico", sm_mode == 0 ? 0xFFFFFF : 0x1E293B, 0, true);
 }
 
 static void draw_res_tab(window_t* win, display_state_t* state) {
@@ -622,6 +629,18 @@ static void display_mouse(window_t* win, int32_t mx, int32_t my, bool clicked) {
         int32_t total_w = visible_cards * card_w + (visible_cards - 1) * card_gap; // 506px
         int32_t start_x = cx + (cw - total_w) / 2;
         int32_t card_y = cy + 170;
+
+        // Click su selettore Stile Menu Start (Moderno / Classico)
+        if (my >= cy + 316 && my <= cy + 336) {
+            if (mx >= cx + 160 && mx <= cx + 244) {
+                wm_set_start_menu_mode(1);
+                return;
+            }
+            if (mx >= cx + 252 && mx <= cx + 336) {
+                wm_set_start_menu_mode(0);
+                return;
+            }
+        }
 
         // Click su una card tema nella galleria orizzontale
         for (int v = 0; v < visible_cards; v++) {

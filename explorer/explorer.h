@@ -132,6 +132,13 @@ typedef struct {
     explorer_view_mode_t view_mode;
     bool show_extensions;
     bool show_hidden;
+    bool show_preview_pane;
+    bool show_checkboxes;
+    bool view_submenu_open;
+    bool sort_desc;
+    bool item_selected[MAX_EXPLORER_ITEMS];
+    int selected_count;
+    uint64_t selected_bytes;
 } explorer_state_t;
 
 // Funzioni pubbliche di apertura

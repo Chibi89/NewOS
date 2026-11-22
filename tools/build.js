@@ -200,6 +200,7 @@ const cFiles = [
     'kernel/gui/settings_loader.c',
     'kernel/gui/comdlg_loader.c',
     'kernel/gui/comctl_loader.c',
+    'kernel/gui/startmenu_loader.c',
     'kernel/gui/uistyle_loader.c',
     'kernel/gui/hwaccel_loader.c',
     'kernel/gui/gpu3d_loader.c',
@@ -296,7 +297,13 @@ const objcopyCmd = `${llvm.objcopy} -O binary "${kernelElf}" "${kernelBin}"`;
 execSync(objcopyCmd, { stdio: 'inherit' });
 
 const kernelStat = fs.statSync(kernelBin);
-console.log(`[OK] Kernel 64-bit generato con successo: ${kernelStat.size} byte`);
+const MAX_KERNEL_BYTES = 491520; // 480 KB budget rigoroso
+const kernelPct = ((kernelStat.size / MAX_KERNEL_BYTES) * 100).toFixed(1);
+console.log(`[OK] Kernel 64-bit generato con successo: ${kernelStat.size} byte (${kernelPct}% del budget 480 KB / ${MAX_KERNEL_BYTES} B)`);
+if (kernelStat.size >= MAX_KERNEL_BYTES) {
+    console.error(`[ERRORE BUDGET KERNEL] kernel.bin (${kernelStat.size} B) supera il limite di ${MAX_KERNEL_BYTES} B!`);
+    process.exit(1);
+}
 
 // Estrazione tabella simboli compatta KERNEL.SYM ('NSYM') da kernel.elf per BSOD.DLL
 const targetLibDirEarly = path.join(BIN_DIR, 'NewOS', 'SystemLibrary');
@@ -548,6 +555,9 @@ const systemLibraries = [
     { src: 'SystemLibrary/timedate.c', ini: 'SystemLibrary/TIMEDATE.INI', out: 'TIMEDATE.DLL', iniOut: 'TIMEDATE.INI' },
     { src: 'SystemLibrary/netcpl.c', ini: 'SystemLibrary/NETCPL.INI', out: 'NETCPL.DLL', iniOut: 'NETCPL.INI' },
     { src: 'SystemLibrary/keybcpl.c', ini: 'SystemLibrary/KEYBCPL.INI', out: 'KEYBCPL.DLL', iniOut: 'KEYBCPL.INI' },
+    { src: 'SystemLibrary/fontscpl.c', ini: 'SystemLibrary/FONTSCPL.INI', out: 'FONTSCPL.DLL', iniOut: 'FONTSCPL.INI' },
+    { src: 'SystemLibrary/pkgsvc.c', ini: 'SystemLibrary/PKGSVC.INI', out: 'PKGSVC.DLL', iniOut: 'PKGSVC.INI' },
+    { src: 'SystemLibrary/ports_dll.c', ini: 'SystemLibrary/PORTS.INI', out: 'PORTS.DLL', iniOut: 'PORTS.INI' },
     { src: 'SystemLibrary/comdlg.c', ini: 'SystemLibrary/COMDLG.INI', out: 'COMDLG.DLL', iniOut: 'COMDLG.INI' },
     { src: 'SystemLibrary/recycle.c', ini: 'SystemLibrary/RECYCLE.INI', out: 'RECYCLE.DLL', iniOut: 'RECYCLE.INI' },
     { src: 'SystemLibrary/uistyle_copenhagen.c', ini: 'SystemLibrary/COPENHAGEN.INI', out: 'COPENHAGEN.DLL', iniOut: 'COPENHAGEN.INI', destSubDir: ['NewOS', 'Resources', 'UIStyle'] },
@@ -570,7 +580,8 @@ const systemLibraries = [
     { src: 'SystemLibrary/bsod_dll.c', ini: 'SystemLibrary/BSOD.INI', out: 'BSOD.DLL', iniOut: 'BSOD.INI', extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
     { src: 'SystemLibrary/launcher_dll.c', ini: 'SystemLibrary/LAUNCHER.INI', out: 'LAUNCHER.DLL', iniOut: 'LAUNCHER.INI', extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
     { src: 'SystemLibrary/seccpl.c', ini: 'SystemLibrary/SECCPL.INI', out: 'SECCPL.DLL', iniOut: 'SECCPL.INI', extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
-    { src: 'SystemLibrary/comctl_dll.c', ini: 'SystemLibrary/COMCTL.INI', out: 'COMCTL.DLL', iniOut: 'COMCTL.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` }
+    { src: 'SystemLibrary/comctl_dll.c', ini: 'SystemLibrary/COMCTL.INI', out: 'COMCTL.DLL', iniOut: 'COMCTL.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
+    { src: 'SystemLibrary/startmenu_dll.c', ini: 'SystemLibrary/STARTMENU.INI', out: 'STARTMENU.DLL', iniOut: 'STARTMENU.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` }
 ];
 
 const targetLibDir = path.join(BIN_DIR, 'NewOS', 'SystemLibrary');

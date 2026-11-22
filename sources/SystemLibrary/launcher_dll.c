@@ -178,6 +178,24 @@ static bool launch_by_alias(launcher_params_t* p, const char* name, const char* 
         set_handler(p, "KEYBCPL.DLL");
         return true;
     }
+    if (strcasecmp(name, "fontscpl") == 0 || strcasecmp(name, "fonts.cpl") == 0 ||
+        strcasecmp(name, "fonts") == 0 || strcasecmp(name, "font") == 0) {
+        app_fonts_props_launch();
+        set_handler(p, "FONTSCPL.DLL");
+        return true;
+    }
+    if (strcasecmp(name, "pkgsvc") == 0 || strcasecmp(name, "programs") == 0 ||
+        strcasecmp(name, "installapp") == 0) {
+        app_pkgsvc_launch();
+        set_handler(p, "PKGSVC.DLL");
+        return true;
+    }
+    if (strcasecmp(name, "ports") == 0 || strcasecmp(name, "ports.cpl") == 0 ||
+        strcasecmp(name, "com") == 0 || strcasecmp(name, "lpt") == 0) {
+        app_ports_props_launch();
+        set_handler(p, "PORTS.DLL");
+        return true;
+    }
     if (strcasecmp(name, "seccpl") == 0 || strcasecmp(name, "secpol.cpl") == 0 ||
         strcasecmp(name, "security") == 0 || strcasecmp(name, "sicurezza") == 0) {
         app_seccpl_launch();

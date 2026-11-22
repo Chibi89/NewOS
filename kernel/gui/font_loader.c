@@ -104,3 +104,12 @@ bool fontmgr_get_ttf_glyph(uint32_t codepoint, int pixel_height,
     }
     return false;
 }
+
+bool fontmgr_set_ttf(const char *path) {
+    if (!path || !fontmgr_init()) return false;
+    fontmgr_params_t p;
+    memset(&p, 0, sizeof(p));
+    p.cmd = FONTMGR_CMD_SET_TTF;
+    p.ttf_path = path;
+    return (g_fontmgr_entry(screen_mgr_get_api(), &p) == 0);
+}

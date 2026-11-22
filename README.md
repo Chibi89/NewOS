@@ -30,6 +30,21 @@
 <summary><strong>Espandi per visualizzare gli aggiornamenti e i fix recenti</strong></summary>
 
 ### 22 Novembre 2026
+- **Nuovo Menu Start Unificato Moderno (`STARTMENU.DLL`) & Selettore `Personalizzazione`**:
+  - Creato il menu Start out-of-kernel [startmenu_dll.c](SystemLibrary/startmenu_dll.c) ([startmenu_loader.c](kernel/gui/startmenu_loader.c)) con ricerca live unificata, sezione **Preferiti**, sezione **Tutto** con toggle **`Visualizzazione: Griglia | Elenco`** e badge **`Nuova`**, e footer utente/azioni rapide.
+  - Aggiunto selettore dedicato **`Stile Menu Start: Moderno | Classico`** nella tab **Tema** di `Proprietà - Schermo` ([display.c](control_panel/display.c)).
+- **Window Manager, Taskbar & Scorciatoie Globali (`wm.c`)**:
+  - Implementati **Window Snap** (50%/50% ai bordi laterali, massimizzazione al bordo superiore), **Alt+Tab grafico** con anteprima schede, **Menu contestuale Taskbar**, **Tooltip anteprima** al passaggio del mouse sui pulsanti finestra, pulsante **Mostra Desktop** e scorciatoie globali (**`Win+E`**, **`Win+R`**, **`Win+D`**, **`Win+L`**, **`Ctrl+Shift+Esc`**).
+- **Esplora Risorse — Sottomenu `Mostra`, Anteprima, Selezione Multipla & Breadcrumb**:
+  - Aggiunti in [explorer.c](explorer/explorer.c) il sottomenu `Mostra >` (`Estensioni file`, `Elementi nascosti`, `Riquadro anteprima`, `Caselle di controllo`), selezione multipla con conteggio/dimensione nella status bar, ordinamento ASC/DESC cliccando sugli header colonne in `Dettagli` e barra indirizzi **Breadcrumb** cliccabile.
+- **Gestione Font TrueType (`FONTSCPL.CPL`), Installazione Software Terzi (`PKGSVC.DLL`) & Porte I/O (`PORTS.DLL`)**:
+  - Aggiunta applet out-of-kernel [fontscpl.c](SystemLibrary/fontscpl.c) con scansione `.TTF`, anteprima live TrueType via `FONTMGR.DLL` e salvataggio nel Registro.
+  - Aggiunto servizio obbligatorio [pkgsvc.c](SystemLibrary/pkgsvc.c) per l'installazione isolata di software terzi in `C:\ProgramFile\<App>\` (blocco ACL su `C:\NewOS\`, manifest `APP.INI` e registrazione in `HKLM`).
+  - Aggiunto sottosistema [ports_dll.c](SystemLibrary/ports_dll.c) con probing bare-metal UART `16550A` (`COM1`–`COM4`), porte parallele legacy IEEE 1284 (`LPT1`–`LPT2`), porte virtuali (`VCOM1/2`, `VLPT1`) e test Loopback HW.
+- **Task Manager (`Moduli DLL`), Blocco Note (`Trova` / `Righe`) & Controllo Budget Kernel**:
+  - Aggiunto in [taskmgr.c](taskmgr/taskmgr.c) il tab **Moduli DLL** con scansione dinamica di `C:\NewOS\SystemLibrary\`.
+  - Potenziato [notepad.c](notepad/notepad.c) con ricerca live **`Trova` (`Ctrl+F`)**, **`Annulla` (`Ctrl+Z`)** e **numeri di riga opzionali**.
+  - Aggiunto in [build.js](tools/build.js) il controllo automatico del budget `kernel.bin < 491.520 B (480 KB)`.
 - **Esplora Risorse — 8 Modalità di Vista, Layout Dinamico & `CTRL + Rotella Mouse`**:
   - Implementate in [explorer.h](explorer/explorer.h) ed [explorer.c](explorer/explorer.c) tutte le 8 viste stile Windows Explorer (`Icone molto grandi`, `Icone grandi`, `Icone medie`, `Icone piccole`, `Elenco`, `Dettagli` con colonne Nome/Tipo/Dimensione/Permessi, `Riquadri` e `Contenuto`), selezionabili dal menu **Visualizza**.
   - Griglia adattiva dinamica alla larghezza della finestra con spaziatura compatta uniforme (`explorer_get_view_metrics`) e wrapping automatico su due righe per i nomi lunghi (`explorer_split_name`).
@@ -286,6 +301,21 @@ tools\qemu-system-x86_64.exe -cdrom NewOS_V1.iso -m 256M -vga std -device AC97 -
 <summary><strong>Expand to view recent updates and fixes</strong></summary>
 
 ### November 22, 2026
+- **New Modern Unified Start Menu (`STARTMENU.DLL`) & `Personalization` Selector**:
+  - Created the out-of-kernel Start Menu [startmenu_dll.c](SystemLibrary/startmenu_dll.c) ([startmenu_loader.c](kernel/gui/startmenu_loader.c)) with unified live search, **Pinned** (`Preferiti`) grid, **All Apps** (`Tutto`) with **`View: Grid | List`** toggle and **`Nuova`** badges, plus user/quick-actions footer.
+  - Added a dedicated **`Start Menu Style: Modern | Classic`** selector inside the **Theme** tab of Display Properties ([display.c](control_panel/display.c)).
+- **Window Manager, Taskbar & Global Shortcuts (`wm.c`)**:
+  - Implemented **Window Snap** (50%/50% left/right edge snap, top-edge maximize), graphical **Alt+Tab** switcher overlay, **Taskbar context menu**, **Taskbar hover tooltips**, **Show Desktop** button, and global shortcuts (**`Win+E`**, **`Win+R`**, **`Win+D`**, **`Win+L`**, **`Ctrl+Shift+Esc`**).
+- **File Explorer — `Show` Submenu, Preview Pane, Multi-Selection & Clickable Breadcrumb**:
+  - Added the `Show >` submenu (`File extensions`, `Hidden items`, `Preview pane`, `Item checkboxes`) in [explorer.c](explorer/explorer.c), multi-selection with status bar item/byte totals, ASC/DESC column-header sorting in `Details` view, and clickable **Breadcrumb** path segments.
+- **TrueType Font Manager (`FONTSCPL.CPL`), Standardized 3rd-Party Installer (`PKGSVC.DLL`) & I/O Ports (`PORTS.DLL`)**:
+  - Added out-of-kernel [fontscpl.c](SystemLibrary/fontscpl.c) scanning `.TTF` fonts with live `FONTMGR.DLL` TrueType preview and Registry persistence.
+  - Added mandatory [pkgsvc.c](SystemLibrary/pkgsvc.c) package service enforcing isolated installs under `C:\ProgramFile\<App>\` (ACL block on `C:\NewOS\`, `APP.INI` manifest, and `HKLM` registration).
+  - Added [ports_dll.c](SystemLibrary/ports_dll.c) with bare-metal `16550A` UART probing (`COM1`–`COM4`), IEEE 1284 legacy parallel ports (`LPT1`–`LPT2`), virtual ports (`VCOM1/2`, `VLPT1`), and HW Loopback test.
+- **Task Manager (`Moduli DLL`), Notepad (`Find` / `Line Numbers`) & Kernel Budget Guard**:
+  - Added the **Moduli DLL** tab in [taskmgr.c](taskmgr/taskmgr.c) scanning `C:\NewOS\SystemLibrary\`.
+  - Enhanced [notepad.c](notepad/notepad.c) with live **`Find` (`Ctrl+F`)** highlighting, **`Undo` (`Ctrl+Z`)**, and **optional line numbers**.
+  - Added automatic `kernel.bin < 491,520 B (480 KB)` budget enforcement in [build.js](tools/build.js).
 - **File Explorer — 8 View Modes, Dynamic Grid Layout & `CTRL + Mouse Wheel`**:
   - Implemented all 8 Windows Explorer-style view modes in [explorer.h](explorer/explorer.h) and [explorer.c](explorer/explorer.c) (`Extra large icons`, `Large icons`, `Medium icons`, `Small icons`, `List`, `Details` with Name/Type/Size/Permissions columns, `Tiles`, and `Content`), selectable from the **View** menu.
   - Added dynamic window-width-aware column calculation with uniform compact spacing (`explorer_get_view_metrics`) and automatic two-line word wrapping for long item names (`explorer_split_name`).
