@@ -910,32 +910,63 @@ static inline uint32_t blend_color(uint32_t dst, uint32_t src, uint8_t a) {
   return ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
 }
 
-// Verifica se (px, py) e' dentro il rounded-rect con angoli di raggio r
-static inline bool inside_rounded(int32_t px, int32_t py, int32_t x, int32_t y,
-                                  int32_t w, int32_t h, int32_t r) {
+// Calcola la copertura anti-aliased (0..255) di (px, py) in un rounded-rect
+// tramite supersampling 4x4 (16x) in aritmetica intera pura sui soli pixel di bordo
+static inline uint8_t rounded_coverage(int32_t px, int32_t py, int32_t x,
+                                       int32_t y, int32_t w, int32_t h,
+                                       int32_t r) {
+  if (r <= 0 || w <= 0 || h <= 0)
+    return 255;
+  if (r * 2 > w)
+    r = w / 2;
+  if (r * 2 > h)
+    r = h / 2;
   if (r <= 0)
-    return true;
-  // Angolo top-left
+    return 255;
+
+  int32_t cx, cy;
   if (px < x + r && py < y + r) {
-    int32_t dx = px - (x + r), dy = py - (y + r);
-    return (dx * dx + dy * dy) <= r * r;
+    cx = x + r;
+    cy = y + r;
+  } else if (px >= x + w - r && py < y + r) {
+    cx = x + w - 1 - r;
+    cy = y + r;
+  } else if (px < x + r && py >= y + h - r) {
+    cx = x + r;
+    cy = y + h - 1 - r;
+  } else if (px >= x + w - r && py >= y + h - r) {
+    cx = x + w - 1 - r;
+    cy = y + h - 1 - r;
+  } else {
+    return 255;
   }
-  // Angolo top-right
-  if (px >= x + w - r && py < y + r) {
-    int32_t dx = px - (x + w - 1 - r), dy = py - (y + r);
-    return (dx * dx + dy * dy) <= r * r;
+
+  int32_t dx = px - cx;
+  int32_t dy = py - cy;
+  int32_t adx = dx < 0 ? -dx : dx;
+  int32_t ady = dy < 0 ? -dy : dy;
+  int32_t r2 = r * r;
+
+  if ((adx + 1) * (adx + 1) + (ady + 1) * (ady + 1) <= r2)
+    return 255;
+  if (adx > 0 && ady > 0 && (adx - 1) * (adx - 1) + (ady - 1) * (ady - 1) > r2)
+    return 0;
+
+  static const int32_t sub_off[4] = {-3, -1, 1, 3};
+  int32_t r8_sq = (r * 8) * (r * 8);
+  int32_t dx8 = dx * 8;
+  int32_t dy8 = dy * 8;
+  int hits = 0;
+  for (int sy = 0; sy < 4; sy++) {
+    int32_t ty = dy8 + sub_off[sy];
+    int32_t ty2 = ty * ty;
+    for (int sx = 0; sx < 4; sx++) {
+      int32_t tx = dx8 + sub_off[sx];
+      if (tx * tx + ty2 <= r8_sq)
+        hits++;
+    }
   }
-  // Angolo bottom-left
-  if (px < x + r && py >= y + h - r) {
-    int32_t dx = px - (x + r), dy = py - (y + h - 1 - r);
-    return (dx * dx + dy * dy) <= r * r;
-  }
-  // Angolo bottom-right
-  if (px >= x + w - r && py >= y + h - r) {
-    int32_t dx = px - (x + w - 1 - r), dy = py - (y + h - 1 - r);
-    return (dx * dx + dy * dy) <= r * r;
-  }
-  return true;
+  return (uint8_t)((hits * 255) >> 4);
 }
 
 // ---- gfx_fill_alpha ----------------------------------------
@@ -963,25 +994,32 @@ void gfx_fill_rounded_rect(int32_t x, int32_t y, int32_t w, int32_t h,
   for (int32_t py = y1; py < y2; py++) {
     uint32_t *row = &lfb_back[py * scr_pitch_pixels];
     for (int32_t px = x1; px < x2; px++) {
-      if (inside_rounded(px, py, x, y, w, h, radius))
+      uint8_t cov = rounded_coverage(px, py, x, y, w, h, radius);
+      if (cov == 255)
         row[px] = color;
+      else if (cov > 0)
+        row[px] = blend_color(row[px], color, cov);
     }
   }
 }
 
 // ---- gfx_draw_rounded_rect ---------------------------------
-// Disegna il bordo perimetrale continuo di 1px che segue fedelmente la curvatura degli angoli
+// Disegna il bordo perimetrale continuo e anti-aliased di 1px sugli angoli
 void gfx_draw_rounded_rect(int32_t x, int32_t y, int32_t w, int32_t h,
                            int32_t radius, uint32_t color) {
-  if (w <= 0 || h <= 0) return;
+  if (w <= 0 || h <= 0)
+    return;
   if (radius <= 0) {
     gfx_draw_rect(x, y, w, h, color);
     return;
   }
-  if (radius * 2 > w) radius = w / 2;
-  if (radius * 2 > h) radius = h / 2;
+  if (radius * 2 > w)
+    radius = w / 2;
+  if (radius * 2 > h)
+    radius = h / 2;
 
   int32_t r = radius;
+  int32_t r_in = (r > 1) ? (r - 1) : 0;
 
   // 1. Tratti rettilinei orizzontali (superiore e inferiore)
   for (int32_t px = x + r; px < x + w - r; px++) {
@@ -995,54 +1033,29 @@ void gfx_draw_rounded_rect(int32_t x, int32_t y, int32_t w, int32_t h,
     gfx_draw_pixel(x + w - 1, py, color);
   }
 
-  // 3. I 4 angoli arrotondati che seguono la sagoma esatta di inside_rounded
-  // Angolo Top-Left: [x, x + r - 1] x [y, y + r - 1]
-  for (int32_t py = y; py < y + r; py++) {
-    for (int32_t px = x; px < x + r; px++) {
-      if (inside_rounded(px, py, x, y, w, h, r)) {
-        if (px == x || py == y ||
-            !inside_rounded(px - 1, py, x, y, w, h, r) ||
-            !inside_rounded(px, py - 1, x, y, w, h, r)) {
-          gfx_draw_pixel(px, py, color);
-        }
-      }
-    }
-  }
-
-  // Angolo Top-Right: [x + w - r, x + w - 1] x [y, y + r - 1]
-  for (int32_t py = y; py < y + r; py++) {
-    for (int32_t px = x + w - r; px < x + w; px++) {
-      if (inside_rounded(px, py, x, y, w, h, r)) {
-        if (px == x + w - 1 || py == y ||
-            !inside_rounded(px + 1, py, x, y, w, h, r) ||
-            !inside_rounded(px, py - 1, x, y, w, h, r)) {
-          gfx_draw_pixel(px, py, color);
-        }
-      }
-    }
-  }
-
-  // Angolo Bottom-Left: [x, x + r - 1] x [y + h - r, y + h - 1]
-  for (int32_t py = y + h - r; py < y + h; py++) {
-    for (int32_t px = x; px < x + r; px++) {
-      if (inside_rounded(px, py, x, y, w, h, r)) {
-        if (px == x || py == y + h - 1 ||
-            !inside_rounded(px - 1, py, x, y, w, h, r) ||
-            !inside_rounded(px, py + 1, x, y, w, h, r)) {
-          gfx_draw_pixel(px, py, color);
-        }
-      }
-    }
-  }
-
-  // Angolo Bottom-Right: [x + w - r, x + w - 1] x [y + h - r, y + h - 1]
-  for (int32_t py = y + h - r; py < y + h; py++) {
-    for (int32_t px = x + w - r; px < x + w; px++) {
-      if (inside_rounded(px, py, x, y, w, h, r)) {
-        if (px == x + w - 1 || py == y + h - 1 ||
-            !inside_rounded(px + 1, py, x, y, w, h, r) ||
-            !inside_rounded(px, py + 1, x, y, w, h, r)) {
-          gfx_draw_pixel(px, py, color);
+  // 3. I 4 angoli arrotondati con anti-aliasing (copertura esterna - interna)
+  const int32_t corners_x[4][2] = {
+      {x, x + r}, {x + w - r, x + w}, {x, x + r}, {x + w - r, x + w}};
+  const int32_t corners_y[4][2] = {
+      {y, y + r}, {y, y + r}, {y + h - r, y + h}, {y + h - r, y + h}};
+  for (int c = 0; c < 4; c++) {
+    int32_t cy1 = corners_y[c][0] < 0 ? 0 : corners_y[c][0];
+    int32_t cy2 = corners_y[c][1] > (int32_t)scr_height ? (int32_t)scr_height
+                                                        : corners_y[c][1];
+    int32_t cx1 = corners_x[c][0] < 0 ? 0 : corners_x[c][0];
+    int32_t cx2 = corners_x[c][1] > (int32_t)scr_width ? (int32_t)scr_width
+                                                       : corners_x[c][1];
+    for (int32_t py = cy1; py < cy2; py++) {
+      uint32_t *row = &lfb_back[py * scr_pitch_pixels];
+      for (int32_t px = cx1; px < cx2; px++) {
+        uint8_t cov_out = rounded_coverage(px, py, x, y, w, h, r);
+        uint8_t cov_in = (w > 2 && h > 2)
+                             ? rounded_coverage(px, py, x + 1, y + 1, w - 2,
+                                                h - 2, r_in)
+                             : 0;
+        if (cov_out > cov_in) {
+          uint8_t ring = (uint8_t)(cov_out - cov_in);
+          row[px] = (ring == 255) ? color : blend_color(row[px], color, ring);
         }
       }
     }
@@ -1050,7 +1063,7 @@ void gfx_draw_rounded_rect(int32_t x, int32_t y, int32_t w, int32_t h,
 }
 
 // ---- gfx_fill_rounded_alpha ---------------------------------
-// Campiona blurred_buf (o back-buffer se non disponibile) e blenda il tint
+// Campiona blurred_buf (o back-buffer se non disponibile) e blenda il tint con AA
 void gfx_fill_rounded_alpha(int32_t x, int32_t y, int32_t w, int32_t h,
                             int32_t radius, uint32_t tint, uint8_t alpha) {
   int32_t x1 = x < 0 ? 0 : x;
@@ -1060,12 +1073,15 @@ void gfx_fill_rounded_alpha(int32_t x, int32_t y, int32_t w, int32_t h,
   for (int32_t py = y1; py < y2; py++) {
     uint32_t *row = &lfb_back[py * scr_pitch_pixels];
     for (int32_t px = x1; px < x2; px++) {
-      if (!inside_rounded(px, py, x, y, w, h, radius))
+      uint8_t cov = rounded_coverage(px, py, x, y, w, h, radius);
+      if (cov == 0)
         continue;
-      // Base: pixel sfocato (o quello del back-buffer come fallback)
+      uint8_t eff_alpha = (cov == 255) ? alpha : (uint8_t)(((uint32_t)alpha * cov) / 255);
+      if (eff_alpha == 0)
+        continue;
       uint32_t base =
           blurred_buf ? blurred_buf[py * scr_pitch_pixels + px] : row[px];
-      row[px] = blend_color(base, tint, alpha);
+      row[px] = blend_color(base, tint, eff_alpha);
     }
   }
 }
@@ -1084,9 +1100,11 @@ void gfx_draw_specular_rim(int32_t x, int32_t y, int32_t w, int32_t h,
     for (int32_t px = x; px < x + w; px++) {
       if (px < 0 || px >= (int32_t)scr_width)
         continue;
-      if (!inside_rounded(px, py, x, y, w, h, radius))
+      uint8_t cov = rounded_coverage(px, py, x, y, w, h, radius);
+      if (cov == 0)
         continue;
-      scanline[px] = blend_color(scanline[px], LG_SPECULAR_COLOR, alphas[row]);
+      uint8_t eff = (cov == 255) ? alphas[row] : (uint8_t)(((uint32_t)alphas[row] * cov) / 255);
+      scanline[px] = blend_color(scanline[px], LG_SPECULAR_COLOR, eff);
     }
   }
   // Ultima riga: bordo inferiore sottilissimo semi-trasparente
@@ -1096,10 +1114,11 @@ void gfx_draw_specular_rim(int32_t x, int32_t y, int32_t w, int32_t h,
     for (int32_t px = x; px < x + w; px++) {
       if (px < 0 || px >= (int32_t)scr_width)
         continue;
-      if (!inside_rounded(px, py_bot, x, y, w, h, radius))
+      uint8_t cov = rounded_coverage(px, py_bot, x, y, w, h, radius);
+      if (cov == 0)
         continue;
-      scanline[px] =
-          blend_color(scanline[px], LG_BORDER_COLOR, LG_BORDER_ALPHA);
+      uint8_t eff = (cov == 255) ? LG_BORDER_ALPHA : (uint8_t)(((uint32_t)LG_BORDER_ALPHA * cov) / 255);
+      scanline[px] = blend_color(scanline[px], LG_BORDER_COLOR, eff);
     }
   }
 }
@@ -1110,7 +1129,7 @@ void gfx_draw_drop_shadow(int32_t x, int32_t y, int32_t w, int32_t h,
   (void)spread;
   const theme_info_t *th = wm_get_current_theme_props();
   int32_t r = (th && th->corner_radius > 0) ? th->corner_radius : 8;
-  // Ombra leggera e centrata su tutti e 4 i lati della finestra
+  // Ombra leggera e centrata su tutti e 4 i lati della finestra con AA
   static const struct {
     int32_t pad;
     uint8_t a;
@@ -1130,11 +1149,16 @@ void gfx_draw_drop_shadow(int32_t x, int32_t y, int32_t w, int32_t h,
     for (int32_t py = y1; py < y2; py++) {
       uint32_t *row = &lfb_back[py * scr_pitch_pixels];
       for (int32_t px = x1; px < x2; px++) {
-        if (!inside_rounded(px, py, sx, sy, sw_box, sh_box, r + pad))
+        uint8_t cov_out = rounded_coverage(px, py, sx, sy, sw_box, sh_box, r + pad);
+        if (cov_out == 0)
           continue;
-        if (inside_rounded(px, py, x + 1, y + 1, w - 2, h - 2, r))
+        uint8_t cov_in = rounded_coverage(px, py, x + 1, y + 1, w - 2, h - 2, r);
+        if (cov_out <= cov_in)
           continue;
-        row[px] = blend_color(row[px], LG_SHADOW_COLOR, layers[li].a);
+        uint8_t ring = (uint8_t)(cov_out - cov_in);
+        uint8_t eff = (ring == 255) ? layers[li].a : (uint8_t)(((uint32_t)layers[li].a * ring) / 255);
+        if (eff > 0)
+          row[px] = blend_color(row[px], LG_SHADOW_COLOR, eff);
       }
     }
   }
