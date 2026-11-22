@@ -1107,19 +1107,20 @@ void gfx_draw_specular_rim(int32_t x, int32_t y, int32_t w, int32_t h,
 // ---- gfx_draw_drop_shadow -----------------------------------
 void gfx_draw_drop_shadow(int32_t x, int32_t y, int32_t w, int32_t h,
                           int32_t spread) {
+  (void)spread;
   const theme_info_t *th = wm_get_current_theme_props();
   int32_t r = (th && th->corner_radius > 0) ? th->corner_radius : 8;
-  // 3 layer leggeri e morbidi con angoli arrotondati anti-artefatto
-  int32_t eff_spread = (spread > 6) ? 6 : spread;
+  // Ombra leggera e centrata su tutti e 4 i lati della finestra
   static const struct {
-    int32_t off;
+    int32_t pad;
     uint8_t a;
-  } layers[] = {{2, 26}, {4, 15}, {6, 7}};
+  } layers[] = {{2, 16}, {4, 9}, {6, 4}};
   for (int li = 0; li < 3; li++) {
-    int32_t sx = x + layers[li].off - eff_spread / 3;
-    int32_t sy = y + layers[li].off - eff_spread / 3;
-    int32_t sw_box = w + eff_spread;
-    int32_t sh_box = h + eff_spread;
+    int32_t pad = layers[li].pad;
+    int32_t sx = x - pad;
+    int32_t sy = y - pad;
+    int32_t sw_box = w + pad * 2;
+    int32_t sh_box = h + pad * 2;
     int32_t x1 = sx < 0 ? 0 : sx;
     int32_t y1 = sy < 0 ? 0 : sy;
     int32_t x2 = (sx + sw_box > (int32_t)scr_width) ? (int32_t)scr_width
@@ -1129,7 +1130,9 @@ void gfx_draw_drop_shadow(int32_t x, int32_t y, int32_t w, int32_t h,
     for (int32_t py = y1; py < y2; py++) {
       uint32_t *row = &lfb_back[py * scr_pitch_pixels];
       for (int32_t px = x1; px < x2; px++) {
-        if (!inside_rounded(px, py, sx, sy, sw_box, sh_box, r + 2))
+        if (!inside_rounded(px, py, sx, sy, sw_box, sh_box, r + pad))
+          continue;
+        if (inside_rounded(px, py, x + 1, y + 1, w - 2, h - 2, r))
           continue;
         row[px] = blend_color(row[px], LG_SHADOW_COLOR, layers[li].a);
       }
