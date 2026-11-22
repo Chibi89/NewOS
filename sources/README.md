@@ -2,7 +2,7 @@
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 [![Arch](https://img.shields.io/badge/architecture-x86__64%20(Long%20Mode)-blue.svg)]()
-[![Kernel Size](https://img.shields.io/badge/kernel%20size-180%20KB%20%2F%20480%20KB-brightgreen.svg)]()
+[![Kernel Size](https://img.shields.io/badge/kernel%20size-181%20KB%20%2F%20480%20KB-brightgreen.svg)]()
 [![Dual Boot](https://img.shields.io/badge/boot-BIOS%20MBR%20%2B%20UEFI%2064--bit-blueviolet.svg)]()
 [![Filesystem](https://img.shields.io/badge/filesystems-exFAT%20%7C%20NTFS--3G%20%7C%20ISO%209660%20%7C%20UDF%20%7C%20RamFS-purple.svg)]()
 [![UI](https://img.shields.io/badge/GUI-Liquid%20Glass%20%7C%20Mica%20%7C%20Classic%202000-lightgrey.svg)]()
@@ -32,6 +32,10 @@
   - Convertiti a `uint64_t`/`int64_t` dimensioni file, offset `vfs_seek`/`vfs_tell`/`vfs_file_size`, dentry cache e indirizzamento LBA/FAT/Bitmap in [vfs.h](file:///c:/Users/morga/Desktop/MyOS/kernel/fs/vfs.h), [vfs.c](file:///c:/Users/morga/Desktop/MyOS/kernel/fs/vfs.c), [vfs_cache.c](file:///c:/Users/morga/Desktop/MyOS/kernel/fs/vfs_cache.c), [exfat.c](file:///c:/Users/morga/Desktop/MyOS/kernel/fs/exfat.c) ed [exfat_ops.c](file:///c:/Users/morga/Desktop/MyOS/kernel/fs/exfat_ops.c), rimuovendo l'offset hardcoded `EXFAT_PARTITION_LBA` in favore di `vbr->partition_offset`.
   - Rimossi i fallback fittizi (`128 MB`, `650 MB`, `16 MB`) in [vfs_mount.c](file:///c:/Users/morga/Desktop/MyOS/kernel/fs/vfs_mount.c) ed [exfat_ops.c](file:///c:/Users/morga/Desktop/MyOS/kernel/fs/exfat_ops.c) con calcolo reale `total_bytes`/`free_bytes` a 64-bit.
   - Integrato il controller **NVMe** (`NVME.DLL`) nel VFS tramite `ata_register_nvme_device()` in [ata.c](file:///c:/Users/morga/Desktop/MyOS/kernel/drivers/ata.c) e `VFS_BUS_NVME`, con probing GPT/MBR automatico fino alla capienza massima del namespace.
+- **Ottimizzazioni Kernel Heap, Cache VFS & exFAT Bare-Metal**:
+  - Implementato `kmalloc_aligned()` reale in [heap.c](file:///c:/Users/morga/Desktop/MyOS/kernel/mm/heap.c) tramite split in-place compatibile con `kfree()` per l'allineamento a `4096` byte di tabelle `PML4/PDPT/PD/PT` e buffer DMA.
+  - Potenziata la cache VFS ([vfs_cache.h](file:///c:/Users/morga/Desktop/MyOS/kernel/fs/vfs_cache.h), [vfs_cache.c](file:///c:/Users/morga/Desktop/MyOS/kernel/fs/vfs_cache.c)) a **256 settori / 64 dentry** con tabella hash a **512 bucket** ($O(1)$) e fix eviction multi-disco (`ata_write_device_sectors`).
+  - Introdotti `g_next_free_hint` con scansione bitmap a **64 bit** (`__builtin_ctzll`) e fast-path **zero-copy multi-cluster** in [exfat.c](file:///c:/Users/morga/Desktop/MyOS/kernel/fs/exfat.c).
 
 ### 20 Novembre 2026
 - **BSOD Liquid Glass Out-of-Kernel (`BSOD.DLL` + `KERNEL.SYM`)**:
@@ -83,8 +87,8 @@
 
 ---
 
-### 2. Kernel Core Protetto (~180 KB / 480 KB)
-- **Budget Kernel Rispettato**: Dimensione di `kernel.bin` ridotta a **184.252 byte (~180 KB)** grazie allo scorporo sistematico dei sottosistemi, driver avanzati, browser e librerie dinamiche in `C:\NewOS\SystemLibrary\`, ben al di sotto del vincolo di 480 KB (491.520 byte).
+### 2. Kernel Core Protetto (~181 KB / 480 KB)
+- **Budget Kernel Rispettato**: Dimensione di `kernel.bin` ridotta a **185.628 byte (~181 KB)** grazie allo scorporo sistematico dei sottosistemi, driver avanzati, browser e librerie dinamiche in `C:\NewOS\SystemLibrary\`, ben al di sotto del vincolo di 480 KB (491.520 byte).
 - **Separazione Privilegi Ring 0 / Ring 3**:
   - Istruzioni native `SYSCALL` e `SYSRET` per le chiamate di sistema (`kernel/arch/x86_64/syscall.c`).
   - Protezione della memoria virtuale con Supervisor bit nelle tabelle PML4 (`kernel/mm/paging.c`).

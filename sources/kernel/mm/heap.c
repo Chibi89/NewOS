@@ -56,8 +56,71 @@ void* kmalloc(size_t size) {
 }
 
 void* kmalloc_aligned(size_t size, size_t alignment) {
-    (void)alignment;
-    return kmalloc(size);
+    if (size == 0) return NULL;
+    if (alignment <= 16) return kmalloc(size);
+
+    // Assicura che alignment sia una potenza di 2
+    if ((alignment & (alignment - 1)) != 0) {
+        size_t p = 16;
+        while (p < alignment) p <<= 1;
+        alignment = p;
+    }
+
+    size = (size + 15) & ~15;
+    size_t hdr_sz = sizeof(block_header_t);
+
+    block_header_t* curr = free_list;
+    while (curr != NULL) {
+        if (curr->is_free) {
+            uintptr_t data_addr = (uintptr_t)curr + hdr_sz;
+            if ((data_addr & (alignment - 1)) == 0) {
+                if (curr->size >= size) {
+                    if (curr->size >= size + hdr_sz + 32) {
+                        block_header_t* rem = (block_header_t*)(data_addr + size);
+                        rem->size = curr->size - size - hdr_sz;
+                        rem->is_free = true;
+                        rem->next = curr->next;
+                        rem->reserved_align = 0;
+                        curr->size = size;
+                        curr->next = rem;
+                    }
+                    curr->is_free = false;
+                    return (void*)data_addr;
+                }
+            } else {
+                // Calcola un indirizzo dati allineato che lasci spazio a un nuovo header prima di esso
+                uintptr_t min_aligned = data_addr + hdr_sz + 32;
+                uintptr_t aligned_data = (min_aligned + alignment - 1) & ~(alignment - 1);
+                size_t pad = (size_t)(aligned_data - data_addr);
+                if (curr->size >= pad + size) {
+                    block_header_t* aligned_hdr = (block_header_t*)(aligned_data - hdr_sz);
+                    size_t avail_after_hdr = curr->size - pad;
+
+                    aligned_hdr->size = avail_after_hdr;
+                    aligned_hdr->is_free = false;
+                    aligned_hdr->next = curr->next;
+                    aligned_hdr->reserved_align = 0;
+
+                    if (avail_after_hdr >= size + hdr_sz + 32) {
+                        block_header_t* tail = (block_header_t*)(aligned_data + size);
+                        tail->size = avail_after_hdr - size - hdr_sz;
+                        tail->is_free = true;
+                        tail->next = curr->next;
+                        tail->reserved_align = 0;
+                        aligned_hdr->size = size;
+                        aligned_hdr->next = tail;
+                    }
+
+                    curr->size = pad - hdr_sz;
+                    curr->is_free = true;
+                    curr->next = aligned_hdr;
+                    return (void*)aligned_data;
+                }
+            }
+        }
+        curr = curr->next;
+    }
+    return NULL;
 }
 
 void* kcalloc(size_t num, size_t size) {

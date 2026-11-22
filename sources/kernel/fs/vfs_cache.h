@@ -3,8 +3,8 @@
 
 #include <types.h>
 
-#define VFS_CACHE_SECTORS_MAX  64
-#define VFS_DENTRY_CACHE_MAX   32
+#define VFS_CACHE_SECTORS_MAX  256
+#define VFS_DENTRY_CACHE_MAX   64
 
 typedef struct {
     uint32_t dev_id;
