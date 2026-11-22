@@ -2,7 +2,7 @@
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 [![Arch](https://img.shields.io/badge/architecture-x86__64%20(Long%20Mode)-blue.svg)]()
-[![Kernel Size](https://img.shields.io/badge/kernel%20size-181%20KB%20%2F%20480%20KB-brightgreen.svg)]()
+[![Kernel Size](https://img.shields.io/badge/kernel%20size-187%20KB%20%2F%20480%20KB-brightgreen.svg)]()
 [![Dual Boot](https://img.shields.io/badge/boot-BIOS%20MBR%20%2B%20UEFI%2064--bit-blueviolet.svg)]()
 [![Filesystem](https://img.shields.io/badge/filesystems-exFAT%20%7C%20NTFS--3G%20%7C%20ISO%209660%20%7C%20UDF%20%7C%20RamFS-purple.svg)]()
 [![UI](https://img.shields.io/badge/GUI-Liquid%20Glass%20%7C%20Mica%20%7C%20Classic%202000-lightgrey.svg)]()
@@ -23,6 +23,14 @@
 <summary><strong>Espandi per visualizzare gli aggiornamenti e i fix recenti</strong></summary>
 
 ### 22 Novembre 2026
+- **Esplora Risorse — 8 Modalità di Vista, Layout Dinamico & `CTRL + Rotella Mouse`**:
+  - Implementate in [explorer.h](file:///c:/Users/morga/Desktop/MyOS/explorer/explorer.h) ed [explorer.c](file:///c:/Users/morga/Desktop/MyOS/explorer/explorer.c) tutte le 8 viste stile Windows Explorer (`Icone molto grandi`, `Icone grandi`, `Icone medie`, `Icone piccole`, `Elenco`, `Dettagli` con colonne Nome/Tipo/Dimensione/Permessi, `Riquadri` e `Contenuto`), selezionabili dal menu **Visualizza**.
+  - Griglia adattiva dinamica alla larghezza della finestra con spaziatura compatta uniforme (`explorer_get_view_metrics`) e wrapping automatico su due righe per i nomi lunghi (`explorer_split_name`).
+  - Aggiunto supporto hardware PS/2 IntelliMouse a 4 byte (`mouse_consume_scroll` in [mouse.c](file:///c:/Users/morga/Desktop/MyOS/kernel/drivers/mouse.c)), codici `KEY_WHEEL_UP`/`KEY_WHEEL_DOWN` + `keyboard_is_ctrl_pressed()` ([keyboard.c](file:///c:/Users/morga/Desktop/MyOS/kernel/drivers/keyboard.c), [wm.c](file:///c:/Users/morga/Desktop/MyOS/kernel/gui/wm.c)) per scorrere normalmente o cambiare vista istantaneamente con **`CTRL + Rotella`**.
+- **Libreria Controlli UI Standard Out-of-Kernel (`COMCTL.DLL`)**:
+  - Creata la libreria condivisa [comctl.h](file:///c:/Users/morga/Desktop/MyOS/SystemLibrary/comctl.h) / [comctl_dll.c](file:///c:/Users/morga/Desktop/MyOS/SystemLibrary/comctl_dll.c) ([comctl_loader.c](file:///c:/Users/morga/Desktop/MyOS/kernel/gui/comctl_loader.c)) con controlli standard moderni multi-tema (`Button`, `Checkbox`, `Radio`, `ToggleSwitch`, `ProgressBar`, `Slider`, `Scrollbar`, `TextBox`, `ComboBox`, `ListView`, `TreeView`, `TabControl`, `Breadcrumb`, `InfoBar` e `PropertyGrid` multi-colonna/multi-tipo) utilizzati dalle applicazioni out-of-kernel.
+- **Supporto EXT4 (`FS_EXT.DLL`) & NVMe TRIM / Deallocate (`NVME.DLL`)**:
+  - Aggiunto il driver `EXT4` ([ext4.c](file:///c:/Users/morga/Desktop/MyOS/kernel/fs/ext4.c), [ext4.h](file:///c:/Users/morga/Desktop/MyOS/kernel/fs/ext4.h)) nel modulo out-of-kernel [fs_ext_dll.c](file:///c:/Users/morga/Desktop/MyOS/SystemLibrary/fs_ext_dll.c) e il supporto `NVME_CMD_DSM` (Deallocate/TRIM) in [nvme_dll.c](file:///c:/Users/morga/Desktop/MyOS/SystemLibrary/nvme_dll.c), [ata.c](file:///c:/Users/morga/Desktop/MyOS/kernel/drivers/ata.c), [ahci.c](file:///c:/Users/morga/Desktop/MyOS/kernel/drivers/ahci.c) ed [exfat_ops.c](file:///c:/Users/morga/Desktop/MyOS/kernel/fs/exfat_ops.c).
 - **Servizio di Avvio Unificato Out-of-Kernel (`LAUNCHER.DLL` + `launcher_loader.c`)**:
   - Centralizzato il lancio di programmi, applet `.CPL`, documenti, script e moduli critici in [launcher_dll.c](file:///c:/Users/morga/Desktop/MyOS/SystemLibrary/launcher_dll.c) e [launcher_loader.c](file:///c:/Users/morga/Desktop/MyOS/kernel/apps/launcher_loader.c), con verifica firma `NOSM` + `CRC32` e integrazione in [cmd.c](file:///c:/Users/morga/Desktop/MyOS/kernel/apps/cmd.c), [wm.c](file:///c:/Users/morga/Desktop/MyOS/kernel/gui/wm.c) ed [explorer.c](file:///c:/Users/morga/Desktop/MyOS/explorer/explorer.c).
 - **Centro Sicurezza e Permessi (`SECCPL.CPL`) & Registro Isolato LSA**:

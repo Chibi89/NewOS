@@ -22,6 +22,84 @@ static uint32_t    g_bm_cluster = 0;
 static uint64_t    g_bm_length = 0;
 static uint32_t    g_next_free_hint = 2;
 static const ata_device_t* g_exfat_dev = NULL;
+static uint32_t    g_exfat_dev_id = 0;
+static uint16_t    g_upcase_table[256];
+static bool        g_upcase_loaded = false;
+
+static void exfat_update_dev_id(const ata_device_t* dev) {
+    if (!dev) { g_exfat_dev_id = 0; return; }
+    int cnt = ata_get_device_count();
+    for (int i = 0; i < cnt; i++) {
+        if (ata_get_device(i) == dev) {
+            g_exfat_dev_id = (uint32_t)i;
+            return;
+        }
+    }
+    g_exfat_dev_id = 0;
+}
+
+uint32_t exfat_get_dev_id(void) {
+    return g_exfat_dev_id;
+}
+
+const ata_device_t* exfat_get_device(void) {
+    return g_exfat_dev ? g_exfat_dev : ata_get_primary_master();
+}
+
+uint16_t exfat_upcase_char(uint16_t ch) {
+    if (g_upcase_loaded && ch < 256) return g_upcase_table[ch];
+    if (ch >= 'a' && ch <= 'z') return (uint16_t)(ch - 32);
+    if (ch >= 0xE0 && ch <= 0xFE && ch != 0xF7) return (uint16_t)(ch - 32);
+    return ch;
+}
+
+int exfat_utf16_to_utf8(const uint16_t* u16, int u16_len, char* out, int out_max) {
+    if (!u16 || !out || out_max <= 1) return 0;
+    int pos = 0;
+    for (int i = 0; i < u16_len; i++) {
+        uint16_t ch = u16[i];
+        if (ch == 0) break;
+        if (ch < 0x80) {
+            if (pos + 1 >= out_max) break;
+            out[pos++] = (char)ch;
+        } else if (ch < 0x800) {
+            if (pos + 2 >= out_max) break;
+            out[pos++] = (char)(0xC0 | (ch >> 6));
+            out[pos++] = (char)(0x80 | (ch & 0x3F));
+        } else {
+            if (pos + 3 >= out_max) break;
+            out[pos++] = (char)(0xE0 | (ch >> 12));
+            out[pos++] = (char)(0x80 | ((ch >> 6) & 0x3F));
+            out[pos++] = (char)(0x80 | (ch & 0x3F));
+        }
+    }
+    out[pos] = '\0';
+    return pos;
+}
+
+int exfat_utf8_to_utf16(const char* u8, uint16_t* out, int out_max) {
+    if (!u8 || !out || out_max <= 0) return 0;
+    int pos = 0;
+    const uint8_t* p = (const uint8_t*)u8;
+    while (*p && pos < out_max) {
+        uint32_t cp;
+        if (p[0] < 0x80) {
+            cp = p[0];
+            p += 1;
+        } else if ((p[0] & 0xE0) == 0xC0 && (p[1] & 0xC0) == 0x80) {
+            cp = ((uint32_t)(p[0] & 0x1F) << 6) | (uint32_t)(p[1] & 0x3F);
+            p += 2;
+        } else if ((p[0] & 0xF0) == 0xE0 && (p[1] & 0xC0) == 0x80 && (p[2] & 0xC0) == 0x80) {
+            cp = ((uint32_t)(p[0] & 0x0F) << 12) | ((uint32_t)(p[1] & 0x3F) << 6) | (uint32_t)(p[2] & 0x3F);
+            p += 3;
+        } else {
+            cp = '_';
+            p += 1;
+        }
+        out[pos++] = (uint16_t)cp;
+    }
+    return pos;
+}
 
 static bool exfat_read_sec(uint64_t lba, uint32_t count, void* buf) {
     if (g_exfat_dev) return ata_read_device_sectors(g_exfat_dev, lba, count, buf);
@@ -31,6 +109,19 @@ static bool exfat_read_sec(uint64_t lba, uint32_t count, void* buf) {
 static bool exfat_write_sec(uint64_t lba, uint32_t count, const void* buf) {
     if (g_exfat_dev) return ata_write_device_sectors(g_exfat_dev, lba, count, buf);
     return ata_write_sectors(lba, count, buf);
+}
+
+void exfat_set_volume_dirty(bool dirty) {
+    if (!g_mounted || !g_partition_lba) return;
+    uint16_t new_flags = dirty ? (uint16_t)(g_vbr.volume_flags | 0x0002U)
+                               : (uint16_t)(g_vbr.volume_flags & ~0x0002U);
+    if (new_flags == g_vbr.volume_flags) return;
+    g_vbr.volume_flags = new_flags;
+    uint8_t sec_buf[512];
+    if (exfat_read_sec(g_partition_lba, 1, sec_buf)) {
+        *(uint16_t*)(sec_buf + 106) = new_flags;
+        exfat_write_sec(g_partition_lba, 1, sec_buf);
+    }
 }
 
 uint64_t exfat_cluster_to_lba(uint32_t cluster) {
@@ -47,7 +138,7 @@ uint32_t exfat_get_next_cluster(uint32_t cluster, bool no_fat_chain) {
     uint32_t fat_offset = (uint32_t)(((uint64_t)cluster * 4ULL) % 512ULL);
 
     uint8_t sec_buf[512];
-    if (!vfs_cache_read_sector(0, fat_sector, sec_buf)) {
+    if (!vfs_cache_read_sector(g_exfat_dev_id, fat_sector, sec_buf)) {
         if (!exfat_read_sec(fat_sector, 1, sec_buf)) {
             return 0xFFFFFFFF;
         }
@@ -75,7 +166,7 @@ void exfat_set_bitmap_bit(uint32_t cluster, bool allocated) {
 
     uint64_t sec_lba = exfat_cluster_to_lba(cur_bm_cl) + sec_in_cl;
     uint8_t sec_buf[512];
-    if (!vfs_cache_read_sector(0, sec_lba, sec_buf)) {
+    if (!vfs_cache_read_sector(g_exfat_dev_id, sec_lba, sec_buf)) {
         if (!exfat_read_sec(sec_lba, 1, sec_buf)) return;
     }
 
@@ -91,7 +182,7 @@ void exfat_set_bitmap_bit(uint32_t cluster, bool allocated) {
         }
     }
 
-    vfs_cache_write_sector(0, sec_lba, sec_buf);
+    vfs_cache_write_sector(g_exfat_dev_id, sec_lba, sec_buf);
 }
 
 static uint32_t exfat_scan_bitmap_range(uint32_t start_cluster, uint32_t total_cl) {
@@ -117,7 +208,7 @@ static uint32_t exfat_scan_bitmap_range(uint32_t start_cluster, uint32_t total_c
                 byte_pos += 512ULL;
                 continue;
             }
-            if (!vfs_cache_read_sector(0, cl_lba + s, sec_buf)) {
+            if (!vfs_cache_read_sector(g_exfat_dev_id, cl_lba + s, sec_buf)) {
                 if (!exfat_read_sec(cl_lba + s, 1, sec_buf)) break;
             }
             uint32_t b_start = (start_byte > byte_pos) ? (uint32_t)(start_byte - byte_pos) : 0U;
@@ -175,18 +266,23 @@ bool exfat_mount_device(const ata_device_t* dev, uint64_t partition_lba) {
     bool old_mounted = g_mounted;
 
     g_exfat_dev = dev ? dev : ata_get_primary_master();
+    exfat_update_dev_id(g_exfat_dev);
     if (exfat_mount(partition_lba)) {
         return true;
     }
 
     g_exfat_dev = old_dev;
+    exfat_update_dev_id(g_exfat_dev);
     g_partition_lba = old_lba;
     g_mounted = old_mounted;
     return false;
 }
 
 void exfat_set_device(const ata_device_t* dev, uint64_t partition_lba) {
-    if (dev) g_exfat_dev = dev;
+    if (dev) {
+        g_exfat_dev = dev;
+        exfat_update_dev_id(dev);
+    }
     if (partition_lba) g_partition_lba = partition_lba;
 }
 
@@ -194,6 +290,7 @@ bool exfat_mount(uint64_t partition_lba) {
     if (!g_exfat_dev) {
         g_exfat_dev = ata_get_primary_master();
     }
+    exfat_update_dev_id(g_exfat_dev);
     uint8_t sec_buf[512];
     bool primary_valid = false;
 
@@ -239,6 +336,8 @@ bool exfat_mount(uint64_t partition_lba) {
     uint8_t root_sec[512];
     uint32_t bm_cluster = 0;
     uint64_t bm_length = 0;
+    uint32_t uc_cluster = 0;
+    g_upcase_loaded = false;
 
     if (exfat_read_sec(root_lba, 1, root_sec)) {
         for (int i = 0; i < 16; i++) {
@@ -246,8 +345,17 @@ bool exfat_mount(uint64_t partition_lba) {
             if (ent[0] == EXFAT_ENTRY_BITMAP) {
                 bm_cluster = *(uint32_t*)(ent + 20);
                 bm_length = *(uint64_t*)(ent + 24);
-                break;
+            } else if (ent[0] == EXFAT_ENTRY_UPCASE) {
+                uc_cluster = *(uint32_t*)(ent + 20);
             }
+        }
+    }
+
+    if (uc_cluster >= 2) {
+        uint8_t uc_sec[512];
+        if (exfat_read_sec(exfat_cluster_to_lba(uc_cluster), 1, uc_sec)) {
+            memcpy(g_upcase_table, uc_sec, sizeof(g_upcase_table));
+            g_upcase_loaded = true;
         }
     }
 
@@ -367,22 +475,24 @@ int32_t exfat_list_dir(uint32_t dir_cluster, exfat_item_info_t* out_items, int32
                         uint32_t first_cl = *(uint32_t*)(stream + 20);
                         uint64_t file_size = *(uint64_t*)(stream + 24);
 
-                        // Leggi il nome dalle entry 0xC1 successive
-                        char name[128];
-                        int name_pos = 0;
-                        name[0] = '\0';
+                        // Leggi il nome UTF-16 dalle entry 0xC1 successive e converti in UTF-8
+                        uint16_t u16_buf[255];
+                        int u16_pos = 0;
+                        uint32_t mtime = *(uint32_t*)(entry + 12);
 
                         for (uint8_t s = 2; s <= secondary_count && (i + s < entries_per_cl); s++) {
                             uint8_t* name_entry = cl_buf + (i + s) * 32;
                             if (name_entry[0] == EXFAT_ENTRY_NAME) {
-                                for (int c = 0; c < 15 && name_pos < 127; c++) {
+                                for (int c = 0; c < 15 && u16_pos < 255; c++) {
                                     uint16_t ch = *(uint16_t*)(name_entry + 2 + c * 2);
                                     if (ch == 0) break;
-                                    name[name_pos++] = (ch < 128) ? (char)ch : '_';
+                                    u16_buf[u16_pos++] = ch;
                                 }
                             }
                         }
-                        name[name_pos] = '\0';
+
+                        char name[128];
+                        int name_pos = exfat_utf16_to_utf8(u16_buf, u16_pos, name, sizeof(name));
 
                         // Salva nel risultato se abbiamo un nome valido
                         if (name_pos > 0) {
@@ -390,6 +500,7 @@ int32_t exfat_list_dir(uint32_t dir_cluster, exfat_item_info_t* out_items, int32
                             out_items[count].size = file_size;
                             out_items[count].first_cluster = first_cl;
                             out_items[count].attributes = attr;
+                            out_items[count].mtime = mtime;
                             out_items[count].is_directory = (attr & EXFAT_ATTR_DIRECTORY) != 0;
                             out_items[count].no_fat_chain = (stream_flags & EXFAT_FLAG_NO_FAT_CHAIN) != 0;
                             count++;

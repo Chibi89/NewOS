@@ -10,5 +10,6 @@ uint32_t    nvme_get_sector_size(void);
 const char* nvme_get_model(void);
 bool        nvme_read_sectors(uint64_t lba, uint32_t count, void* buffer);
 bool        nvme_write_sectors(uint64_t lba, uint32_t count, const void* buffer);
+bool        nvme_deallocate_sectors(uint64_t lba, uint32_t count);
 
 #endif // DRIVERS_NVME_H

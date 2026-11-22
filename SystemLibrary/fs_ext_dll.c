@@ -3,6 +3,7 @@
 #include <drivers/usb/usb_msc.h>
 #include <fs/ntfs.h>
 #include <fs/udf.h>
+#include <fs/ext4.h>
 #include <fs/vfs.h>
 #include <fs/vfs_mount.h>
 #include <mm/heap.h>
@@ -52,6 +53,7 @@ int module_main(const kernel_api_t *api, fs_ext_params_t *p) {
         case 1:
             ntfs_init();
             udf_init();
+            ext4_init();
             p->ret_bool = true;
             break;
         case 2:
@@ -69,3 +71,4 @@ int module_main(const kernel_api_t *api, fs_ext_params_t *p) {
 
 #include "../kernel/fs/ntfs.c"
 #include "../kernel/fs/udf.c"
+#include "../kernel/fs/ext4.c"

@@ -15,8 +15,25 @@
 #include <user.h>
 #include <arch/x86_64/io.h>
 
-#define MAX_OPEN_FILES 16
+#define MAX_OPEN_FILES 128
 static vfs_file_t g_file_pool[MAX_OPEN_FILES];
+static volatile int g_vfs_pool_lock = 0;
+
+static inline uint64_t vfs_pool_lock_irq(void) {
+    uint64_t flags;
+    __asm__ volatile ("pushfq; pop %0; cli" : "=r"(flags) :: "memory");
+    while (__atomic_test_and_set(&g_vfs_pool_lock, __ATOMIC_ACQUIRE)) {
+        __asm__ volatile ("pause");
+    }
+    return flags;
+}
+
+static inline void vfs_pool_unlock_irq(uint64_t flags) {
+    __atomic_clear(&g_vfs_pool_lock, __ATOMIC_RELEASE);
+    if (flags & (1ULL << 9)) {
+        __asm__ volatile ("sti" ::: "memory");
+    }
+}
 
 static void vfs_serial(const char* s) {
     if (!s) return;
@@ -162,39 +179,53 @@ bool vfs_init(void) {
         vfs_serial("[VFS] Controller NVMe rilevato e registrato nel VFS!\n");
     }
 
-    // 3. Montaggio di tutti gli altri Hard Disk / SSD secondari rilevati sulla scheda madre:
-    // Il disco C: e' SEMPRE e RIGOROSAMENTE il sistema operativo in esecuzione.
-    // Se altri dischi hanno partizioni con lettera C:, vengono riassegnati alla prima lettera non allocata.
+    // 3. Montaggio multi-partizione di tutti gli altri Hard Disk / SSD / NVMe rilevati:
+    // Il disco C: e' SEMPRE il sistema operativo in esecuzione.
     for (int i = 0; i < dev_cnt; i++) {
         const ata_device_t* dev = ata_get_device(i);
         if (!dev || !dev->present || dev->is_atapi) continue;
         if (dev == pm) continue; // Salta il disco di sistema C:
 
-        // Trova la prima lettera di unità libera non allocata (E..Z, escluse R e U)
-        char free_letter = 0;
-        for (char cand = 'E'; cand <= 'Z'; cand++) {
-            if (cand == 'R' || cand == 'U') continue;
-            vfs_drive_info_t dummy;
-            if (!vfs_get_drive_info(cand, &dummy)) {
-                free_letter = cand;
-                break;
+        fs_part_info_t parts[FS_MAX_PARTITIONS_PER_DISK];
+        int pcount = fs_probe_device_partitions(dev, parts, FS_MAX_PARTITIONS_PER_DISK);
+        if (pcount <= 0) {
+            parts[0].start_lba = dev->part_lba;
+            parts[0].sector_count = dev->part_sectors;
+            parts[0].is_esp = false;
+            strncpy(parts[0].fs_name, dev->part_fs, sizeof(parts[0].fs_name) - 1);
+            pcount = 1;
+        }
+
+        for (int p = 0; p < pcount; p++) {
+            if (parts[p].is_esp) continue;
+
+            // Trova la prima lettera di unità libera non allocata (E..Z, escluse R e U)
+            char free_letter = 0;
+            for (char cand = 'E'; cand <= 'Z'; cand++) {
+                if (cand == 'R' || cand == 'U') continue;
+                vfs_drive_info_t dummy;
+                if (!vfs_get_drive_info(cand, &dummy)) {
+                    free_letter = cand;
+                    break;
+                }
             }
+            if (!free_letter) break;
+
+            const char* fs_name = "RAW";
+            if (strcmp(parts[p].fs_name, "NTFS") == 0) {
+                fs_name = "NTFS";
+            } else if (strcmp(parts[p].fs_name, "exFAT") == 0) {
+                fs_name = "exFAT";
+            } else if (strcmp(parts[p].fs_name, "EXT4") == 0) {
+                fs_name = "EXT4";
+            } else if (strcmp(parts[p].fs_name, "FAT32") == 0 || strcmp(parts[p].fs_name, "FAT16") == 0) {
+                fs_name = "exFAT";
+            }
+
+            char label[32];
+            mini_snprintf(label, sizeof(label), "Disco locale (%c:)", free_letter);
+            vfs_mount_drive(free_letter, fs_name, label, (uint32_t)i, parts[p].start_lba, false, (void*)dev);
         }
-        if (!free_letter) break; // Terminate lettere di unità disponibili
-
-        const char* fs_name = "RAW";
-        if (strcmp(dev->part_fs, "NTFS") == 0) {
-            fs_name = "NTFS";
-        } else if (strcmp(dev->part_fs, "exFAT") == 0) {
-            fs_name = "exFAT";
-        } else if (strcmp(dev->part_fs, "FAT32") == 0 || strcmp(dev->part_fs, "FAT16") == 0) {
-            fs_name = "exFAT"; // Fallback compatibile FAT
-        }
-
-        char label[32];
-        mini_snprintf(label, sizeof(label), "Disco locale (%c:)", free_letter);
-
-        vfs_mount_drive(free_letter, fs_name, label, (uint32_t)i, dev->part_lba, false, (void*)dev);
     }
 
     return c_ok;
@@ -203,18 +234,22 @@ bool vfs_init(void) {
 vfs_file_t* vfs_open(const char* path) {
     if (!path) return NULL;
 
-    // Trova uno slot libero nel pool
+    // Trova e riserva atomicamente uno slot libero nel pool (SMP-safe)
     int free_slot = -1;
+    uint64_t irq = vfs_pool_lock_irq();
     for (int i = 0; i < MAX_OPEN_FILES; i++) {
         if (!g_file_pool[i].is_open) {
+            g_file_pool[i].is_open = true;
             free_slot = i;
             break;
         }
     }
+    vfs_pool_unlock_irq(irq);
     if (free_slot < 0) return NULL;
 
     vfs_file_t* f = &g_file_pool[free_slot];
     memset(f, 0, sizeof(vfs_file_t));
+    f->is_open = true;
 
     // Risoluzione tramite Mount Manager e dispatch dinamico
     const char* rel_path = NULL;
@@ -339,6 +374,30 @@ void vfs_close(vfs_file_t* file) {
         }
     }
     file->is_open = false;
+}
+
+bool vfs_truncate(vfs_file_t* file, uint64_t new_size) {
+    if (!file || !file->is_open || file->is_directory) return false;
+    if (file->driver_data) {
+        vfs_mount_t* mnt = (vfs_mount_t*)file->driver_data;
+        if (mnt->read_only) return false;
+        if (mnt->driver && mnt->driver->truncate) {
+            return mnt->driver->truncate(mnt, file, new_size);
+        }
+    }
+    return false;
+}
+
+bool vfs_fsync(vfs_file_t* file) {
+    if (!file || !file->is_open) return false;
+    if (file->driver_data) {
+        vfs_mount_t* mnt = (vfs_mount_t*)file->driver_data;
+        if (mnt->driver && mnt->driver->fsync) {
+            return mnt->driver->fsync(mnt, file);
+        }
+    }
+    vfs_flush();
+    return true;
 }
 
 int32_t vfs_readdir(const char* dir_path, vfs_dirent_t* entries, int32_t max_entries) {

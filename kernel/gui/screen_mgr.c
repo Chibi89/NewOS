@@ -662,6 +662,9 @@ void screen_mgr_init(void) {
   g_kernel_ext_api.uistyle_open_explorer = uistyle_open_explorer;
   g_kernel_ext_api.app_installer_launch = app_installer_launch;
   g_kernel_ext_api.app_seccpl_launch = app_seccpl_launch;
+  extern const void *comctl_get_api(void);
+  g_kernel_ext_api.comctl_get_api = comctl_get_api;
+  g_kernel_ext_api.keyboard_is_ctrl_pressed = keyboard_is_ctrl_pressed;
   g_kernel_api.ext_api = &g_kernel_ext_api;
 
   g_api_initialized = true;

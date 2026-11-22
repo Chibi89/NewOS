@@ -289,3 +289,34 @@ bool nvme_read_sectors(uint64_t lba, uint32_t count, void* buffer) {
 bool nvme_write_sectors(uint64_t lba, uint32_t count, const void* buffer) {
     return nvme_rw_chunk(true, lba, count, (void*)buffer);
 }
+
+bool nvme_deallocate_sectors(uint64_t lba, uint32_t count) {
+    if (!g_nvme_present || count == 0) return false;
+    typedef struct __attribute__((packed)) {
+        uint32_t cattr;
+        uint32_t nlb;
+        uint64_t slba;
+    } nvme_dsm_range_t;
+
+    uint64_t buf_phys = 0;
+    uint8_t* buf = (uint8_t*)dma_alloc(4096, 4096, &buf_phys);
+    if (!buf) return false;
+    memset(buf, 0, 4096);
+
+    nvme_dsm_range_t* rng = (nvme_dsm_range_t*)buf;
+    rng->cattr = 0;
+    rng->nlb = count;
+    rng->slba = lba;
+
+    nvme_sqe_t cmd;
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.cdw0 = 0x09U; // Dataset Management
+    cmd.nsid = 1;
+    cmd.prp1 = buf_phys;
+    cmd.cdw10 = 0;          // 1 range (0-based)
+    cmd.cdw11 = (1U << 2);  // AD (Attribute Deallocate)
+
+    bool ok = nvme_submit_cmd(1, g_iosq, g_iocq, &g_iosq_tail, &g_iocq_head, &g_iocq_phase, &cmd);
+    kfree(buf);
+    return ok;
+}

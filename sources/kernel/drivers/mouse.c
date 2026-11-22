@@ -10,8 +10,10 @@ static uint32_t scr_w = 1024;
 static uint32_t scr_h = 768;
 
 static uint8_t mouse_cycle = 0;
-static int8_t  mouse_byte[3];
+static int8_t  mouse_byte[4];
 static mouse_state_t current_mouse;
+static bool    mouse_has_wheel = false;
+static volatile int32_t pending_scroll_z = 0;
 
 static void mouse_wait(uint8_t type) {
     uint32_t time_out = 100000;
@@ -62,6 +64,10 @@ static void mouse_callback(interrupt_frame_t* frame) {
         mouse_cycle++;
     } else if (mouse_cycle == 2) {
         mouse_byte[2] = (int8_t)b;
+        if (mouse_has_wheel) {
+            mouse_cycle++;
+            return;
+        }
         mouse_cycle = 0;
 
         // Decodifica pacchetto a 3 byte
@@ -69,12 +75,11 @@ static void mouse_callback(interrupt_frame_t* frame) {
         int32_t dx = mouse_byte[1];
         int32_t dy = mouse_byte[2];
 
-        // Segno X e Y
         if (flags & 0x10) dx |= 0xFFFFFF00;
         if (flags & 0x20) dy |= 0xFFFFFF00;
 
         current_mouse.x += dx;
-        current_mouse.y -= dy; // Inversione asse Y dello schermo
+        current_mouse.y -= dy;
 
         if (current_mouse.x < 0) current_mouse.x = 0;
         if (current_mouse.x >= (int32_t)scr_w) current_mouse.x = scr_w - 1;
@@ -84,6 +89,31 @@ static void mouse_callback(interrupt_frame_t* frame) {
         current_mouse.left_button   = (flags & 0x01) ? true : false;
         current_mouse.right_button  = (flags & 0x02) ? true : false;
         current_mouse.middle_button = (flags & 0x04) ? true : false;
+    } else if (mouse_cycle == 3) {
+        mouse_byte[3] = (int8_t)b;
+        mouse_cycle = 0;
+
+        uint8_t flags = (uint8_t)mouse_byte[0];
+        int32_t dx = mouse_byte[1];
+        int32_t dy = mouse_byte[2];
+        if (flags & 0x10) dx |= 0xFFFFFF00;
+        if (flags & 0x20) dy |= 0xFFFFFF00;
+
+        current_mouse.x += dx;
+        current_mouse.y -= dy;
+        if (current_mouse.x < 0) current_mouse.x = 0;
+        if (current_mouse.x >= (int32_t)scr_w) current_mouse.x = scr_w - 1;
+        if (current_mouse.y < 0) current_mouse.y = 0;
+        if (current_mouse.y >= (int32_t)scr_h) current_mouse.y = scr_h - 1;
+
+        current_mouse.left_button   = (flags & 0x01) ? true : false;
+        current_mouse.right_button  = (flags & 0x02) ? true : false;
+        current_mouse.middle_button = (flags & 0x04) ? true : false;
+
+        int8_t dz = (int8_t)(b & 0x0F);
+        if (dz & 0x08) dz |= (int8_t)0xF0;
+        // Convenzione PS/2: rotella su = dz < 0 (-1), rotella giu = dz > 0 (+1); normalizziamo su=+1, giu=-1
+        if (dz != 0) pending_scroll_z -= (int32_t)dz;
     }
 }
 
@@ -121,9 +151,23 @@ void mouse_init(uint32_t screen_width, uint32_t screen_height) {
     mouse_write(0xF6);
     mouse_read(); // ACK (0xFA)
 
+    // Sequenza IntelliMouse per abilitare la rotella Z-axis (Sample Rate 200, 100, 80)
+    mouse_write(0xF3); mouse_read(); mouse_write(200); mouse_read();
+    mouse_write(0xF3); mouse_read(); mouse_write(100); mouse_read();
+    mouse_write(0xF3); mouse_read(); mouse_write(80);  mouse_read();
+    mouse_write(0xF2); mouse_read();
+    uint8_t dev_id = mouse_read();
+    mouse_has_wheel = (dev_id == 3 || dev_id == 4);
+
     // Abilita data streaming
     mouse_write(0xF4);
     mouse_read(); // ACK (0xFA)
+}
+
+int32_t mouse_consume_scroll(void) {
+    int32_t z = pending_scroll_z;
+    pending_scroll_z = 0;
+    return z;
 }
 
 void mouse_set_bounds(uint32_t screen_width, uint32_t screen_height) {

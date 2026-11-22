@@ -269,6 +269,8 @@
 #define nvme_get_model()         g_ext_api->nvme_get_model()
 #define nvme_get_capacity_sectors() g_ext_api->nvme_get_capacity_sectors()
 #define launcher_open(t,a)       g_ext_api->launcher_open((t),(a))
+#define comctl_api_get()         ((const comctl_api_t*)g_ext_api->comctl_get_api())
+#define keyboard_is_ctrl_pressed() g_ext_api->keyboard_is_ctrl_pressed()
 #define uistyle_open_explorer(p) g_ext_api->uistyle_open_explorer(p)
 #define app_installer_launch()   g_ext_api->app_installer_launch()
 #define app_seccpl_launch()      g_ext_api->app_seccpl_launch()

@@ -4,7 +4,7 @@
 #include <types.h>
 #include <fs/vfs.h>
 
-#define VFS_MAX_DRIVES       16
+#define VFS_MAX_DRIVES       24
 #define VFS_MAX_FS_DRIVERS   8
 #define VFS_FS_NAME_MAX      16
 
@@ -35,6 +35,8 @@ typedef struct vfs_driver {
     bool     (*unlink)(struct vfs_mount* mnt, const char* rel_path);
     bool     (*rename)(struct vfs_mount* mnt, const char* old_path, const char* new_path);
     bool     (*stat)(struct vfs_mount* mnt, const char* rel_path, vfs_dirent_t* out_stat);
+    bool     (*truncate)(struct vfs_mount* mnt, vfs_file_t* file, uint64_t new_size);
+    bool     (*fsync)(struct vfs_mount* mnt, vfs_file_t* file);
 } vfs_driver_t;
 
 // Punto di montaggio (Unità logica)

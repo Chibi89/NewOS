@@ -206,6 +206,8 @@ typedef struct {
     bool (*uistyle_open_explorer)(const char *path);
     void (*app_installer_launch)(void);
     void (*app_seccpl_launch)(void);
+    const void *(*comctl_get_api)(void);
+    bool (*keyboard_is_ctrl_pressed)(void);
 } kernel_ext_api_t;
 
 const kernel_ext_api_t *screen_mgr_get_ext_api(void);

@@ -55,6 +55,7 @@ bool ata_write_sectors(uint64_t lba, uint32_t count, const void* buffer);
 // Lettura e scrittura da una specifica unità con supporto 64-bit LBA
 bool ata_read_device_sectors(const ata_device_t* dev, uint64_t lba, uint32_t count, void* buffer);
 bool ata_write_device_sectors(const ata_device_t* dev, uint64_t lba, uint32_t count, const void* buffer);
+bool ata_discard_device_sectors(const ata_device_t* dev, uint64_t lba, uint32_t count);
 
 // Lettura diretta blocco da 2048 byte da unità ottica ATAPI (CD-ROM / DVD / Blu-Ray)
 bool atapi_read_cd_sector(const ata_device_t* dev, uint32_t cd_lba, void* buf2048);

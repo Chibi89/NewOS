@@ -2025,6 +2025,19 @@ void wm_update(mouse_state_t *mouse, char key) {
     }
   }
 
+  // Inoltro rotella del mouse (PS/2 IntelliMouse) alla finestra attiva
+  int32_t dz = mouse_consume_scroll();
+  if (dz != 0 && active_window_id != -1) {
+    for (int i = 0; i < MAX_WINDOWS; i++) {
+      if (windows[i] && windows[i]->id == active_window_id &&
+          !windows[i]->is_minimized && windows[i]->on_key) {
+        char wk = (dz > 0) ? (char)KEY_WHEEL_UP : (char)KEY_WHEEL_DOWN;
+        windows[i]->on_key(windows[i], wk);
+        break;
+      }
+    }
+  }
+
   // Scorciatoie globali di sistema (Win/Ctrl+Esc, Alt+Tab, Alt+F4)
   if (key == KEY_WIN_START) {
     start_menu_open = !start_menu_open;

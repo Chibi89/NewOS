@@ -244,6 +244,25 @@ void vfs_cache_flush(void) {
     }
 }
 
+void vfs_cache_invalidate_range(uint32_t dev_id, uint64_t start_lba, uint32_t count) {
+    if (count == 0) return;
+    uint64_t end_lba = start_lba + (uint64_t)count;
+    bool changed = false;
+    for (int i = 0; i < VFS_CACHE_SECTORS_MAX; i++) {
+        if (g_sector_cache[i].valid &&
+            g_sector_cache[i].dev_id == dev_id &&
+            g_sector_cache[i].lba >= start_lba &&
+            g_sector_cache[i].lba < end_lba) {
+            g_sector_cache[i].valid = false;
+            g_sector_cache[i].dirty = false;
+            changed = true;
+        }
+    }
+    if (changed) {
+        vfs_cache_hash_rebuild();
+    }
+}
+
 bool vfs_dentry_lookup(char drive_letter, const char* clean_path, uint32_t* out_cluster, uint64_t* out_size, uint16_t* out_attr, bool* out_is_dir) {
     if (!clean_path) return false;
 

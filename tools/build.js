@@ -199,6 +199,7 @@ const cFiles = [
     'kernel/gui/theme_loader.c',
     'kernel/gui/settings_loader.c',
     'kernel/gui/comdlg_loader.c',
+    'kernel/gui/comctl_loader.c',
     'kernel/gui/uistyle_loader.c',
     'kernel/gui/hwaccel_loader.c',
     'kernel/gui/gpu3d_loader.c',
@@ -568,7 +569,8 @@ const systemLibraries = [
     { src: 'SystemLibrary/gpu3d_dll.c', ini: 'SystemLibrary/GPU3D.INI', out: 'GPU3D.DLL', iniOut: 'GPU3D.INI', allowSse2: true, needsReloc: true, extraFlags: `-mstackrealign -Wno-unused-function -Wno-unused-parameter` },
     { src: 'SystemLibrary/bsod_dll.c', ini: 'SystemLibrary/BSOD.INI', out: 'BSOD.DLL', iniOut: 'BSOD.INI', extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
     { src: 'SystemLibrary/launcher_dll.c', ini: 'SystemLibrary/LAUNCHER.INI', out: 'LAUNCHER.DLL', iniOut: 'LAUNCHER.INI', extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
-    { src: 'SystemLibrary/seccpl.c', ini: 'SystemLibrary/SECCPL.INI', out: 'SECCPL.DLL', iniOut: 'SECCPL.INI', extraFlags: `-Wno-unused-function -Wno-unused-parameter` }
+    { src: 'SystemLibrary/seccpl.c', ini: 'SystemLibrary/SECCPL.INI', out: 'SECCPL.DLL', iniOut: 'SECCPL.INI', extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
+    { src: 'SystemLibrary/comctl_dll.c', ini: 'SystemLibrary/COMCTL.INI', out: 'COMCTL.DLL', iniOut: 'COMCTL.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` }
 ];
 
 const targetLibDir = path.join(BIN_DIR, 'NewOS', 'SystemLibrary');

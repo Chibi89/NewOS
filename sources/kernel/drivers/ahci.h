@@ -166,6 +166,7 @@ const ahci_device_t* ahci_get_primary_device(void);
 // I/O a blocchi ad alte prestazioni (DMA)
 bool ahci_read_sectors(uint32_t port_num, uint64_t lba, uint32_t count, void* buffer);
 bool ahci_write_sectors(uint32_t port_num, uint64_t lba, uint32_t count, const void* buffer);
+bool ahci_trim_sectors(uint32_t port_num, uint64_t lba, uint32_t count);
 bool ahci_read_primary_sectors(uint64_t lba, uint32_t count, void* buffer);
 bool ahci_write_primary_sectors(uint64_t lba, uint32_t count, const void* buffer);
 bool ahci_read_cd_sector(uint32_t port_num, uint32_t cd_lba, void* buf2048);

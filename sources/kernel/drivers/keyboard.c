@@ -189,3 +189,7 @@ void keyboard_inject_char(char c) {
         }
     }
 }
+
+bool keyboard_is_ctrl_pressed(void) {
+    return ctrl_pressed;
+}

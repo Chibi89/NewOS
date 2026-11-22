@@ -35,6 +35,7 @@ void vfs_cache_init(void);
 bool vfs_cache_read_sector(uint32_t dev_id, uint64_t lba, void* buffer);
 bool vfs_cache_write_sector(uint32_t dev_id, uint64_t lba, const void* buffer);
 void vfs_cache_flush(void);
+void vfs_cache_invalidate_range(uint32_t dev_id, uint64_t start_lba, uint32_t count);
 void vfs_cache_set_write_back(bool enable);
 bool vfs_cache_is_write_back(void);
 

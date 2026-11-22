@@ -16,10 +16,16 @@
 #define VFS_SEEK_CUR 1
 #define VFS_SEEK_END 2
 
+#define VFS_PERM_READ  0x01
+#define VFS_PERM_WRITE 0x02
+#define VFS_PERM_EXEC  0x04
+
 typedef struct {
     char     name[VFS_MAX_FILENAME];
     uint64_t size;
     uint16_t attributes;
+    uint16_t permissions;
+    uint32_t mtime;
     bool     is_directory;
 } vfs_dirent_t;
 
@@ -116,5 +122,9 @@ bool vfs_wildcard_match(const char* pattern, const char* str);
 
 // Sincronizza tutti i buffer sporchi della cache del filesystem su supporto fisico
 void vfs_flush(void);
+
+// Ridimensiona un file aperto e forza la sincronizzazione su disco del file
+bool vfs_truncate(vfs_file_t* file, uint64_t new_size);
+bool vfs_fsync(vfs_file_t* file);
 
 #endif // FS_VFS_H

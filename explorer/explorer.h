@@ -38,11 +38,25 @@ typedef enum {
     EXPLORER_MENU_HELP
 } explorer_menu_t;
 
+typedef enum {
+    EXPLORER_VIEW_EXTRA_LARGE = 0, // Icone molto grandi
+    EXPLORER_VIEW_LARGE,           // Icone grandi
+    EXPLORER_VIEW_MEDIUM,          // Icone medie (default)
+    EXPLORER_VIEW_SMALL,           // Icone piccole
+    EXPLORER_VIEW_LIST,            // Elenco
+    EXPLORER_VIEW_DETAILS,         // Dettagli multi-colonna
+    EXPLORER_VIEW_TILES,           // Riquadri
+    EXPLORER_VIEW_CONTENT,         // Contenuto
+    EXPLORER_VIEW_COUNT
+} explorer_view_mode_t;
+
 typedef struct {
     char name[64];
     char desc[48];
     icon_id_t icon_id;
-    uint32_t size_bytes;
+    uint64_t size_bytes;
+    uint32_t mtime;
+    uint16_t permissions;
     bool is_folder;
     bool is_drive;
     char content[256]; // Contenuto testuale se file di testo
@@ -109,6 +123,15 @@ typedef struct {
 
     // Stato della modalità moderna Impostazioni (scorporata in SETTINGS.DLL)
     settings_state_t settings_state;
+
+    // Banner stato / sicurezza ACL (COMCTL_BANNER)
+    char status_banner[96];
+    bool status_banner_err;
+
+    // Modalità di visualizzazione Windows Explorer (CTRL + Rotella Mouse)
+    explorer_view_mode_t view_mode;
+    bool show_extensions;
+    bool show_hidden;
 } explorer_state_t;
 
 // Funzioni pubbliche di apertura

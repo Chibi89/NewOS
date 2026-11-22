@@ -11,6 +11,23 @@ typedef struct block_header {
 static uint8_t* heap_start = NULL;
 static size_t   heap_total_size = 0;
 static block_header_t* free_list = NULL;
+static volatile int g_heap_lock = 0;
+
+static inline uint64_t heap_lock_irq(void) {
+    uint64_t flags;
+    __asm__ volatile ("pushfq; pop %0; cli" : "=r"(flags) :: "memory");
+    while (__atomic_test_and_set(&g_heap_lock, __ATOMIC_ACQUIRE)) {
+        __asm__ volatile ("pause");
+    }
+    return flags;
+}
+
+static inline void heap_unlock_irq(uint64_t flags) {
+    __atomic_clear(&g_heap_lock, __ATOMIC_RELEASE);
+    if (flags & (1ULL << 9)) {
+        __asm__ volatile ("sti" ::: "memory");
+    }
+}
 
 void heap_init(uint64_t start_address, size_t size) {
     uint64_t aligned = (start_address + 15ULL) & ~15ULL;
@@ -31,6 +48,7 @@ void* kmalloc(size_t size) {
 
     // Allineamento a 16 byte
     size = (size + 15) & ~15;
+    uint64_t irq = heap_lock_irq();
 
     block_header_t* curr = free_list;
     while (curr != NULL) {
@@ -48,10 +66,13 @@ void* kmalloc(size_t size) {
             } else {
                 curr->is_free = false;
             }
-            return (void*)((uint8_t*)curr + sizeof(block_header_t));
+            void* ret = (void*)((uint8_t*)curr + sizeof(block_header_t));
+            heap_unlock_irq(irq);
+            return ret;
         }
         curr = curr->next;
     }
+    heap_unlock_irq(irq);
     return NULL; // Out of memory
 }
 
@@ -68,6 +89,7 @@ void* kmalloc_aligned(size_t size, size_t alignment) {
 
     size = (size + 15) & ~15;
     size_t hdr_sz = sizeof(block_header_t);
+    uint64_t irq = heap_lock_irq();
 
     block_header_t* curr = free_list;
     while (curr != NULL) {
@@ -85,6 +107,7 @@ void* kmalloc_aligned(size_t size, size_t alignment) {
                         curr->next = rem;
                     }
                     curr->is_free = false;
+                    heap_unlock_irq(irq);
                     return (void*)data_addr;
                 }
             } else {
@@ -114,12 +137,14 @@ void* kmalloc_aligned(size_t size, size_t alignment) {
                     curr->size = pad - hdr_sz;
                     curr->is_free = true;
                     curr->next = aligned_hdr;
+                    heap_unlock_irq(irq);
                     return (void*)aligned_data;
                 }
             }
         }
         curr = curr->next;
     }
+    heap_unlock_irq(irq);
     return NULL;
 }
 
@@ -134,6 +159,7 @@ void* kcalloc(size_t num, size_t size) {
 
 void kfree(void* ptr) {
     if (!ptr) return;
+    uint64_t irq = heap_lock_irq();
 
     block_header_t* block = (block_header_t*)((uint8_t*)ptr - sizeof(block_header_t));
     block->is_free = true;
@@ -148,4 +174,5 @@ void kfree(void* ptr) {
             curr = curr->next;
         }
     }
+    heap_unlock_irq(irq);
 }

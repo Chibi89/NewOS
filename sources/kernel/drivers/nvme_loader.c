@@ -120,3 +120,14 @@ bool nvme_write_sectors(uint64_t lba, uint32_t count, const void *buffer) {
     g_nvme_entry(screen_mgr_get_api(), &p);
     return p.ret_bool;
 }
+
+bool nvme_deallocate_sectors(uint64_t lba, uint32_t count) {
+    if (!nvme_init()) return false;
+    nvme_dll_params_t p;
+    memset(&p, 0, sizeof(p));
+    p.cmd = 8;
+    p.lba = lba;
+    p.count = count;
+    g_nvme_entry(screen_mgr_get_api(), &p);
+    return p.ret_bool;
+}

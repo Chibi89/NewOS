@@ -829,3 +829,63 @@ bool ahci_read_cd_sectors(uint32_t port_num, uint32_t cd_lba, uint32_t count, vo
 bool ahci_read_cd_sector(uint32_t port_num, uint32_t cd_lba, void* buf2048) {
     return ahci_read_cd_sectors(port_num, cd_lba, 1, buf2048);
 }
+
+bool ahci_trim_sectors(uint32_t port_num, uint64_t lba, uint32_t count) {
+    if (!g_ahci_active || !g_hba || port_num >= AHCI_MAX_PORTS || count == 0) return false;
+
+    int port_idx = -1;
+    for (int i = 0; i < g_ahci_device_count; i++) {
+        if (g_ahci_devices[i].port_num == port_num) {
+            port_idx = i;
+            break;
+        }
+    }
+    if (port_idx < 0) port_idx = 0;
+
+    ahci_lock_port(port_idx);
+    ahci_port_regs_t* port = &g_hba->ports[port_num];
+
+    int slot = ahci_alloc_slot(port);
+    if (slot < 0) {
+        ahci_unlock_port(port_idx);
+        return false;
+    }
+
+    uint32_t trim_cnt = (count > 65535U) ? 65535U : count;
+    memset(g_ahci_bounce_buf, 0, 512);
+    // Entry LBA Range TRIM (64 bit: 48-bit LBA + 16-bit sector count)
+    g_ahci_bounce_buf[0] = (uint8_t)(lba & 0xFF);
+    g_ahci_bounce_buf[1] = (uint8_t)((lba >> 8) & 0xFF);
+    g_ahci_bounce_buf[2] = (uint8_t)((lba >> 16) & 0xFF);
+    g_ahci_bounce_buf[3] = (uint8_t)((lba >> 24) & 0xFF);
+    g_ahci_bounce_buf[4] = (uint8_t)((lba >> 32) & 0xFF);
+    g_ahci_bounce_buf[5] = (uint8_t)((lba >> 40) & 0xFF);
+    g_ahci_bounce_buf[6] = (uint8_t)(trim_cnt & 0xFF);
+    g_ahci_bounce_buf[7] = (uint8_t)((trim_cnt >> 8) & 0xFF);
+
+    ahci_cmd_header_t* cmd_hdr = &g_cmd_list[port_idx][slot];
+    cmd_hdr->cfl = sizeof(fis_reg_h2d_t) / 4;
+    cmd_hdr->w = 1; // Host to Device
+    cmd_hdr->a = 0;
+    cmd_hdr->prdtl = 1;
+
+    ahci_cmd_table_t* tbl = &g_cmd_table[port_idx][slot];
+    memset(tbl, 0, sizeof(ahci_cmd_table_t));
+    uint64_t addr = (uint64_t)(uintptr_t)g_ahci_bounce_buf;
+    tbl->prdt_entry[0].dba  = (uint32_t)(addr & 0xFFFFFFFF);
+    tbl->prdt_entry[0].dbau = (uint32_t)(addr >> 32);
+    tbl->prdt_entry[0].dbc  = 512 - 1;
+    tbl->prdt_entry[0].i    = 1;
+
+    fis_reg_h2d_t* fis = (fis_reg_h2d_t*)(&tbl->cfis[0]);
+    fis->fis_type = FIS_TYPE_REG_H2D;
+    fis->c = 1;
+    fis->command = 0x06; // ATA DATA SET MANAGEMENT
+    fis->featurel = 1;   // TRIM
+    fis->device = 1U << 6;
+    fis->countl = 1;     // 1 block di 512 byte di LBA range
+
+    bool ok = ahci_exec_cmd(port, slot);
+    ahci_unlock_port(port_idx);
+    return ok;
+}

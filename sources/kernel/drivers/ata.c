@@ -637,6 +637,17 @@ bool ata_write_sectors(uint64_t lba, uint32_t count, const void* buffer) {
     return ata_write_device_sectors(&def, lba, count, buffer);
 }
 
+bool ata_discard_device_sectors(const ata_device_t* dev, uint64_t lba, uint32_t count) {
+    if (!dev || dev->is_atapi || count == 0) return false;
+    if (dev->is_nvme) {
+        return nvme_deallocate_sectors(lba, count);
+    }
+    if (dev->is_ahci) {
+        return ahci_trim_sectors(dev->ahci_port, lba, count);
+    }
+    return false;
+}
+
 bool ata_register_nvme_device(void) {
     if (!g_ata_initialized) ata_init();
     for (int i = 0; i < g_device_count; i++) {

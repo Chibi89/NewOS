@@ -265,3 +265,78 @@ fs_type_t fs_probe_optical_device(const ata_device_t* dev, char* out_fs_name, si
 
     return detected;
 }
+
+static void fs_detect_vbr_type(const ata_device_t* dev, uint64_t start_lba, char* out_fs, size_t out_len) {
+    strncpy(out_fs, "RAW", out_len - 1);
+    out_fs[out_len - 1] = '\0';
+    uint8_t vbr[512];
+    if (!ata_read_device_sectors(dev, start_lba, 1, vbr)) return;
+    if (memcmp(&vbr[3], "EXFAT   ", 8) == 0) strncpy(out_fs, "exFAT", out_len - 1);
+    else if (memcmp(&vbr[3], "NTFS    ", 8) == 0) strncpy(out_fs, "NTFS", out_len - 1);
+    else if (memcmp(&vbr[82], "FAT32   ", 8) == 0) strncpy(out_fs, "FAT32", out_len - 1);
+    else if (memcmp(&vbr[54], "FAT16   ", 8) == 0) strncpy(out_fs, "FAT16", out_len - 1);
+    else {
+        uint8_t sb[512];
+        if (ata_read_device_sectors(dev, start_lba + 2, 1, sb) && *(uint16_t*)&sb[56] == 0xEF53) {
+            strncpy(out_fs, "EXT4", out_len - 1);
+        }
+    }
+}
+
+int fs_probe_device_partitions(const ata_device_t* dev, fs_part_info_t* out_parts, int max_parts) {
+    if (!dev || !dev->present || dev->is_atapi || !out_parts || max_parts <= 0) return 0;
+
+    int found = 0;
+    uint8_t sec_buf[512];
+
+    // 1. Tentativo GPT (LBA 1)
+    if (ata_read_device_sectors(dev, 1, 1, sec_buf)) {
+        const gpt_header_t* hdr = (const gpt_header_t*)sec_buf;
+        if (memcmp(hdr->signature, "EFI PART", 8) == 0) {
+            uint32_t num_entries = hdr->num_partition_entries;
+            if (num_entries == 0 || num_entries > 128) num_entries = 128;
+            uint32_t entry_size = hdr->partition_entry_size;
+            if (entry_size < sizeof(gpt_entry_t)) entry_size = sizeof(gpt_entry_t);
+            uint64_t entries_lba = hdr->partition_entries_lba >= 2 ? hdr->partition_entries_lba : 2;
+            uint32_t entries_per_sec = 512 / entry_size;
+            if (entries_per_sec == 0) entries_per_sec = 4;
+            uint32_t secs = (num_entries + entries_per_sec - 1) / entries_per_sec;
+            if (secs > 32) secs = 32;
+
+            for (uint32_t s = 0; s < secs && found < max_parts; s++) {
+                uint8_t ebuf[512];
+                if (!ata_read_device_sectors(dev, entries_lba + s, 1, ebuf)) break;
+                for (uint32_t e = 0; e < entries_per_sec && found < max_parts; e++) {
+                    const gpt_entry_t* ent = (const gpt_entry_t*)(ebuf + e * entry_size);
+                    if (memcmp(ent->type_guid, GPT_GUID_UNUSED, 16) == 0) continue;
+                    if (ent->starting_lba == 0 || ent->ending_lba < ent->starting_lba) continue;
+
+                    out_parts[found].start_lba = ent->starting_lba;
+                    out_parts[found].sector_count = ent->ending_lba - ent->starting_lba + 1;
+                    out_parts[found].is_esp = (memcmp(ent->type_guid, GPT_GUID_ESP, 16) == 0);
+                    fs_detect_vbr_type(dev, ent->starting_lba, out_parts[found].fs_name, sizeof(out_parts[found].fs_name));
+                    found++;
+                }
+            }
+            if (found > 0) return found;
+        }
+    }
+
+    // 2. Fallback MBR (4 entry primarie a LBA 0)
+    if (ata_read_device_sectors(dev, 0, 1, sec_buf) && sec_buf[510] == 0x55 && sec_buf[511] == 0xAA) {
+        for (int p = 0; p < 4 && found < max_parts; p++) {
+            const uint8_t* pe = sec_buf + 446 + p * 16;
+            uint8_t ptype = pe[4];
+            uint32_t plba = *(const uint32_t*)(pe + 8);
+            uint32_t psec = *(const uint32_t*)(pe + 12);
+            if (ptype == 0 || ptype == 0xEE || plba == 0 || psec == 0) continue;
+
+            out_parts[found].start_lba = plba;
+            out_parts[found].sector_count = psec;
+            out_parts[found].is_esp = (ptype == 0xEF);
+            fs_detect_vbr_type(dev, plba, out_parts[found].fs_name, sizeof(out_parts[found].fs_name));
+            found++;
+        }
+    }
+    return found;
+}

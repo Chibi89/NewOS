@@ -46,8 +46,20 @@ typedef struct __attribute__((packed)) {
     uint16_t name[36];             // Nome partizione UTF-16LE
 } gpt_entry_t;
 
+#define FS_MAX_PARTITIONS_PER_DISK 8
+
+typedef struct {
+    uint64_t start_lba;
+    uint64_t sector_count;
+    char     fs_name[16];
+    bool     is_esp;
+} fs_part_info_t;
+
 // Esegue la scansione a 64-bit della tabella GPT su disco fisico
 bool gpt_probe_table(sector_reader_fn reader, void* ctx, uint64_t* out_lba, uint64_t* out_sectors, char* out_fs_name, size_t fs_len);
+
+// Sonda tutte le partizioni GPT/MBR presenti su un disco fisico
+int fs_probe_device_partitions(const ata_device_t* dev, fs_part_info_t* out_parts, int max_parts);
 
 // Esegue il rilevamento automatico del filesystem nativo presente su un supporto USB Mass Storage
 fs_type_t fs_probe_usb_device(uint64_t* out_part_lba, char* out_fs_name, size_t fs_name_len, char* out_label, size_t label_len);

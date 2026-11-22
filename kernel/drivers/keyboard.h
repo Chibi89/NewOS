@@ -14,10 +14,15 @@
 #define KEY_ALT_F4     ((char)0x1D)
 #define KEY_WIN_START  ((char)0x1E)
 #define KEY_DEL        ((char)0x7F)
+#define KEY_WHEEL_UP   ((char)0xF1)
+#define KEY_WHEEL_DOWN ((char)0xF2)
 
 void keyboard_init(void);
 bool keyboard_has_char(void);
 char keyboard_get_char(void);
 void keyboard_inject_char(char c);
+#ifndef keyboard_is_ctrl_pressed
+bool keyboard_is_ctrl_pressed(void);
+#endif
 
 #endif // DRIVERS_KEYBOARD_H

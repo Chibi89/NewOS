@@ -53,6 +53,7 @@ typedef struct {
     uint64_t size;
     uint32_t first_cluster;
     uint16_t attributes;
+    uint32_t mtime;
     bool     is_directory;
     bool     no_fat_chain;
 } exfat_item_info_t;
@@ -60,6 +61,12 @@ typedef struct {
 bool exfat_mount(uint64_t partition_lba);
 bool exfat_mount_device(const ata_device_t* dev, uint64_t partition_lba);
 void exfat_set_device(const ata_device_t* dev, uint64_t partition_lba);
+uint32_t exfat_get_dev_id(void);
+const ata_device_t* exfat_get_device(void);
+void exfat_set_volume_dirty(bool dirty);
+uint16_t exfat_upcase_char(uint16_t ch);
+int exfat_utf16_to_utf8(const uint16_t* u16, int u16_len, char* out, int out_max);
+int exfat_utf8_to_utf16(const char* u8, uint16_t* out, int out_max);
 bool exfat_is_mounted(void);
 const exfat_vbr_t* exfat_get_vbr(void);
 uint32_t exfat_get_root_cluster(void);

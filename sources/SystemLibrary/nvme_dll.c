@@ -57,6 +57,7 @@ int module_main(const kernel_api_t *api, nvme_dll_params_t *p) {
         case 5: p->ret_str = nvme_get_model(); break;
         case 6: p->ret_bool = nvme_read_sectors(p->lba, p->count, p->buf); break;
         case 7: p->ret_bool = nvme_write_sectors(p->lba, p->count, p->buf); break;
+        case 8: p->ret_bool = nvme_deallocate_sectors(p->lba, p->count); break;
         default: return -1;
     }
     return 0;
