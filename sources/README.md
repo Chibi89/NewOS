@@ -26,6 +26,9 @@
 
 ## Registro Aggiornamenti e Fix Recenti
 
+<details>
+<summary><strong>Espandi per visualizzare gli aggiornamenti e i fix recenti</strong></summary>
+
 ### 22 Novembre 2026
 - **Esplora Risorse — 8 Modalità di Vista, Layout Dinamico & `CTRL + Rotella Mouse`**:
   - Implementate in [explorer.h](explorer/explorer.h) ed [explorer.c](explorer/explorer.c) tutte le 8 viste stile Windows Explorer (`Icone molto grandi`, `Icone grandi`, `Icone medie`, `Icone piccole`, `Elenco`, `Dettagli` con colonne Nome/Tipo/Dimensione/Permessi, `Riquadri` e `Contenuto`), selezionabili dal menu **Visualizza**.
@@ -61,6 +64,8 @@
 - **Ricollegamento Schermata di Logout (`LOGOUT.MOD`) & Fix PIC**:
   - Ricollegata la voce **"Arresta il sistema..."** del menu Start in [wm.c](kernel/gui/wm.c) a `screen_mgr_run_logoutscreen()` con gestione completa di Spegnimento ACPI, Riavvio, Standby/Sospensione, Disconnessione (ritorno a `LOGIN.MOD`) e Annulla.
   - Corretto l'indirizzamento delle stringhe opzioni in [logoutscreen.c](logoutscreen/logoutscreen.c) in formato 100% PIC `RIP`-relativo per il rendering corretto dei testi nel modulo piatto `LOGOUT.MOD`.
+
+</details>
 
 ---
 
@@ -277,6 +282,9 @@ tools\qemu-system-x86_64.exe -cdrom NewOS_V1.iso -m 256M -vga std -device AC97 -
 
 ## Changelog & Recent Fixes
 
+<details>
+<summary><strong>Expand to view recent updates and fixes</strong></summary>
+
 ### November 22, 2026
 - **File Explorer — 8 View Modes, Dynamic Grid Layout & `CTRL + Mouse Wheel`**:
   - Implemented all 8 Windows Explorer-style view modes in [explorer.h](explorer/explorer.h) and [explorer.c](explorer/explorer.c) (`Extra large icons`, `Large icons`, `Medium icons`, `Small icons`, `List`, `Details` with Name/Type/Size/Permissions columns, `Tiles`, and `Content`), selectable from the **View** menu.
@@ -312,6 +320,8 @@ tools\qemu-system-x86_64.exe -cdrom NewOS_V1.iso -m 256M -vga std -device AC97 -
 - **Logout Screen Reconnection (`LOGOUT.MOD`) & PIC Fix**:
   - Reconnected the Start Menu **"Shut down..."** action in [wm.c](kernel/gui/wm.c) to `screen_mgr_run_logoutscreen()` with full support for ACPI Power Off, Reboot, Standby/Sleep, Sign Out (returning to `LOGIN.MOD`), and Cancel.
   - Fixed option string addressing in [logoutscreen.c](logoutscreen/logoutscreen.c) using 100% `RIP`-relative PIC code for proper text rendering inside the flat `LOGOUT.MOD` binary.
+
+</details>
 
 ---
 
