@@ -216,6 +216,13 @@ typedef struct {
     void (*app_imgview_props_launch)(void);
     void (*wm_set_start_menu_mode)(int mode);
     int  (*wm_get_start_menu_mode)(void);
+    uint32_t (*dns_resolve)(const char *hostname);
+    void *(*tcp_create_conn)(void);
+    void (*tcp_destroy_conn)(void *conn);
+    bool (*tcp_connect)(void *conn, uint32_t remote_ip, uint16_t remote_port);
+    int  (*tcp_send)(void *conn, const void *data, uint16_t len);
+    int  (*tcp_recv)(void *conn, void *buf, uint16_t max_len);
+    void (*tcp_close)(void *conn);
 } kernel_ext_api_t;
 
 const kernel_ext_api_t *screen_mgr_get_ext_api(void);

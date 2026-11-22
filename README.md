@@ -46,6 +46,10 @@
   - Aggiunta applet out-of-kernel [fontscpl.c](SystemLibrary/fontscpl.c) con scansione `.TTF`, anteprima live TrueType via `FONTMGR.DLL` e salvataggio nel Registro.
   - Aggiunto servizio obbligatorio [pkgsvc.c](SystemLibrary/pkgsvc.c) per l'installazione isolata di software terzi in `C:\ProgramFile\<App>\` (blocco ACL su `C:\NewOS\`, manifest `APP.INI` e registrazione in `HKLM`).
   - Aggiunto sottosistema [ports_dll.c](SystemLibrary/ports_dll.c) con probing bare-metal UART `16550A` (`COM1`–`COM4`), porte parallele legacy IEEE 1284 (`LPT1`–`LPT2`), porte virtuali (`VCOM1/2`, `VLPT1`) e test Loopback HW.
+- **Collegamenti `.LNK`, Client HTTP CLI (`curl`/`wget`) & Fix exFAT Multi-Cluster**:
+  - Supporto completo ai file di collegamento `.LNK` (`[NewOS.Shortcut]` / `Target=` / `Args=`) in `LAUNCHER.DLL` ed `EXPLORER.DLL`, con comando `mklnk <file.lnk> <target>` in `CMD`.
+  - Aggiunti comandi di rete `curl <url>`, `wget <url> [file]`, `nslookup <host>` e `arp -a` nel terminale `CMD` con esportazione DNS/TCP in `kernel_ext_api.h`.
+  - Risolto il limite di 64 voci e la lettura a cavallo dei confini di cluster nelle directory exFAT multi-cluster in `kernel/fs/exfat.c`.
 - **Visualizzatore Immagini (`IMGVIEW.DLL`) & Suite di Regressione (`test_all.js`)**:
   - Aggiunto il visualizzatore out-of-kernel [imgview_dll.c](SystemLibrary/imgview_dll.c) (`IMGVIEW.DLL`, avviabile con `start imgview`) con zoom `50%–150%`, rotazione `90°/180°/270°`, adattamento e navigazione libreria `.BMP`.
   - Aggiunta la suite automatizzata [test_all.js](tools/test_all.js) (`node tools/test_all.js`, 16 check PASS/FAIL su budget kernel, firme `NOSM`, ISO/IMG e boot QEMU).
@@ -325,6 +329,10 @@ tools\qemu-system-x86_64.exe -cdrom NewOS_V1.iso -m 256M -vga std -device AC97 -
   - Added out-of-kernel [fontscpl.c](SystemLibrary/fontscpl.c) scanning `.TTF` fonts with live `FONTMGR.DLL` TrueType preview and Registry persistence.
   - Added mandatory [pkgsvc.c](SystemLibrary/pkgsvc.c) package service enforcing isolated installs under `C:\ProgramFile\<App>\` (ACL block on `C:\NewOS\`, `APP.INI` manifest, and `HKLM` registration).
   - Added [ports_dll.c](SystemLibrary/ports_dll.c) with bare-metal `16550A` UART probing (`COM1`–`COM4`), IEEE 1284 legacy parallel ports (`LPT1`–`LPT2`), virtual ports (`VCOM1/2`, `VLPT1`), and HW Loopback test.
+- **`.LNK` Shortcuts, HTTP CLI Client (`curl`/`wget`) & Multi-Cluster exFAT Fix**:
+  - Added `.LNK` shortcut resolution (`Target=` / `Args=`) in `LAUNCHER.DLL` and `EXPLORER.DLL`, plus `mklnk <file.lnk> <target>` in `CMD`.
+  - Added `curl <url>`, `wget <url> [file]`, `nslookup <host>`, and `arp -a` network commands in `CMD` with DNS/TCP exports in `kernel_ext_api.h`.
+  - Fixed the 64-entry cap and cluster-boundary spanning directory reads for multi-cluster exFAT folders in `kernel/fs/exfat.c`.
 - **Dedicated Image Viewer (`IMGVIEW.DLL`) & Regression Suite (`test_all.js`)**:
   - Added out-of-kernel [imgview_dll.c](SystemLibrary/imgview_dll.c) (`IMGVIEW.DLL`, launched via `start imgview`) supporting `50%–150%` zoom, `90°/180°/270°` rotation, fit-to-window, and `.BMP` library browsing.
   - Added the automated regression suite [test_all.js](tools/test_all.js) (`node tools/test_all.js`, 16 PASS/FAIL checks covering kernel budget, `NOSM` signatures, ISO/IMG artifacts, and QEMU boot).

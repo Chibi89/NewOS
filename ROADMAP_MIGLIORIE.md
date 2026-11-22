@@ -46,7 +46,7 @@ Elenco completo delle migliorie architetturali, grafiche, di sistema e hardware 
 - [ ] **Scrittura completa su `EXT4` e `FAT32`**: consolidare il supporto R/W sicuro su `FAT32` (chiavette USB e partizione ESP) ed `EXT4` in `FS_EXT.DLL`.
 - [ ] **Write-back cache & Flush periodico sicuro**: timer di flush automatico in background dei settori dirty e indicatore di **"Rimozione sicura dell'hardware"** USB nella tray bar.
 - [ ] **Compressione / Archivi `.ZIP` / `.TAR`**: supporto in `FS_EXT.DLL` ed Explorer per aprire/estrarre archivi `.ZIP` come cartelle virtuali.
-- [ ] **Collegamenti (`.LNK`)**: file shortcut su Desktop ed Explorer gestiti da `LAUNCHER.DLL` per puntare a programmi o cartelle.
+- [x] **Collegamenti (`.LNK`)**: file shortcut su Desktop ed Explorer gestiti da `LAUNCHER.DLL` per puntare a programmi o cartelle. (`Target=`/`Args=` in `LAUNCHER.DLL`, riconoscimento Explorer e comando `mklnk` in `CMD`).
 
 ---
 
@@ -83,7 +83,7 @@ Elenco completo delle migliorie architetturali, grafiche, di sistema e hardware 
 - [ ] **Cache HTTP su disco & Cookie/Cronologia**: salvataggio persistente di cronologia, segnalibri e cache in `C:\User\<Utente>\AppData\`.
 - [ ] **Browser Multi-Tab & Download Manager**: schede multiple in `WEBBROWSER.DLL` e download file in `C:\User\<Utente>\Downloads\` con progress bar `COMCTL`.
 - [ ] **Client DHCPv6 / DNS Caching & Strumenti di Rete**: cache DNS locale con TTL, `traceroute`, `arp -a` e diagnostica schede in `NETCPL.CPL`.
-- [ ] **Client HTTP / FTP CLI (`curl` / `wget`)** in `CMD` per scaricare file e risorse da terminale.
+- [x] **Client HTTP / FTP CLI (`curl` / `wget`)** in `CMD` per scaricare file e risorse da terminale. (Aggiunti anche `arp -a` e `nslookup` in `CMD` con esportazione DNS/TCP in `kernel_ext_api.h`).
 
 ---
 

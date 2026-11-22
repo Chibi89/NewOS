@@ -445,8 +445,9 @@ static explorer_file_category_t explorer_get_file_category(const char *name,
     return FILE_CAT_INI;
   }
 
-  // Applicazioni
-  if (strcasecmp(dot, ".exe") == 0 || strcasecmp(dot, ".cpl") == 0) {
+  // Applicazioni e Collegamenti
+  if (strcasecmp(dot, ".exe") == 0 || strcasecmp(dot, ".cpl") == 0 ||
+      strcasecmp(dot, ".lnk") == 0) {
     return FILE_CAT_APP;
   }
 
@@ -530,6 +531,9 @@ static void explorer_classify_item(explorer_item_t *it) {
   case FILE_CAT_APP:
     if (dot && strcasecmp(dot, ".cpl") == 0) {
       strcpy(it->desc, "Applet Pannello Controllo");
+      it->icon_id = ICON_RUN;
+    } else if (dot && strcasecmp(dot, ".lnk") == 0) {
+      strcpy(it->desc, "Collegamento NewOS");
       it->icon_id = ICON_RUN;
     } else if (strcasecmp(it->name, "PLAYER.EXE") == 0) {
       strcpy(it->desc, "Lettore Multimediale");

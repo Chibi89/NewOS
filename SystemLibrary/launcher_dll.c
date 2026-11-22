@@ -257,6 +257,62 @@ static bool launch_file_by_ext(launcher_params_t* p, const char* path, const cha
         return true;
     }
 
+    // 2b. Collegamenti (.LNK) -> Risoluzione Target= / Args= con protezione loop
+    if (ext && strcasecmp(ext, ".lnk") == 0) {
+        static int lnk_depth = 0;
+        if (lnk_depth >= 3) return false;
+        char raw_buf[512];
+        const char* src_txt = content_hint;
+        char* alloc_buf = NULL;
+        if (!src_txt) {
+            uint32_t sz = 0;
+            alloc_buf = (char*)vfs_read_entire_file(path, &sz);
+            if (alloc_buf) {
+                uint32_t cpy = (sz < sizeof(raw_buf) - 1) ? sz : (sizeof(raw_buf) - 1);
+                memcpy(raw_buf, alloc_buf, cpy);
+                raw_buf[cpy] = '\0';
+                kfree(alloc_buf);
+                src_txt = raw_buf;
+            }
+        }
+        if (src_txt) {
+            char target_buf[128] = "";
+            char args_buf[128] = "";
+            const char* ln = src_txt;
+            while (*ln) {
+                const char* eol = ln;
+                while (*eol && *eol != '\n' && *eol != '\r') eol++;
+                int len = (int)(eol - ln);
+                if (len > 7 && strncasecmp(ln, "Target=", 7) == 0) {
+                    int c = len - 7;
+                    if (c > (int)sizeof(target_buf) - 1) c = sizeof(target_buf) - 1;
+                    memcpy(target_buf, ln + 7, c);
+                    target_buf[c] = '\0';
+                } else if (len > 5 && strncasecmp(ln, "Args=", 5) == 0) {
+                    int c = len - 5;
+                    if (c > (int)sizeof(args_buf) - 1) c = sizeof(args_buf) - 1;
+                    memcpy(args_buf, ln + 5, c);
+                    args_buf[c] = '\0';
+                }
+                ln = eol;
+                while (*ln == '\n' || *ln == '\r') ln++;
+            }
+            if (target_buf[0]) {
+                lnk_depth++;
+                bool ok = launch_by_alias(p, target_buf, args_buf[0] ? args_buf : NULL);
+                if (!ok) ok = launch_file_by_ext(p, target_buf, NULL);
+                if (!ok && (strchr(target_buf, '\\') || strchr(target_buf, '/'))) {
+                    app_explorer_open_folder(target_buf);
+                    set_handler(p, "EXPLORER.DLL (Shortcut)");
+                    ok = true;
+                }
+                lnk_depth--;
+                return ok;
+            }
+        }
+        return false;
+    }
+
     // 3. Audio (.WAV, .MP3, .FLAC) -> Riproduzione / Media Player
     if (ext && (strcasecmp(ext, ".wav") == 0 || strcasecmp(ext, ".mp3") == 0 ||
                 strcasecmp(ext, ".flac") == 0)) {

@@ -282,6 +282,13 @@
 #define app_imgview_props_launch() g_ext_api->app_imgview_props_launch()
 #define wm_set_start_menu_mode(m) g_ext_api->wm_set_start_menu_mode(m)
 #define wm_get_start_menu_mode()  g_ext_api->wm_get_start_menu_mode()
+#define dns_resolve(h)            g_ext_api->dns_resolve(h)
+#define tcp_create_conn()         ((tcp_conn_t *)g_ext_api->tcp_create_conn())
+#define tcp_destroy_conn(c)       g_ext_api->tcp_destroy_conn(c)
+#define tcp_connect(c,ip,p)       g_ext_api->tcp_connect((c),(ip),(p))
+#define tcp_send(c,d,l)           g_ext_api->tcp_send((c),(d),(l))
+#define tcp_recv(c,b,m)           g_ext_api->tcp_recv((c),(b),(m))
+#define tcp_close(c)              g_ext_api->tcp_close(c)
 
 void *memset(void *dst, int c, size_t n) { return dll_memset(dst, c, n); }
 void *memcpy(void *dst, const void *src, size_t n) { return dll_memcpy(dst, src, n); }

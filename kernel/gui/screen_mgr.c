@@ -673,6 +673,13 @@ void screen_mgr_init(void) {
   g_kernel_ext_api.app_imgview_props_launch = app_imgview_props_launch;
   g_kernel_ext_api.wm_set_start_menu_mode = wm_set_start_menu_mode;
   g_kernel_ext_api.wm_get_start_menu_mode = wm_get_start_menu_mode;
+  g_kernel_ext_api.dns_resolve = dns_resolve;
+  g_kernel_ext_api.tcp_create_conn = (void *(*)(void))tcp_create_conn;
+  g_kernel_ext_api.tcp_destroy_conn = (void (*)(void *))tcp_destroy_conn;
+  g_kernel_ext_api.tcp_connect = (bool (*)(void *, uint32_t, uint16_t))tcp_connect;
+  g_kernel_ext_api.tcp_send = (int (*)(void *, const void *, uint16_t))tcp_send;
+  g_kernel_ext_api.tcp_recv = (int (*)(void *, void *, uint16_t))tcp_recv;
+  g_kernel_ext_api.tcp_close = (void (*)(void *))tcp_close;
   g_kernel_api.ext_api = &g_kernel_ext_api;
 
   g_api_initialized = true;

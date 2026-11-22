@@ -21,6 +21,7 @@
 #include <net/dhcp.h>
 #include <net/tcp.h>
 #include <net/icmp.h>
+#include <net/dns.h>
 #include <apps/explorer.h>
 #include <apps/taskmgr.h>
 #include <apps/oobe.h>
@@ -133,6 +134,10 @@ static void cmd_execute_internal(cmd_state_t* state, const char* cmd) {
         cmd_print(state, "  IPCONFIG  Visualizza configurazione di rete e IP");
         cmd_print(state, "  PING      Invia pacchetti ICMP Echo a un host");
         cmd_print(state, "  NETSTAT   Visualizza connessioni e porte TCP/UDP");
+        cmd_print(state, "  ARP -A    Tabella risoluzione indirizzi IP -> MAC");
+        cmd_print(state, "  NSLOOKUP  Risoluzione hostname DNS");
+        cmd_print(state, "  CURL/WGET Client HTTP/CLI (es. CURL http://10.0.2.2/)");
+        cmd_print(state, "  MKLNK     Crea collegamento .LNK (MKLNK file.lnk target)");
         cmd_print(state, "  DIR       Elenca i file e le cartelle (es. DIR o DIR R:)");
         cmd_print(state, "  DRIVES    Elenca le unita' montate (C:, D:, R:, U:)");
         cmd_print(state, "  NTFS      Stato e collaudo file system NTFS-3G (R/W)");
@@ -592,6 +597,182 @@ static void cmd_execute_internal(cmd_state_t* state, const char* cmd) {
         }
         if (printed == 0) {
             cmd_print(state, "Nessuna connessione TCP attiva.");
+        }
+    } else if (strcmp(cmd, "arp") == 0 || strcmp(cmd, "arp -a") == 0) {
+        net_nic_t* nic = net_nic_get_active();
+        if (!nic) {
+            cmd_print(state, "Nessuna scheda di rete attiva.");
+        } else {
+            char line[CMD_COLS], ip_s[20], mac_s[24];
+            cmd_print(state, "Indirizzo Internet     Indirizzo fisico      Tipo");
+            cmd_print(state, "-----------------------------------------------------");
+            net_format_ip(nic->ip, ip_s, sizeof(ip_s));
+            net_format_mac(nic->mac, mac_s, sizeof(mac_s));
+            mini_snprintf(line, sizeof(line), "  %s    %s   locale", ip_s, mac_s);
+            cmd_print(state, line);
+            if (nic->gateway) {
+                net_format_ip(nic->gateway, ip_s, sizeof(ip_s));
+                mini_snprintf(line, sizeof(line), "  %s    52-55-0a-00-02-02   gateway", ip_s);
+                cmd_print(state, line);
+            }
+        }
+    } else if (strncmp(cmd, "nslookup", 8) == 0 && (cmd[8] == '\0' || cmd[8] == ' ')) {
+        const char* host = cmd + 8;
+        while (*host == ' ') host++;
+        if (!*host) {
+            cmd_print(state, "Uso: nslookup <hostname>  (es. nslookup example.com)");
+        } else {
+            uint32_t ip = net_parse_ip(host);
+            if (!ip) ip = dns_resolve(host);
+            if (!ip) {
+                cmd_print(state, "DNS: impossibile risolvere l'host.");
+            } else {
+                char ip_s[20], msg[CMD_COLS];
+                net_format_ip(ip, ip_s, sizeof(ip_s));
+                mini_snprintf(msg, sizeof(msg), "Nome: %s  ->  Indirizzo IP: %s", host, ip_s);
+                cmd_print(state, msg);
+            }
+        }
+    } else if ((strncmp(cmd, "curl", 4) == 0 && (cmd[4] == '\0' || cmd[4] == ' ')) ||
+               (strncmp(cmd, "wget", 4) == 0 && (cmd[4] == '\0' || cmd[4] == ' '))) {
+        bool is_wget = (cmd[0] == 'w');
+        const char* arg = cmd + 4;
+        while (*arg == ' ') arg++;
+        if (!*arg) {
+            cmd_print(state, is_wget ? "Uso: wget <http://host[:port]/path> [file]"
+                                     : "Uso: curl <http://host[:port]/path>");
+        } else {
+            char url[128], dest[96] = "";
+            int ui = 0;
+            while (*arg && *arg != ' ' && ui < (int)sizeof(url) - 1) url[ui++] = *arg++;
+            url[ui] = '\0';
+            while (*arg == ' ') arg++;
+            if (*arg) {
+                strncpy(dest, arg, sizeof(dest) - 1);
+                dest[sizeof(dest) - 1] = '\0';
+            }
+
+            const char* p = url;
+            if (strncmp(p, "http://", 7) == 0) p += 7;
+            char host[64], req_path[96] = "/";
+            uint16_t port = 80;
+            int hi = 0;
+            while (*p && *p != ':' && *p != '/' && hi < (int)sizeof(host) - 1) host[hi++] = *p++;
+            host[hi] = '\0';
+            if (*p == ':') {
+                p++;
+                uint32_t pv = 0;
+                while (*p >= '0' && *p <= '9') { pv = pv * 10 + (uint32_t)(*p - '0'); p++; }
+                if (pv > 0 && pv <= 65535) port = (uint16_t)pv;
+            }
+            if (*p == '/') {
+                strncpy(req_path, p, sizeof(req_path) - 1);
+                req_path[sizeof(req_path) - 1] = '\0';
+            }
+
+            uint32_t ip = net_parse_ip(host);
+            if (!ip) ip = dns_resolve(host);
+            if (!ip) {
+                cmd_print(state, "HTTP: risoluzione host fallita (controlla rete/DNS).");
+            } else {
+                tcp_conn_t* conn = tcp_create_conn();
+                if (!conn || !tcp_connect(conn, ip, port)) {
+                    cmd_print(state, "HTTP: connessione TCP fallita o timeout.");
+                    if (conn) tcp_destroy_conn(conn);
+                } else {
+                    char req[256];
+                    mini_snprintf(req, sizeof(req),
+                        "GET %s HTTP/1.0\r\nHost: %s\r\nUser-Agent: NewOS-CURL/1.0\r\nConnection: close\r\n\r\n",
+                        req_path, host);
+                    tcp_send(conn, req, (uint16_t)strlen(req));
+
+                    uint8_t* rx = (uint8_t*)kmalloc(16384);
+                    uint32_t total = 0;
+                    if (rx) {
+                        for (int t = 0; t < 180 && total < 16383; t++) {
+                            net_nic_poll();
+                            int n = tcp_recv(conn, rx + total, (uint16_t)(16383 - total));
+                            if (n > 0) {
+                                total += (uint32_t)n;
+                            } else if (conn->state == TCP_STATE_CLOSE_WAIT || conn->state == TCP_STATE_CLOSED) {
+                                break;
+                            } else {
+                                timer_sleep(10);
+                            }
+                        }
+                        rx[total] = '\0';
+
+                        char info[CMD_COLS];
+                        mini_snprintf(info, sizeof(info), "HTTP %s:%u -> ricevuti %u byte.", host, (unsigned int)port, (unsigned int)total);
+                        cmd_print(state, info);
+
+                        if (is_wget) {
+                            if (!dest[0]) strcpy(dest, "C:\\download.bin");
+                            uint8_t* body = rx;
+                            uint32_t body_len = total;
+                            for (uint32_t k = 0; k + 3 < total; k++) {
+                                if (rx[k] == '\r' && rx[k+1] == '\n' && rx[k+2] == '\r' && rx[k+3] == '\n') {
+                                    body = rx + k + 4;
+                                    body_len = total - (k + 4);
+                                    break;
+                                }
+                            }
+                            if (!vfs_exists(dest)) vfs_create(dest);
+                            int wr = vfs_write_entire_file_inplace(dest, body, body_len);
+                            if (wr >= 0) {
+                                mini_snprintf(info, sizeof(info), "Salvato: %s (%u byte)", dest, (unsigned int)body_len);
+                                cmd_print(state, info);
+                            } else {
+                                cmd_print(state, "Errore scrittura file destinazione.");
+                            }
+                        } else if (total > 0) {
+                            char line[CMD_COLS];
+                            int li = 0, shown = 0;
+                            for (uint32_t k = 0; k < total && shown < 14; k++) {
+                                char c = (char)rx[k];
+                                if (c == '\r') continue;
+                                if (c == '\n' || li >= CMD_COLS - 2) {
+                                    line[li] = '\0';
+                                    cmd_print(state, line);
+                                    li = 0;
+                                    shown++;
+                                    if (c != '\n') line[li++] = c;
+                                } else {
+                                    line[li++] = c;
+                                }
+                            }
+                            if (li > 0 && shown < 14) { line[li] = '\0'; cmd_print(state, line); }
+                        }
+                        kfree(rx);
+                    }
+                    tcp_close(conn);
+                    tcp_destroy_conn(conn);
+                }
+            }
+        }
+    } else if (strncmp(cmd, "mklnk", 5) == 0 && (cmd[5] == '\0' || cmd[5] == ' ')) {
+        const char* p = cmd + 5;
+        while (*p == ' ') p++;
+        char lnk_path[96], tgt[96];
+        int i = 0;
+        while (*p && *p != ' ' && i < (int)sizeof(lnk_path) - 1) lnk_path[i++] = *p++;
+        lnk_path[i] = '\0';
+        while (*p == ' ') p++;
+        strncpy(tgt, p, sizeof(tgt) - 1);
+        tgt[sizeof(tgt) - 1] = '\0';
+        if (!lnk_path[0] || !tgt[0]) {
+            cmd_print(state, "Uso: mklnk <percorso.lnk> <target>");
+        } else {
+            char body[160];
+            mini_snprintf(body, sizeof(body), "[NewOS.Shortcut]\r\nTarget=%s\r\n", tgt);
+            if (!vfs_exists(lnk_path)) vfs_create(lnk_path);
+            if (vfs_write_entire_file_inplace(lnk_path, body, (uint32_t)strlen(body)) >= 0) {
+                char msg[CMD_COLS];
+                mini_snprintf(msg, sizeof(msg), "Collegamento creato: %s -> %s", lnk_path, tgt);
+                cmd_print(state, msg);
+            } else {
+                cmd_print(state, "Errore creazione collegamento .LNK");
+            }
         }
     } else if (strcmp(cmd, "dhcp") == 0 || strcmp(cmd, "dhcp renew") == 0) {
         cmd_print(state, "Negoziazione DHCP (Discover -> Request -> Ack)...");
