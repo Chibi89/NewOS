@@ -184,7 +184,8 @@ static int g_proj_list_cnt = 0;
 /* Configurazione Progetto & File Output (Modalita' Progetto) */
 typedef struct {
   char name[40];
-  uint8_t usage;     /* 0=UI Layout, 1=Sorgente C, 2=Progetto, 3=Config, 4=Risorsa */
+  uint8_t
+      usage; /* 0=UI Layout, 1=Sorgente C, 2=Progetto, 3=Config, 4=Risorsa */
   uint8_t copy_mode; /* 0=Non copiare, 1=Copia sempre, 2=Solo se nuovo */
 } st_proj_file_t;
 
@@ -688,10 +689,11 @@ static bool st_save_project(void) {
   pos += g_rt->snprintf(
       pbuf + pos, 2048 - (size_t)pos,
       "[NewOSProject]\nname=%s\nversion=1.%d\nauthor=NewOS Developer\n"
-      "target=%s\ntemplate=%d\nver_minor=%d\ntarget_efi=%d\nseq=%d\nctrl_count=%d\n",
+      "target=%s\ntemplate=%d\nver_minor=%d\ntarget_efi=%d\nseq=%d\nctrl_count="
+      "%d\n",
       g_proj_name, g_proj_ver_minor,
-      g_proj_target_efi ? "x86_64+EFI" : "x86_64", g_proj_tpl,
-      g_proj_ver_minor, g_proj_target_efi, g_seq, g_ctrl_count);
+      g_proj_target_efi ? "x86_64+EFI" : "x86_64", g_proj_tpl, g_proj_ver_minor,
+      g_proj_target_efi, g_seq, g_ctrl_count);
   for (int i = 0; i < g_pfile_cnt && pos < 1750; i++) {
     pos += g_rt->snprintf(pbuf + pos, 2048 - (size_t)pos, "copy_%s=%d\n",
                           g_pfiles[i].name, (int)g_pfiles[i].copy_mode);
@@ -1117,12 +1119,11 @@ static void st_deploy_project(void) {
     }
     if (g_rt->strcmp && g_rt->strcmp(pf->name, "app.ini") == 0) {
       char ini[256];
-      int ilen = g_rt->snprintf(
-          ini, sizeof(ini),
-          "[AppManifest]\nName=%s\nVersion=1.%d\n"
-          "Runtime=NSRT.DLL+XUIML.DLL\nTarget=%s\n",
-          g_proj_name, g_proj_ver_minor,
-          g_proj_target_efi ? "x86_64+EFI" : "x86_64");
+      int ilen = g_rt->snprintf(ini, sizeof(ini),
+                                "[AppManifest]\nName=%s\nVersion=1.%d\n"
+                                "Runtime=NSRT.DLL+XUIML.DLL\nTarget=%s\n",
+                                g_proj_name, g_proj_ver_minor,
+                                g_proj_target_efi ? "x86_64+EFI" : "x86_64");
       if (g_rt->file_write(dp, ini, (uint32_t)ilen, true))
         copied++;
     } else {
@@ -1145,6 +1146,125 @@ static void st_deploy_project(void) {
   dll_strcpy(g_status, msg, sizeof(g_status));
   if (copied > 0 && g_rt->notify)
     g_rt->notify("NewOS Studio - Publish", msg);
+}
+
+static void st_create_installer(void) {
+  if (!g_rt || !g_rt->snprintf || !g_rt->alloc || !g_rt->free)
+    return;
+  st_save_project();
+  st_refresh_project_files();
+
+  /* Regola obbligatoria: verifica collegamento a PKGSVC.DLL */
+  const char *pkg_svc_path = "C:\\NewOS\\SystemLibrary\\PKGSVC.DLL";
+  if (g_rt->file_exists && !g_rt->file_exists(pkg_svc_path)) {
+    st_push_output("[ERR] Servizio obbligatorio PKGSVC.DLL non trovato!");
+    dll_strcpy(g_status, "Errore: PKGSVC.DLL assente!", sizeof(g_status));
+    return;
+  }
+
+  char inst_dir[160];
+  st_proj_path(inst_dir, sizeof(inst_dir), "Installer");
+  if (!g_rt->file_exists || !g_rt->file_exists(inst_dir))
+    g_rt->mkdir(inst_dir, true);
+
+  char *buf = (char *)g_rt->alloc(4096);
+  if (!buf)
+    return;
+
+  /* 1. Manifest Installer (.nsi) con linker obbligatorio a PKGSVC.DLL */
+  int pos = 0;
+  int inc_cnt = 0;
+  pos += g_rt->snprintf(
+      buf + pos, 4096 - (size_t)pos,
+      "[NewOSInstaller]\n"
+      "PackageName=%s\n"
+      "Version=1.%d\n"
+      "Target=%s\n"
+      "RequiredService=C:\\NewOS\\SystemLibrary\\PKGSVC.DLL\n"
+      "ServiceModule=PKGSVC\n"
+      "ServiceEntry=pkgsvc_dll_entry\n"
+      "InstallDir=C:\\ProgramFile\\%s\\\n"
+      "SandboxACL=PROGRAMFILE_ONLY\n",
+      g_proj_name, g_proj_ver_minor,
+      g_proj_target_efi ? "x86_64+EFI" : "x86_64", g_proj_name);
+  for (int i = 0; i < g_pfile_cnt && pos < 3600; i++) {
+    if (g_pfiles[i].copy_mode == 0)
+      continue;
+    pos += g_rt->snprintf(buf + pos, 4096 - (size_t)pos, "File_%d=%s|%d\n",
+                          inc_cnt++, g_pfiles[i].name,
+                          (int)g_pfiles[i].copy_mode);
+  }
+  pos += g_rt->snprintf(buf + pos, 4096 - (size_t)pos, "FileCount=%d\n",
+                        inc_cnt);
+  char p_nsi[180];
+  g_rt->snprintf(p_nsi, sizeof(p_nsi), "%s\\%s_setup.nsi", inst_dir,
+                 g_proj_name);
+  bool ok_nsi = g_rt->file_write(p_nsi, buf, (uint32_t)pos, true);
+
+  /* 2. Wizard UI Installer (.xuiml) */
+  int xlen = g_rt->snprintf(
+      buf, 4096,
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+      "<Form id=\"pkg_setup\" title=\"Installer - %s v1.%d\" width=\"420\" "
+      "height=\"240\">\n"
+      "  <GroupBox title=\" Installazione Guidata (PKGSVC.DLL) \" x=\"12\" "
+      "y=\"26\" w=\"396\" h=\"162\" />\n"
+      "  <Label id=\"lbl_pkg\" text=\"Pacchetto: %s (1.%d) - %d file\" "
+      "x=\"24\" y=\"54\" />\n"
+      "  <Label id=\"lbl_dst\" text=\"Destinazione: C:\\ProgramFile\\%s\\\" "
+      "x=\"24\" y=\"82\" />\n"
+      "  <Label id=\"lbl_svc\" text=\"Servizio: PKGSVC.DLL (Obbligatorio)\" "
+      "x=\"24\" y=\"110\" />\n"
+      "  <Button id=\"btn_install\" text=\"Installa\" x=\"24\" y=\"148\" "
+      "w=\"130\" h=\"28\" />\n"
+      "  <Button id=\"btn_cancel\" text=\"Annulla\" x=\"266\" y=\"148\" "
+      "w=\"120\" h=\"28\" />\n"
+      "</Form>\n",
+      g_proj_name, g_proj_ver_minor, g_proj_name, g_proj_ver_minor, inc_cnt,
+      g_proj_name);
+  char p_ui[180];
+  g_rt->snprintf(p_ui, sizeof(p_ui), "%s\\%s_installer.xuiml", inst_dir,
+                 g_proj_name);
+  bool ok_ui = g_rt->file_write(p_ui, buf, (uint32_t)xlen, true);
+
+  /* 3. Sorgente Installer C linkato a newos/pkg.h + PKGSVC.DLL */
+  int clen = g_rt->snprintf(
+      buf, 4096,
+      "// %s_installer.c - Generato da NewOS Studio (Linker: PKGSVC.DLL)\n"
+      "#include <newos/sdk.h>\n"
+      "#include <newos/pkg.h>\n\n"
+      "static const ns_pkg_manifest_t g_manifest = {\n"
+      "    \"%s\", \"%s v1.%d\", \"NewOS Developer\",\n"
+      "    {1, %d, 0}, NS_PKG_PERM_FS_USER, \"C:\\\\ProgramFile\\\\%s\\\\\"\n"
+      "};\n\n"
+      "void app_main(const kernel_api_t* kapi) {\n"
+      "    const nsrt_api_t* rt = nsrt_load_library(kapi);\n"
+      "    if (!rt || !rt->file_exists(\"C:\\\\NewOS\\\\SystemLibrary\\\\PKGSVC.DLL\")) return;\n"
+      "    rt->mkdir(\"C:\\\\ProgramFile\", true);\n"
+      "    rt->mkdir(g_manifest.install_dir, true);\n"
+      "    rt->notify(\"Installer PKGSVC\", \"Installazione completata in C:\\\\ProgramFile\");\n"
+      "}\n",
+      g_proj_name, g_proj_name, g_proj_name, g_proj_ver_minor,
+      g_proj_ver_minor, g_proj_name);
+  char p_c[180];
+  g_rt->snprintf(p_c, sizeof(p_c), "%s\\%s_installer.c", inst_dir, g_proj_name);
+  bool ok_c = g_rt->file_write(p_c, buf, (uint32_t)clen, true);
+
+  g_rt->free(buf);
+
+  char msg[76];
+  if (ok_nsi && ok_ui && ok_c) {
+    g_rt->snprintf(msg, sizeof(msg),
+                   "[INSTALLER] Creato %s_setup.nsi (%d file, link: PKGSVC.DLL)",
+                   g_proj_name, inc_cnt);
+    if (g_rt->notify)
+      g_rt->notify("NewOS Studio - Installer", msg);
+  } else {
+    g_rt->snprintf(msg, sizeof(msg),
+                   "[ERR] Creazione installer per '%s' fallita", g_proj_name);
+  }
+  st_push_output(msg);
+  dll_strcpy(g_status, msg, sizeof(g_status));
 }
 
 static void st_build_verify_project(void) {
@@ -1477,8 +1597,7 @@ static void studio_draw(window_t *win) {
       char tb1[32], tb2[32];
       g_rt->snprintf(tb1, sizeof(tb1), "Target: %s",
                      g_proj_target_efi ? "x86+EFI" : "x86_64");
-      g_rt->snprintf(tb2, sizeof(tb2), "Versione: 1.%d (+)",
-                     g_proj_ver_minor);
+      g_rt->snprintf(tb2, sizeof(tb2), "Versione: 1.%d (+)", g_proj_ver_minor);
       vs_draw_btn(p, tx + 10, body_y + 48, tw - 20, 23, tb1, false);
       vs_draw_btn(p, tx + 10, body_y + 76, tw - 20, 23, tb2, false);
     }
@@ -1486,11 +1605,9 @@ static void studio_draw(window_t *win) {
     g_api->gfx_draw_string(tx + 10, body_y + 108, "v Preset Copia Output",
                            p->text_muted, 0, true);
     vs_draw_btn(p, tx + 10, body_y + 128, tw - 20, 23, "Solo Runtime", false);
-    vs_draw_btn(p, tx + 10, body_y + 156, tw - 20, 23, "Sorgenti + SDK",
-                false);
+    vs_draw_btn(p, tx + 10, body_y + 156, tw - 20, 23, "Sorgenti + SDK", false);
     vs_draw_btn(p, tx + 10, body_y + 184, tw - 20, 23, "Copia Tutto", false);
-    vs_draw_btn(p, tx + 10, body_y + 212, tw - 20, 23, "Aggiorna Lista",
-                false);
+    vs_draw_btn(p, tx + 10, body_y + 212, tw - 20, 23, "Aggiorna Lista", false);
 
     g_api->gfx_draw_string(tx + 10, body_y + 244, "v Compila & Deploy",
                            p->text_muted, 0, true);
@@ -1498,6 +1615,9 @@ static void studio_draw(window_t *win) {
                 true);
     vs_draw_btn(p, tx + 10, body_y + 294, tw - 20, 24, "Pubblica Eseguibile",
                 true);
+    vs_draw_btn(p, tx + 10, body_y + 324, tw - 20, 24, "Crea Installer", true);
+    g_api->gfx_draw_string(tx + 10, body_y + 354, "Linker: PKGSVC.DLL",
+                           p->status_ok, 0, true);
   } else {
     if (g_code_lines_cnt == 0)
       st_run_code_analysis();
@@ -1694,8 +1814,8 @@ static void studio_draw(window_t *win) {
     if (g_rt && g_rt->snprintf) {
       char hdr[96], sub[96];
       g_rt->snprintf(hdr, sizeof(hdr),
-                     "Configurazione Progetto: %s  (v1.%d  |  %s)",
-                     g_proj_name, g_proj_ver_minor,
+                     "Configurazione Progetto: %s  (v1.%d  |  %s)", g_proj_name,
+                     g_proj_ver_minor,
                      g_proj_target_efi ? "x86_64+EFI" : "x86_64");
       g_rt->snprintf(sub, sizeof(sub),
                      "Cartella Output Eseguibile: C:\\ProgramFile\\%s",
@@ -1704,14 +1824,14 @@ static void studio_draw(window_t *win) {
       g_api->gfx_draw_string(mx + 14, doc_y + 28, sub, p->text_muted, 0, true);
     }
     g_api->gfx_fill_rect(mx + 12, doc_y + 48, mw - 24, 20, p->bg_header);
-    g_api->gfx_draw_string(mx + 20, doc_y + 52, "File del Progetto",
-                           p->text, 0, true);
+    g_api->gfx_draw_string(mx + 20, doc_y + 52, "File del Progetto", p->text, 0,
+                           true);
     g_api->gfx_draw_string(mx + 235, doc_y + 52, "Utilizzo", p->text, 0, true);
     g_api->gfx_draw_string(mx + mw - 182, doc_y + 52, "Copia in Output",
                            p->text, 0, true);
 
-    static const char *const u_lbls[5] = {"UI Layout", "Sorgente C",
-                                          "Progetto", "Config", "Risorsa"};
+    static const char *const u_lbls[5] = {"UI Layout", "Sorgente C", "Progetto",
+                                          "Config", "Risorsa"};
     static const char *const c_lbls[3] = {"Non copiare  v", "Copia sempre v",
                                           "Solo se nuovo v"};
     int max_rows = (doc_h - 80) / 32;
@@ -1722,19 +1842,17 @@ static void studio_draw(window_t *win) {
       const st_proj_file_t *pf = &g_pfiles[i];
       vs_draw_surface(p, mx + 12, ry_f, mw - 24, 28, p->bg_panel, 185);
       g_api->gfx_draw_string(mx + 20, ry_f + 7, pf->name, p->text, 0, true);
-      g_api->gfx_draw_string(mx + 235, ry_f + 7,
-                             u_lbls[pf->usage < 5 ? pf->usage : 4],
-                             pf->usage == 0 ? p->status_ok : p->text_muted, 0,
-                             true);
+      g_api->gfx_draw_string(
+          mx + 235, ry_f + 7, u_lbls[pf->usage < 5 ? pf->usage : 4],
+          pf->usage == 0 ? p->status_ok : p->text_muted, 0, true);
       int32_t cbx = mx + mw - 182;
       bool is_open = (g_open_combo_idx == i);
       g_api->gfx_fill_rect(cbx, ry_f + 3, 162, 22, p->bg_editor);
       g_api->gfx_draw_rect(cbx, ry_f + 3, 162, 22,
                            is_open ? p->accent : p->border);
-      g_api->gfx_draw_string(cbx + 8, ry_f + 7,
-                             c_lbls[pf->copy_mode < 3 ? pf->copy_mode : 0],
-                             pf->copy_mode == 0 ? p->text_muted : p->accent, 0,
-                             true);
+      g_api->gfx_draw_string(
+          cbx + 8, ry_f + 7, c_lbls[pf->copy_mode < 3 ? pf->copy_mode : 0],
+          pf->copy_mode == 0 ? p->text_muted : p->accent, 0, true);
     }
     /* Dropdown a singola scelta disegnato sopra le righe */
     if (g_open_combo_idx >= 0 && g_open_combo_idx < max_rows) {
@@ -2090,6 +2208,10 @@ static void studio_mouse(window_t *win, int32_t lx, int32_t ly, bool clicked) {
       }
       if (ry >= body_y + 294 && ry < body_y + 318) {
         st_deploy_project();
+        return;
+      }
+      if (ry >= body_y + 324 && ry < body_y + 348) {
+        st_create_installer();
         return;
       }
     } else if (g_doc_tab == 1 || g_doc_tab == 2) {
