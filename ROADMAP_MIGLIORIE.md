@@ -108,3 +108,7 @@ Elenco completo delle migliorie architetturali, grafiche, di sistema e hardware 
 - [ ] **Migrazione progressiva delle Applet `.CPL` e App a `.xuiml`**: convertire `NETCPL.DLL`, `USERACCT.DLL`, `PORTS.DLL`, `TIMEDATE.DLL` e le altre dialoghi di sistema in file `.xuiml` sotto `C:\NewOS\SystemLibrary\UI\`.
 - [ ] **Integrazione Compilatore `TCC` (Tiny C Compiler) Out-of-Kernel (`TCC.DLL` / SDK)**: compilazione nativa self-hosted di sorgenti `.c` x86_64 dentro NewOS collegata a `XUIML.DLL` e `PKGSVC.DLL` (`C:\ProgramFile\<App>\`).
 - [ ] **NewOS Studio / Form Designer Visuale `.xuiml`**: editor grafico drag-and-drop con anteprima live per progettare form `.xuiml`, scrivere la logica C/JS e pacchettizzare app installabili.
+
+> **Nota Tecnica — Architettura SDK Minimo & `TCC.DLL`:**
+> - **Header freestanding (`C:\NewOS\SDK\include\`)**: quando `TCC` verrà portato out-of-kernel in `SystemLibrary\` (`TCC.DLL`), fornirgli un set ridotto di header standard freestanding che mappino direttamente le funzioni esportate da `kernel_ext_api.h`, `COMCTL.DLL` e `XUIML.DLL`. In questo modo i programmi compilati on-device non avranno bisogno di `libc` pesanti, gireranno senza dipendenze esterne e rispetteranno al 100% i vincoli di sicurezza e ACL.
+> - **Sintassi `.xuiml` & Data-Binding C**: mantenere tag piatti/leggeri e lookup rapido per `id` affinché il parsing XML resti veloce (< 1 ms) e direttamente collegabile alle callback C compilate da `TCC.DLL`.
