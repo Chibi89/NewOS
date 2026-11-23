@@ -4,6 +4,7 @@
 #include <screen_modules.h>
 #include "dll_libc.h"
 #include "nsrt.h"
+#include "studio.h"
 #include "dll_ext_macros.h"
 
 __attribute__((section(".header"), used)) module_header_t g_launcher_header = {
@@ -53,6 +54,12 @@ static void set_handler(launcher_params_t* p, const char* h) {
 }
 
 static const nsrt_api_t* g_nsrt = NULL;
+static const studio_api_t* g_studio = NULL;
+
+static void launch_studio(void) {
+    if (!g_studio) g_studio = studio_load_library(g_dll_api);
+    if (g_studio && g_studio->open) g_studio->open();
+}
 
 static void nsrt_sync_logs(nsrt_app_t* app) {
     if (!g_nsrt || !app) return;
@@ -253,6 +260,11 @@ static bool launch_by_alias(launcher_params_t* p, const char* name, const char* 
         strcasecmp(name, "installapp") == 0) {
         app_pkgsvc_launch();
         set_handler(p, "PKGSVC.DLL");
+        return true;
+    }
+    if (strcasecmp(name, "studio") == 0 || strcasecmp(name, "ide") == 0) {
+        launch_studio();
+        set_handler(p, "STUDIO.DLL (NewOS Studio)");
         return true;
     }
     if (strcasecmp(name, "ports") == 0 || strcasecmp(name, "ports.cpl") == 0 ||

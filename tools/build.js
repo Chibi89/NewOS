@@ -586,7 +586,8 @@ const systemLibraries = [
     { src: 'SystemLibrary/startmenu_dll.c', ini: 'SystemLibrary/STARTMENU.INI', out: 'STARTMENU.DLL', iniOut: 'STARTMENU.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
     { src: 'SystemLibrary/icons_dll.c', ini: 'SystemLibrary/ICONS.INI', out: 'ICONS.DLL', iniOut: 'ICONS.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
     { src: 'SystemLibrary/xuiml.c', ini: 'SystemLibrary/XUIML.INI', out: 'XUIML.DLL', iniOut: 'XUIML.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
-    { src: 'SystemLibrary/nsrt.c', ini: 'SystemLibrary/NSRT.INI', out: 'NSRT.DLL', iniOut: 'NSRT.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` }
+    { src: 'SystemLibrary/nsrt.c', ini: 'SystemLibrary/NSRT.INI', out: 'NSRT.DLL', iniOut: 'NSRT.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
+    { src: 'SystemLibrary/studio.c', ini: 'SystemLibrary/STUDIO.INI', out: 'STUDIO.DLL', iniOut: 'STUDIO.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` }
 ];
 
 const targetLibDir = path.join(BIN_DIR, 'NewOS', 'SystemLibrary');
