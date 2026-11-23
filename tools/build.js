@@ -585,7 +585,8 @@ const systemLibraries = [
     { src: 'SystemLibrary/comctl_dll.c', ini: 'SystemLibrary/COMCTL.INI', out: 'COMCTL.DLL', iniOut: 'COMCTL.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
     { src: 'SystemLibrary/startmenu_dll.c', ini: 'SystemLibrary/STARTMENU.INI', out: 'STARTMENU.DLL', iniOut: 'STARTMENU.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
     { src: 'SystemLibrary/icons_dll.c', ini: 'SystemLibrary/ICONS.INI', out: 'ICONS.DLL', iniOut: 'ICONS.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
-    { src: 'SystemLibrary/xuiml.c', ini: 'SystemLibrary/XUIML.INI', out: 'XUIML.DLL', iniOut: 'XUIML.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` }
+    { src: 'SystemLibrary/xuiml.c', ini: 'SystemLibrary/XUIML.INI', out: 'XUIML.DLL', iniOut: 'XUIML.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
+    { src: 'SystemLibrary/nsrt.c', ini: 'SystemLibrary/NSRT.INI', out: 'NSRT.DLL', iniOut: 'NSRT.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` }
 ];
 
 const targetLibDir = path.join(BIN_DIR, 'NewOS', 'SystemLibrary');
@@ -719,6 +720,15 @@ if (fs.existsSync(uiSrcDir)) {
     }
     console.log(`[OK] Risorse XUIML sincronizzate in NewOS/SystemLibrary/UI/`);
 }
+
+// Copia gli header pubblici SDK (nsrt.h, xuiml.h) in NewOS/SDK/include/
+const sdkIncDst = path.join(BIN_DIR, 'NewOS', 'SDK', 'include');
+if (!fs.existsSync(sdkIncDst)) fs.mkdirSync(sdkIncDst, { recursive: true });
+for (const hFile of ['nsrt.h', 'xuiml.h']) {
+    const hSrc = path.join(ROOT, 'SystemLibrary', hFile);
+    if (fs.existsSync(hSrc)) fs.copyFileSync(hSrc, path.join(sdkIncDst, hFile));
+}
+console.log(`[OK] Header SDK sincronizzati in NewOS/SDK/include/`);
 
 // Bonifica radice build/bin: rimozione cartelle legacy (C:\SYSTEM\) e file sparsi fuori da C:\NewOS\ (Regola 6)
 const legacySys = path.join(BIN_DIR, 'SYSTEM');

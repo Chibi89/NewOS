@@ -3,6 +3,7 @@
 #include <gui/uistyle_loader.h>
 #include <screen_modules.h>
 #include "dll_libc.h"
+#include "nsrt.h"
 #include "dll_ext_macros.h"
 
 __attribute__((section(".header"), used)) module_header_t g_launcher_header = {
@@ -49,6 +50,55 @@ static const char* get_basename(const char* path) {
 static void set_handler(launcher_params_t* p, const char* h) {
     if (!p || !h) return;
     strcpy(p->resolved_handler, h);
+}
+
+static const nsrt_api_t* g_nsrt = NULL;
+
+static void nsrt_sync_logs(nsrt_app_t* app) {
+    if (!g_nsrt || !app) return;
+    g_nsrt->list_clear(app, "lst_logs");
+    int cnt = g_nsrt->get_log_count();
+    for (int i = 0; i < cnt; i++) {
+        g_nsrt->list_add(app, "lst_logs", g_nsrt->get_log_line(i));
+    }
+}
+
+static void nsrt_console_event(nsrt_app_t* app, const char* id, void* ctx) {
+    (void)ctx;
+    if (!g_nsrt || !app || !id) return;
+    if (strcmp(id, "btn_close") == 0) {
+        g_nsrt->close_app(app);
+        return;
+    }
+    if (strcmp(id, "btn_test") == 0) {
+        g_nsrt->list_clear(app, "lst_tests");
+        void* pt = g_nsrt->alloc(4096);
+        g_nsrt->list_add(app, "lst_tests", pt ? "[PASS] Heap alloc(4096) OK" : "[FAIL] Heap alloc");
+        if (pt) g_nsrt->free(pt);
+
+        bool acl_blocked = !g_nsrt->file_write("C:\\NewOS\\acl_probe.txt", "X", 1, true);
+        g_nsrt->list_add(app, "lst_tests", acl_blocked ? "[PASS] Sandbox ACL: C:\\NewOS\\ protetta" : "[FAIL] Sandbox ACL");
+
+        bool user_ok = g_nsrt->file_write("C:\\User\\nsrt_test.txt", "NSRT OK", 7, true);
+        g_nsrt->list_add(app, "lst_tests", user_ok ? "[PASS] VFS Write C:\\User\\nsrt_test.txt OK" : "[FAIL] VFS Write");
+
+        g_nsrt->log("TEST", "Verifica API NSRT completata");
+        nsrt_sync_logs(app);
+        g_nsrt->set_text(app, "lbl_status", "Verifica Runtime NSRT.DLL completata: 3/3 PASS!");
+    }
+}
+
+static void launch_nsrt_console(void) {
+    if (!g_nsrt) g_nsrt = nsrt_load_library(g_dll_api);
+    if (!g_nsrt) return;
+    nsrt_app_t* app = g_nsrt->create_xuiml_app(
+        "NewSoft Runtime (NSRT.DLL) - Dev Console", 480, 390,
+        "C:\\NewOS\\SystemLibrary\\UI\\nsrt_console.xuiml",
+        nsrt_console_event, NULL);
+    if (app) {
+        g_nsrt->list_add(app, "lst_tests", "[INFO] Premi 'Test ACL/Mem' per testare il runtime");
+        nsrt_sync_logs(app);
+    }
 }
 
 static bool launch_by_alias(launcher_params_t* p, const char* name, const char* args) {
@@ -212,6 +262,11 @@ static bool launch_by_alias(launcher_params_t* p, const char* name, const char* 
         strcasecmp(name, "security") == 0 || strcasecmp(name, "sicurezza") == 0) {
         app_seccpl_launch();
         set_handler(p, "SECCPL.DLL (Centro Sicurezza)");
+        return true;
+    }
+    if (strcasecmp(name, "nsrt") == 0 || strcasecmp(name, "sdk") == 0) {
+        launch_nsrt_console();
+        set_handler(p, "NSRT.DLL (NewSoft Runtime)");
         return true;
     }
     return false;

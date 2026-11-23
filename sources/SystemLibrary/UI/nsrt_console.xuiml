@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Form id="nsrt_console" title="NewSoft Runtime (NSRT.DLL) - Dev Console" width="480" height="390">
+    <Tab id="tab_overview" title="Runtime &amp; ABI" x="8" w="140">
+        <GroupBox title=" NewSoft Runtime v1.0 (C:\NewOS\SystemLibrary\NSRT.DLL) " x="10" y="36" w="448" h="112" />
+        <Label text="Stato Runtime:   ATTIVO (Out-of-Kernel NOSM+CRC32)" x="24" y="58" color="0x107C41" />
+        <Label text="Motore UI:       XUIML.DLL + COMCTL.DLL + ICONS.DLL" x="24" y="80" />
+        <Label text="Header SDK:      C:\NewOS\SDK\include\nsrt.h / xuiml.h" x="24" y="102" />
+        <Label text="Sandbox ACL:     Scrittura consentita in C:\ProgramFile\ e C:\User\" x="24" y="124" color="0x64748B" />
+
+        <GroupBox title=" Test Rapido API Runtime (Memoria / ACL / Log) " x="10" y="156" w="448" h="132" />
+        <List id="lst_tests" x="22" y="178" w="424" h="98" row_h="24" />
+    </Tab>
+
+    <Tab id="tab_logs" title="Dev Log" x="150" w="120">
+        <GroupBox title=" Buffer Diagnostico NewSoft Runtime " x="10" y="36" w="448" h="252" />
+        <List id="lst_logs" x="22" y="58" w="424" h="216" row_h="24" />
+    </Tab>
+
+    <Label id="lbl_status" text="Pronto. Usa 'Test ACL/Mem' per eseguire la verifica live." x="12" y="304" color="0x107C41" />
+    <Button id="btn_test" text="Test ACL/Mem" x="246" y="324" w="118" h="24" />
+    <Button id="btn_close" text="Chiudi" x="372" y="324" w="86" h="24" />
+</Form>
