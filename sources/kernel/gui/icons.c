@@ -7,7 +7,7 @@
 #include <string.h>
 
 #define ICONS_DISK_LBA      1024
-#define ICONS_SECTOR_COUNT  294
+#define ICONS_SECTOR_COUNT  460
 #define ICONS_TOTAL_BYTES   (ICONS_SECTOR_COUNT * 512)
 
 static uint8_t* icon_pkg_buf = NULL;

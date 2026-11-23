@@ -34,7 +34,23 @@ typedef enum {
     ICON_MAINTENANCE         = 26,
     ICON_NET_ON              = 27,
     ICON_NET_OFF             = 28,
-    NUM_ICONS                = 29
+    ICON_BROWSER             = 29,
+    ICON_NOTEPAD             = 30,
+    ICON_USB                 = 31,
+    ICON_CHIP                = 32,
+    ICON_SHORTCUT            = 33,
+    ICON_MEDIA_PLAYER        = 34,
+    ICON_AUDIO_FILE          = 35,
+    ICON_FONT_FILE           = 36,
+    ICON_INSTALLER           = 37,
+    ICON_DISPLAY             = 38,
+    ICON_CLOCK               = 39,
+    ICON_USERS               = 40,
+    ICON_PRINTER             = 41,
+    ICON_CONFIG              = 42,
+    ICON_SCRIPT              = 43,
+    ICON_SETTINGS            = 44,
+    NUM_ICONS                = 45
 } icon_id_t;
 
 // Inizializza il repository icone caricando il pacchetto dal disco (LBA 1024)

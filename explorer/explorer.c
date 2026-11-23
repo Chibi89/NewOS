@@ -492,7 +492,7 @@ static void explorer_classify_item(explorer_item_t *it) {
       strcpy(it->desc, "Musica MIDI");
     else
       strcpy(it->desc, "File audio");
-    it->icon_id = ICON_SOUND;
+    it->icon_id = ICON_AUDIO_FILE;
     break;
 
   case FILE_CAT_VIDEO:
@@ -506,7 +506,7 @@ static void explorer_classify_item(explorer_item_t *it) {
       strcpy(it->desc, "Filmato WebM");
     else
       strcpy(it->desc, "Clip video");
-    it->icon_id = ICON_PLAY;
+    it->icon_id = ICON_MEDIA_PLAYER;
     break;
 
   case FILE_CAT_IMAGE:
@@ -531,19 +531,19 @@ static void explorer_classify_item(explorer_item_t *it) {
       strcpy(it->desc, "File installazione");
     else
       strcpy(it->desc, "Configurazione");
-    it->icon_id = ICON_DOCUMENT;
+    it->icon_id = ICON_CONFIG;
     break;
 
   case FILE_CAT_APP:
     if (dot && strcasecmp(dot, ".cpl") == 0) {
       strcpy(it->desc, "Applet Pannello Controllo");
-      it->icon_id = ICON_RUN;
+      it->icon_id = ICON_SETTINGS;
     } else if (dot && strcasecmp(dot, ".lnk") == 0) {
       strcpy(it->desc, "Collegamento NewOS");
-      it->icon_id = ICON_RUN;
+      it->icon_id = ICON_SHORTCUT;
     } else if (strcasecmp(it->name, "PLAYER.EXE") == 0) {
       strcpy(it->desc, "Lettore Multimediale");
-      it->icon_id = ICON_PLAY;
+      it->icon_id = ICON_MEDIA_PLAYER;
     } else {
       strcpy(it->desc, "Applicazione");
       it->icon_id = ICON_RUN;
@@ -552,12 +552,12 @@ static void explorer_classify_item(explorer_item_t *it) {
 
   case FILE_CAT_HTML:
     strcpy(it->desc, "Documento HTML");
-    it->icon_id = ICON_NET;
+    it->icon_id = ICON_BROWSER;
     break;
 
   case FILE_CAT_RULES:
     strcpy(it->desc, "Regola Ufficiale NewOS");
-    it->icon_id = ICON_DOCUMENT;
+    it->icon_id = ICON_SCRIPT;
     break;
 
   case FILE_CAT_ARCHIVE:
@@ -571,16 +571,22 @@ static void explorer_classify_item(explorer_item_t *it) {
   default:
     if (dot && strcasecmp(dot, ".sys") == 0) {
       strcpy(it->desc, "Driver di periferica");
-      it->icon_id = ICON_DOCUMENT;
+      it->icon_id = ICON_CONFIG;
     } else if (dot && strcasecmp(dot, ".cdc") == 0) {
       strcpy(it->desc, "Codec multimediale");
-      it->icon_id = ICON_MAINTENANCE;
+      it->icon_id = ICON_CHIP;
+    } else if (dot && strcasecmp(dot, ".ttf") == 0) {
+      strcpy(it->desc, "Font TrueType");
+      it->icon_id = ICON_FONT_FILE;
     } else if (dot && strcasecmp(dot, ".mod") == 0) {
       strcpy(it->desc, "Modulo di avvio protetto");
-      it->icon_id = ICON_DOCUMENT;
+      it->icon_id = ICON_CHIP;
     } else if (dot && strcasecmp(dot, ".pak") == 0) {
       strcpy(it->desc, "Archivio compresso");
-      it->icon_id = ICON_DOCUMENT;
+      it->icon_id = ICON_CONFIG;
+    } else if (dot && strcasecmp(dot, ".txt") == 0) {
+      strcpy(it->desc, "Documento di testo");
+      it->icon_id = ICON_NOTEPAD;
     } else {
       strcpy(it->desc, "Documento di testo");
       it->icon_id = ICON_DOCUMENT;

@@ -649,21 +649,21 @@ static icon_id_t wm_get_app_icon(window_t *win) {
   if (win->app_type == APP_CMD)
     return ICON_RUN;
   if (win->app_type == APP_NOTEPAD)
-    return ICON_DOCUMENT;
+    return ICON_NOTEPAD;
   if (win->app_type == APP_CALC)
     return ICON_MAINTENANCE;
   if (win->app_type == APP_ABOUT)
     return ICON_INFO;
   if (win->app_type == APP_DISPLAY)
-    return ICON_DESKTOP;
+    return ICON_DISPLAY;
   if (win->app_type == APP_SOUND)
     return ICON_SOUND;
   if (win->app_type == APP_MOUSE)
     return ICON_MOUSE;
   if (win->app_type == APP_USERACCT)
-    return ICON_ACCESSIBILITY;
+    return ICON_USERS;
   if (win->app_type == APP_TIMEDATE)
-    return ICON_INFO;
+    return ICON_CLOCK;
   if (win->app_type == APP_NETCPL)
     return ICON_NET;
   if (win->app_type == APP_KEYBCPL)
@@ -675,11 +675,11 @@ static icon_id_t wm_get_app_icon(window_t *win) {
     return ICON_FOLDER;
   }
   if (win->app_type == APP_RULES)
-    return ICON_DOCUMENT;
+    return ICON_SCRIPT;
   if (win->app_type == APP_BROWSER)
-    return ICON_NET;
+    return ICON_BROWSER;
   if (win->app_type == APP_PLAYER)
-    return ICON_PLAY;
+    return ICON_MEDIA_PLAYER;
   if (win->app_type == APP_EXPLORER) {
     if (strstr(win->title, "Disco locale") || strstr(win->title, "C:\\"))
       return ICON_HD;
@@ -1224,7 +1224,7 @@ void wm_render(void) {
     else if (desktop_icons[i].type == 1)
       gfx_draw_icon_32(ix, iy, ICON_RUN);
     else if (desktop_icons[i].type == 2)
-      gfx_draw_icon_32(ix, iy, ICON_DOCUMENT);
+      gfx_draw_icon_32(ix, iy, ICON_NOTEPAD);
     else if (desktop_icons[i].type == 3)
       gfx_draw_icon_calc(ix, iy);
     else if (desktop_icons[i].type == 4)
@@ -1237,15 +1237,17 @@ void wm_render(void) {
           (strcasecmp(dot, ".jpg") == 0 || strcasecmp(dot, ".bmp") == 0 ||
            strcasecmp(dot, ".png") == 0)) {
         gfx_draw_icon_32(ix, iy, ICON_IMAGE);
+      } else if (dot && strcasecmp(dot, ".lnk") == 0) {
+        gfx_draw_icon_32(ix, iy, ICON_SHORTCUT);
       } else {
-        gfx_draw_icon_32(ix, iy, ICON_DOCUMENT);
+        gfx_draw_icon_32(ix, iy, ICON_NOTEPAD);
       }
     } else if (desktop_icons[i].type == 7)
       gfx_draw_icon_32(ix, iy, ICON_CESTINO);
     else if (desktop_icons[i].type == 8)
-      gfx_draw_icon_32(ix, iy, ICON_MAINTENANCE);
+      gfx_draw_icon_32(ix, iy, ICON_INSTALLER);
     else if (desktop_icons[i].type == 9)
-      gfx_draw_icon_32(ix, iy, ICON_NET);
+      gfx_draw_icon_32(ix, iy, ICON_BROWSER);
 
     // Formatta etichetta su 1 o 2 righe centrate all'interno della colonna
     char l1[16], l2[16];
@@ -1581,7 +1583,7 @@ void wm_render(void) {
                            g_notif_center_open ? 180 : 95);
     gfx_draw_rounded_rect(bell_x, tray_y, 24, 22, 4, 0x94A3B8);
   }
-  gfx_draw_icon_16(usb_x + 4, tray_y + 3, ICON_HD);
+  gfx_draw_icon_16(usb_x + 4, tray_y + 3, ICON_USB);
   gfx_draw_string(kbd_x + 6, tray_y + 7, keyboard_get_layout_code(), clk_col, 0, true);
   gfx_draw_icon_16(bell_x + 4, tray_y + 3, ICON_INFO);
   if (g_toast_count > 0) {

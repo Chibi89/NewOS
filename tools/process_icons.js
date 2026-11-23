@@ -34,7 +34,23 @@ const ICON_LIST = [
     { id: 'ICON_ENERGY',         file: 'EnergyManagement.ico', name: 'Energia' },
     { id: 'ICON_MAINTENANCE',    file: 'ManutenchTool.ico',    name: 'Manutenzione' },
     { id: 'ICON_NET_ON',         file: 'UnityNetOn.ico',       name: 'Rete Attiva' },
-    { id: 'ICON_NET_OFF',        file: 'UnityNetOff.ico',      name: 'Rete Disattivata' }
+    { id: 'ICON_NET_OFF',        file: 'UnityNetOff.ico',      name: 'Rete Disattivata' },
+    { id: 'ICON_BROWSER',        file: 'browser.ico',          name: 'Web Browser' },
+    { id: 'ICON_NOTEPAD',        file: 'notepad.ico',          name: 'Blocco Note' },
+    { id: 'ICON_USB',            file: 'usb.ico',              name: 'Unita USB' },
+    { id: 'ICON_CHIP',           file: 'chip.ico',             name: 'Hardware / CPU' },
+    { id: 'ICON_SHORTCUT',       file: 'shortcut.ico',         name: 'Collegamento' },
+    { id: 'ICON_MEDIA_PLAYER',   file: 'mediaplayer.ico',      name: 'Media Player' },
+    { id: 'ICON_AUDIO_FILE',     file: 'audiofile.ico',        name: 'File Audio' },
+    { id: 'ICON_FONT_FILE',      file: 'fontfile.ico',         name: 'Font TrueType' },
+    { id: 'ICON_INSTALLER',      file: 'installer.ico',        name: 'Installer' },
+    { id: 'ICON_DISPLAY',        file: 'display.ico',          name: 'Schermo' },
+    { id: 'ICON_CLOCK',          file: 'clock.ico',            name: 'Data e Ora' },
+    { id: 'ICON_USERS',          file: 'users.ico',            name: 'Account Utente' },
+    { id: 'ICON_PRINTER',        file: 'printer.ico',          name: 'Stampanti / Porte' },
+    { id: 'ICON_CONFIG',         file: 'config.ico',           name: 'Configurazione' },
+    { id: 'ICON_SCRIPT',         file: 'script.ico',           name: 'Script / Regole' },
+    { id: 'ICON_SETTINGS',       file: 'settings.ico',         name: 'Impostazioni' }
 ];
 
 console.log('=== Elaborazione Icone di Sistema (resources/icon) ===');

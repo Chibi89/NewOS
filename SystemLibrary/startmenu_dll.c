@@ -65,29 +65,29 @@ static void sm_set_item(sm_app_item_t* it, const char* lbl, const char* tgt, ico
 static void sm_ensure_items(void) {
     if (g_items_init) return;
     g_items_init = true;
-    sm_set_item(&g_pinned[0], "Impostazioni", "display",  ICON_CONTROL_PANEL, false);
-    sm_set_item(&g_pinned[1], "Esplora file", "thispc",   ICON_THIS_PC,       false);
-    sm_set_item(&g_pinned[2], "Web Browser",  "browser",  ICON_NET,           false);
-    sm_set_item(&g_pinned[3], "Blocco note",  "notepad",  ICON_DOCUMENT,      false);
-    sm_set_item(&g_pinned[4], "Calcolatrice", "calc",     ICON_MAINTENANCE,   false);
-    sm_set_item(&g_pinned[5], "Media Player", "player",   ICON_PLAY,          false);
-    sm_set_item(&g_pinned[6], "Prompt CMD",   "cmd",      ICON_RUN,           false);
-    sm_set_item(&g_pinned[7], "Installa App", "pkgsvc",   ICON_FOLDER,        true);
+    sm_set_item(&g_pinned[0], "Impostazioni", "display",  ICON_SETTINGS,     false);
+    sm_set_item(&g_pinned[1], "Esplora file", "thispc",   ICON_THIS_PC,      false);
+    sm_set_item(&g_pinned[2], "Web Browser",  "browser",  ICON_BROWSER,      false);
+    sm_set_item(&g_pinned[3], "Blocco note",  "notepad",  ICON_NOTEPAD,      false);
+    sm_set_item(&g_pinned[4], "Calcolatrice", "calc",     ICON_MAINTENANCE,  false);
+    sm_set_item(&g_pinned[5], "Media Player", "player",   ICON_MEDIA_PLAYER, false);
+    sm_set_item(&g_pinned[6], "Prompt CMD",   "cmd",      ICON_RUN,          false);
+    sm_set_item(&g_pinned[7], "Installa App", "pkgsvc",   ICON_INSTALLER,    true);
 
-    sm_set_item(&g_all_apps[0],  "Blocco note",      "notepad",  ICON_DOCUMENT,      false);
-    sm_set_item(&g_all_apps[1],  "Calcolatrice",     "calc",     ICON_MAINTENANCE,   false);
-    sm_set_item(&g_all_apps[2],  "Caratteri (Font)", "fonts",    ICON_FONT,          true);
-    sm_set_item(&g_all_apps[3],  "Esplora Risorse",  "thispc",   ICON_THIS_PC,       false);
-    sm_set_item(&g_all_apps[4],  "Gestione Attivita","taskmgr",  ICON_CONTROL_PANEL, false);
-    sm_set_item(&g_all_apps[5],  "Info Sistema",     "about",    ICON_INFO,          false);
-    sm_set_item(&g_all_apps[6],  "Installa App",     "pkgsvc",   ICON_FOLDER,        true);
-    sm_set_item(&g_all_apps[7],  "Media Player",     "player",   ICON_PLAY,          false);
-    sm_set_item(&g_all_apps[8],  "Pannello Contr.",  "cpanel",   ICON_CONTROL_PANEL, false);
-    sm_set_item(&g_all_apps[9],  "Porte COM / LPT",  "ports",    ICON_MAINTENANCE,   true);
-    sm_set_item(&g_all_apps[10], "Prompt Comandi",   "cmd",      ICON_RUN,           false);
-    sm_set_item(&g_all_apps[11], "Regedit",          "regedit",  ICON_REGISTRY,      false);
-    sm_set_item(&g_all_apps[12], "Sicurezza",        "seccpl",   ICON_INFO,          true);
-    sm_set_item(&g_all_apps[13], "Web Browser",      "browser",  ICON_NET,           false);
+    sm_set_item(&g_all_apps[0],  "Blocco note",      "notepad",  ICON_NOTEPAD,      false);
+    sm_set_item(&g_all_apps[1],  "Calcolatrice",     "calc",     ICON_MAINTENANCE,  false);
+    sm_set_item(&g_all_apps[2],  "Caratteri (Font)", "fonts",    ICON_FONT_FILE,    true);
+    sm_set_item(&g_all_apps[3],  "Esplora Risorse",  "thispc",   ICON_THIS_PC,      false);
+    sm_set_item(&g_all_apps[4],  "Gestione Attivita","taskmgr",  ICON_CHIP,         false);
+    sm_set_item(&g_all_apps[5],  "Info Sistema",     "about",    ICON_INFO,         false);
+    sm_set_item(&g_all_apps[6],  "Installa App",     "pkgsvc",   ICON_INSTALLER,    true);
+    sm_set_item(&g_all_apps[7],  "Media Player",     "player",   ICON_MEDIA_PLAYER, false);
+    sm_set_item(&g_all_apps[8],  "Pannello Contr.",  "cpanel",   ICON_CONTROL_PANEL,false);
+    sm_set_item(&g_all_apps[9],  "Porte COM / LPT",  "ports",    ICON_PRINTER,      true);
+    sm_set_item(&g_all_apps[10], "Prompt Comandi",   "cmd",      ICON_RUN,          false);
+    sm_set_item(&g_all_apps[11], "Regedit",          "regedit",  ICON_REGISTRY,     false);
+    sm_set_item(&g_all_apps[12], "Sicurezza",        "seccpl",   ICON_INFO,         true);
+    sm_set_item(&g_all_apps[13], "Web Browser",      "browser",  ICON_BROWSER,      false);
 }
 
 static bool sm_contains_nocase(const char* hay, const char* needle) {
