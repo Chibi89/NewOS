@@ -2,7 +2,7 @@
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 [![Arch](https://img.shields.io/badge/architecture-x86__64%20(Long%20Mode)-blue.svg)]()
-[![Kernel Size](https://img.shields.io/badge/kernel%20size-187%20KB%20%2F%20480%20KB-brightgreen.svg)]()
+[![Kernel Size](https://img.shields.io/badge/kernel%20size-197%20KB%20%2F%20480%20KB-brightgreen.svg)]()
 [![Dual Boot](https://img.shields.io/badge/boot-BIOS%20MBR%20%2B%20UEFI%2064--bit-blueviolet.svg)]()
 [![Filesystem](https://img.shields.io/badge/filesystems-exFAT%20%7C%20NTFS--3G%20%7C%20EXT4%20%7C%20ISO%209660%20%7C%20UDF%20%7C%20RamFS-purple.svg)]()
 [![UI](https://img.shields.io/badge/GUI-Liquid%20Glass%20%7C%20Mica%20%7C%20Classic%202000-lightgrey.svg)]()
@@ -30,6 +30,10 @@
 <summary><strong>Espandi per visualizzare gli aggiornamenti e i fix recenti</strong></summary>
 
 ### 23 Novembre 2026
+- **NewOS Studio IDE (`STUDIO.DLL`), NewSoft SDK v3.0 (`NSRT.DLL`) & Gestione Progetti / Installer**:
+  - Creato l'IDE out-of-kernel [studio.c](SystemLibrary/studio.c) (`STUDIO.DLL`, avviabile con `start studio`) a schermo intero stile Visual Studio con aggancio dinamico al motore temi (**Liquid Glass**, **Mica**, **Classic** + override **VS Dark**), **Form Designer `.xuiml`**, **Code Viewer** con **ScrollViewer** sottile e **Strumenti Codice** (analisi sintattica e autocompletamento SDK).
+  - Implementata la **Gestione Progetti `.nsproj`** in `C:\User\Projects\`, **Wizard Nuovo Progetto** con separazione netta tra **Progetti GUI** (Form Designer + XML) e **Progetti Console** (solo codice CLI, blocco file/controlli GUI), personalizzazione **Icona** (anteprima 16×16/32×32), **Versione Build** (`v1.X.NNN`), **Target** (`x86_64` / `x86+EFI`), **Modalità Progetto** con tabella file + **combobox `Copia in Output`** e preset automatizzati (`Solo Runtime`, `Sorgenti + SDK`, `Copia Tutto`), deploy in `C:\ProgramFile\<App>\` e creazione pacchetto **Installer** (`.nsi` / `.c` / `.xuiml`) linkato al servizio obbligatorio `PKGSVC.DLL`.
+  - Espanso **NewSoft SDK v3.0** ([nsrt.c](SystemLibrary/nsrt.c), [NEWOS_SDK.md](SDK/NEWOS_SDK.md)) con 21 header freestanding in `SDK/include/newos/`, accesso globale in lettura al Registro e scrittura sandboxed (`newos/reg.h`), e auto-chiusura dopo 5 secondi delle notifiche toast in [wm.c](kernel/gui/wm.c) se il mouse non è sopra.
 - **Archivi `.TAR`/`.ZIP` Virtuali, Drag & Drop Reale & Strumenti CLI (`tar`, `tracert`)**:
   - Aggiunta navigazione virtuale di archivi `.TAR` (USTAR) e `.ZIP` direttamente in [explorer.c](explorer/explorer.c) e tramite [launcher_dll.c](SystemLibrary/launcher_dll.c), più comando `tar` (`-cf`, `-tf`, `-xf`) e `tracert` in [cmd.c](kernel/apps/cmd.c).
   - Implementato il **Drag & Drop reale** di file su cartelle in `EXPLORER.DLL` con spostamento su VFS tramite rilascio gestito in [wm.c](kernel/gui/wm.c).
@@ -279,6 +283,11 @@ Tutte le applicazioni accessorie e i tool di sistema sono organizzati come modul
 | :---: | :---: | :---: |
 | <img src="docs/screenshots/screenshot_cmd_enhanced.png" alt="CMD History Tab Redirect" width="280" /> | <img src="docs/screenshots/screenshot_cmd_net_lnk.png" alt="CMD arp -a e mklnk" width="280" /> | <img src="docs/screenshots/screenshot_lnk_launch.png" alt="Avvio da file LNK" width="280" /> |
 
+#### NewOS Studio IDE (`STUDIO.DLL`) & NewSoft SDK v3.0 (`NSRT.DLL`)
+| Form Designer Liquid Glass | Code Viewer & Analisi | Wizard Nuovo Progetto | Config Progetto & Installer | Progetto Console (No GUI) |
+| :---: | :---: | :---: | :---: | :---: |
+| <img src="docs/screenshots/studio.png" alt="NewOS Studio Form Designer" width="170" /> | <img src="docs/screenshots/studio_code.png" alt="Code Viewer e ScrollViewer" width="170" /> | <img src="docs/screenshots/studio_wizard.png" alt="Wizard Nuovo Progetto" width="170" /> | <img src="docs/screenshots/studio_project_cfg.png" alt="Config Progetto e PKGSVC" width="170" /> | <img src="docs/screenshots/studio_console.png" alt="Progetto Console CLI" width="170" /> |
+
 </details>
 
 ---
@@ -387,6 +396,10 @@ tools\qemu-system-x86_64.exe -cdrom NewOS_V1.iso -m 256M -vga std -device AC97 -
 <summary><strong>Expand to view recent updates and fixes</strong></summary>
 
 ### November 23, 2026
+- **NewOS Studio IDE (`STUDIO.DLL`), NewSoft SDK v3.0 (`NSRT.DLL`) & Project / Installer Management**:
+  - Created the out-of-kernel IDE [studio.c](SystemLibrary/studio.c) (`STUDIO.DLL`, launched via `start studio`) with a fullscreen Visual Studio-style layout, dynamic system theme integration (**Liquid Glass**, **Mica**, **Classic** + **VS Dark** override), **`.xuiml` Form Designer**, **Code Viewer** with slim **ScrollViewer** and **Code Tools** (syntax analyzer and SDK autocomplete).
+  - Implemented **`.nsproj` Project Management** under `C:\User\Projects\`, a **New Project Wizard** enforcing a strict split between **GUI Projects** (Form Designer + XML) and **Console Projects** (CLI-only, blocking GUI files/controls), customization for **App Icon** (16×16/32×32 preview), **Build Version** (`v1.X.NNN`), **Target** (`x86_64` / `x86+EFI`), **Project Config Mode** with per-file **Copy to Output combobox** and automated presets, deployment to `C:\ProgramFile\<App>\`, and **Installer generation** linked to the mandatory `PKGSVC.DLL` service.
+  - Expanded **NewSoft SDK v3.0** ([nsrt.c](SystemLibrary/nsrt.c), [NEWOS_SDK.md](SDK/NEWOS_SDK.md)) with 21 freestanding headers under `SDK/include/newos/`, global Registry read + sandboxed write (`newos/reg.h`), and 5-second toast auto-dismiss in [wm.c](kernel/gui/wm.c) when not hovered.
 - **Virtual `.TAR`/`.ZIP` Archives, Real Drag & Drop & CLI Tools (`tar`, `tracert`)**:
   - Added virtual folder browsing for `.TAR` (USTAR) and `.ZIP` archives in [explorer.c](explorer/explorer.c) and [launcher_dll.c](SystemLibrary/launcher_dll.c), plus `tar` (`-cf`, `-tf`, `-xf`) and `tracert` commands in [cmd.c](kernel/apps/cmd.c).
   - Implemented **real Drag & Drop** of files onto folders in `EXPLORER.DLL` with VFS move on release handled via [wm.c](kernel/gui/wm.c).
