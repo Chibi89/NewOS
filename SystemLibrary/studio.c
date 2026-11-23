@@ -181,6 +181,20 @@ static char g_new_proj_buf[24] = "";
 static char g_proj_list[8][32];
 static int g_proj_list_cnt = 0;
 
+/* Configurazione Progetto & File Output (Modalita' Progetto) */
+typedef struct {
+  char name[40];
+  uint8_t usage;     /* 0=UI Layout, 1=Sorgente C, 2=Progetto, 3=Config, 4=Risorsa */
+  uint8_t copy_mode; /* 0=Non copiare, 1=Copia sempre, 2=Solo se nuovo */
+} st_proj_file_t;
+
+#define ST_MAX_PFILES 12
+static st_proj_file_t g_pfiles[ST_MAX_PFILES];
+static int g_pfile_cnt = 0;
+static int g_open_combo_idx = -1;
+static int g_proj_ver_minor = 0;
+static int g_proj_target_efi = 0; /* 0=x86_64, 1=x86_64+EFI */
+
 static char g_c_code[2048];
 static char g_output_lines[4][76];
 static char g_status[80] =
@@ -658,6 +672,8 @@ static void st_export_c_app(void) {
   }
 }
 
+static void st_refresh_project_files(void);
+
 static bool st_save_project(void) {
   if (!g_rt || !g_rt->snprintf || !g_rt->alloc || !g_rt->free)
     return false;
@@ -671,9 +687,15 @@ static bool st_save_project(void) {
   int pos = 0;
   pos += g_rt->snprintf(
       pbuf + pos, 2048 - (size_t)pos,
-      "[NewOSProject]\nname=%s\nversion=1.0\nauthor=NewOS Developer\n"
-      "target=x86_64\ntemplate=%d\nseq=%d\nctrl_count=%d\n",
-      g_proj_name, g_proj_tpl, g_seq, g_ctrl_count);
+      "[NewOSProject]\nname=%s\nversion=1.%d\nauthor=NewOS Developer\n"
+      "target=%s\ntemplate=%d\nver_minor=%d\ntarget_efi=%d\nseq=%d\nctrl_count=%d\n",
+      g_proj_name, g_proj_ver_minor,
+      g_proj_target_efi ? "x86_64+EFI" : "x86_64", g_proj_tpl,
+      g_proj_ver_minor, g_proj_target_efi, g_seq, g_ctrl_count);
+  for (int i = 0; i < g_pfile_cnt && pos < 1750; i++) {
+    pos += g_rt->snprintf(pbuf + pos, 2048 - (size_t)pos, "copy_%s=%d\n",
+                          g_pfiles[i].name, (int)g_pfiles[i].copy_mode);
+  }
   for (int i = 0; i < g_ctrl_count && pos < 1900; i++) {
     const st_ctrl_t *c = &g_ctrls[i];
     pos +=
@@ -736,9 +758,27 @@ static bool st_load_project_file(const char *nsproj_path) {
     } else if (g_rt->strncmp && g_rt->strncmp(p, "template=", 9) == 0) {
       p += 9;
       g_proj_tpl = st_parse_int_tok(&p, '\n');
+    } else if (g_rt->strncmp && g_rt->strncmp(p, "ver_minor=", 10) == 0) {
+      p += 10;
+      g_proj_ver_minor = st_parse_int_tok(&p, '\n');
+    } else if (g_rt->strncmp && g_rt->strncmp(p, "target_efi=", 11) == 0) {
+      p += 11;
+      g_proj_target_efi = st_parse_int_tok(&p, '\n');
     } else if (g_rt->strncmp && g_rt->strncmp(p, "seq=", 4) == 0) {
       p += 4;
       g_seq = st_parse_int_tok(&p, '\n');
+    } else if (g_rt->strncmp && g_rt->strncmp(p, "copy_", 5) == 0) {
+      p += 5;
+      char fname[40];
+      st_read_str_tok(&p, '=', fname, sizeof(fname));
+      int cm = st_parse_int_tok(&p, '\n');
+      st_refresh_project_files();
+      for (int fi = 0; fi < g_pfile_cnt; fi++) {
+        if (g_rt->strcmp && g_rt->strcmp(g_pfiles[fi].name, fname) == 0) {
+          g_pfiles[fi].copy_mode = (uint8_t)(cm >= 0 && cm <= 2 ? cm : 0);
+          break;
+        }
+      }
     } else if (g_rt->strncmp && g_rt->strncmp(p, "ctrl_", 5) == 0 &&
                g_rt->strncmp(p, "ctrl_count=", 11) != 0) {
       while (p < end && *p && *p != '=')
@@ -817,41 +857,51 @@ static void st_apply_project_template(int tpl) {
   g_edit_code = false;
   g_doc_tab = 0;
   if (tpl == 0) {
-    g_ctrls[0] = (st_ctrl_t){ST_GROUPBOX, "grp_main", " App Vuota ", 14, 34, 390, 190};
-    g_ctrls[1] = (st_ctrl_t){ST_LABEL, "lbl_msg", "Progetto vuoto pronto.", 28, 62, 260, 20};
+    g_ctrls[0] =
+        (st_ctrl_t){ST_GROUPBOX, "grp_main", " App Vuota ", 14, 34, 390, 190};
+    g_ctrls[1] = (st_ctrl_t){
+        ST_LABEL, "lbl_msg", "Progetto vuoto pronto.", 28, 62, 260, 20};
     g_ctrl_count = 2;
     g_sel_idx = 1;
     st_regen_c_code(NULL);
   } else if (tpl == 2 && g_rt && g_rt->snprintf) {
-    g_ctrls[0] = (st_ctrl_t){ST_GROUPBOX, "grp_sys", " Diagnostica Sistema ", 14, 34, 390, 190};
-    g_ctrls[1] = (st_ctrl_t){ST_LABEL, "lbl_os", "OS: NewOS V1 (x86_64)", 28, 62, 320, 20};
-    g_ctrls[2] = (st_ctrl_t){ST_LABEL, "lbl_ram", "RAM: pronto al rilevamento", 28, 92, 320, 20};
-    g_ctrls[3] = (st_ctrl_t){ST_BUTTON, "btn_ref", "Aggiorna Info", 28, 174, 130, 28};
-    g_ctrls[4] = (st_ctrl_t){ST_BUTTON, "btn_exit", "Chiudi", 264, 174, 120, 28};
+    g_ctrls[0] = (st_ctrl_t){
+        ST_GROUPBOX, "grp_sys", " Diagnostica Sistema ", 14, 34, 390, 190};
+    g_ctrls[1] = (st_ctrl_t){
+        ST_LABEL, "lbl_os", "OS: NewOS V1 (x86_64)", 28, 62, 320, 20};
+    g_ctrls[2] = (st_ctrl_t){
+        ST_LABEL, "lbl_ram", "RAM: pronto al rilevamento", 28, 92, 320, 20};
+    g_ctrls[3] =
+        (st_ctrl_t){ST_BUTTON, "btn_ref", "Aggiorna Info", 28, 174, 130, 28};
+    g_ctrls[4] =
+        (st_ctrl_t){ST_BUTTON, "btn_exit", "Chiudi", 264, 174, 120, 28};
     g_ctrl_count = 5;
     g_sel_idx = 3;
-    g_rt->snprintf(g_c_code, sizeof(g_c_code),
-                   "// studio_app.c - Template SysInfo (SDK v3.0)\n"
-                   "#include <newos/sdk.h>\n\n"
-                   "static const nsrt_api_t* g_rt = NULL;\n\n"
-                   "static void on_ui_event(nsrt_app_t* app, const char* control_id, void* ctx) {\n"
-                   "    NS_UNUSED(ctx);\n"
-                   "    const nsrt_api_t* rt = g_rt;\n"
-                   "    if (!rt) return;\n"
-                   "    NS_ON_CLICK(\"btn_ref\") {\n"
-                   "        ns_sys_info_t info; char buf[64];\n"
-                   "        if (rt->get_sys_info(&info)) {\n"
-                   "            rt->snprintf(buf, 64, \"RAM Libera: %u KB\", info.free_ram_kb);\n"
-                   "            rt->set_text(app, \"lbl_ram\", buf);\n"
-                   "        }\n"
-                   "    }\n"
-                   "    NS_ON_CLICK(\"btn_exit\") { rt->close_app(app); }\n"
-                   "}\n\n"
-                   "void app_main(const kernel_api_t* kapi) {\n"
-                   "    g_rt = nsrt_load_library(kapi);\n"
-                   "    if (g_rt) g_rt->create_xuiml_app(\"SysInfo App\", 420, 280,\n"
-                   "        \"C:\\\\User\\\\studio_form.xuiml\", on_ui_event, NULL);\n"
-                   "}\n");
+    g_rt->snprintf(
+        g_c_code, sizeof(g_c_code),
+        "// studio_app.c - Template SysInfo (SDK v3.0)\n"
+        "#include <newos/sdk.h>\n\n"
+        "static const nsrt_api_t* g_rt = NULL;\n\n"
+        "static void on_ui_event(nsrt_app_t* app, const char* control_id, "
+        "void* ctx) {\n"
+        "    NS_UNUSED(ctx);\n"
+        "    const nsrt_api_t* rt = g_rt;\n"
+        "    if (!rt) return;\n"
+        "    NS_ON_CLICK(\"btn_ref\") {\n"
+        "        ns_sys_info_t info; char buf[64];\n"
+        "        if (rt->get_sys_info(&info)) {\n"
+        "            rt->snprintf(buf, 64, \"RAM Libera: %u KB\", "
+        "info.free_ram_kb);\n"
+        "            rt->set_text(app, \"lbl_ram\", buf);\n"
+        "        }\n"
+        "    }\n"
+        "    NS_ON_CLICK(\"btn_exit\") { rt->close_app(app); }\n"
+        "}\n\n"
+        "void app_main(const kernel_api_t* kapi) {\n"
+        "    g_rt = nsrt_load_library(kapi);\n"
+        "    if (g_rt) g_rt->create_xuiml_app(\"SysInfo App\", 420, 280,\n"
+        "        \"C:\\\\User\\\\studio_form.xuiml\", on_ui_event, NULL);\n"
+        "}\n");
   } else {
     st_init_template();
   }
@@ -888,7 +938,8 @@ static void st_duplicate_project(const char *src_name) {
   const char *files[2] = {"studio_form.xuiml", "studio_app.c"};
   for (int i = 0; i < 2; i++) {
     char sp[160], dp[160];
-    g_rt->snprintf(sp, sizeof(sp), "C:\\User\\Projects\\%s\\%s", src_name, files[i]);
+    g_rt->snprintf(sp, sizeof(sp), "C:\\User\\Projects\\%s\\%s", src_name,
+                   files[i]);
     g_rt->snprintf(dp, sizeof(dp), "%s\\%s", dst_dir, files[i]);
     uint32_t sz = 0;
     void *d = g_rt->file_read ? g_rt->file_read(sp, &sz) : NULL;
@@ -898,7 +949,8 @@ static void st_duplicate_project(const char *src_name) {
     }
   }
   char p_src[176], p_dst[176];
-  g_rt->snprintf(p_src, sizeof(p_src), "C:\\User\\Projects\\%s\\%s.nsproj", src_name, src_name);
+  g_rt->snprintf(p_src, sizeof(p_src), "C:\\User\\Projects\\%s\\%s.nsproj",
+                 src_name, src_name);
   g_rt->snprintf(p_dst, sizeof(p_dst), "%s\\%s.nsproj", dst_dir, dst_name);
   uint32_t psz = 0;
   void *pd = g_rt->file_read ? g_rt->file_read(p_src, &psz) : NULL;
@@ -908,7 +960,8 @@ static void st_duplicate_project(const char *src_name) {
   }
   st_refresh_project_list();
   char msg[76];
-  g_rt->snprintf(msg, sizeof(msg), "[PROJ] Duplicato '%s' -> '%s'", src_name, dst_name);
+  g_rt->snprintf(msg, sizeof(msg), "[PROJ] Duplicato '%s' -> '%s'", src_name,
+                 dst_name);
   st_push_output(msg);
   dll_strcpy(g_status, msg, sizeof(g_status));
 }
@@ -918,27 +971,130 @@ static void st_delete_project(const char *name) {
     return;
   if (g_rt->strcmp && g_rt->strcmp(name, g_proj_name) == 0) {
     st_push_output("[WARN] Impossibile eliminare il progetto attivo.");
-    dll_strcpy(g_status, "Impossibile eliminare il progetto attivo!", sizeof(g_status));
+    dll_strcpy(g_status, "Impossibile eliminare il progetto attivo!",
+               sizeof(g_status));
     return;
   }
   char p1[176], p2[160], p3[160];
-  g_rt->snprintf(p1, sizeof(p1), "C:\\User\\Projects\\%s\\%s.nsproj", name, name);
-  g_rt->snprintf(p2, sizeof(p2), "C:\\User\\Projects\\%s\\studio_form.xuiml", name);
+  g_rt->snprintf(p1, sizeof(p1), "C:\\User\\Projects\\%s\\%s.nsproj", name,
+                 name);
+  g_rt->snprintf(p2, sizeof(p2), "C:\\User\\Projects\\%s\\studio_form.xuiml",
+                 name);
   g_rt->snprintf(p3, sizeof(p3), "C:\\User\\Projects\\%s\\studio_app.c", name);
   g_rt->file_delete(p1, true);
   g_rt->file_delete(p2, true);
   g_rt->file_delete(p3, true);
   st_refresh_project_list();
   char msg[76];
-  g_rt->snprintf(msg, sizeof(msg), "[PROJ] Rimossi file del progetto '%s'", name);
+  g_rt->snprintf(msg, sizeof(msg), "[PROJ] Rimossi file del progetto '%s'",
+                 name);
   st_push_output(msg);
   dll_strcpy(g_status, msg, sizeof(g_status));
+}
+
+static uint8_t st_classify_usage(const char *fname) {
+  if (!fname)
+    return 4;
+  int len = 0;
+  while (fname[len])
+    len++;
+  if (len >= 6 && g_rt && g_rt->strcmp &&
+      g_rt->strcmp(fname + len - 6, ".xuiml") == 0)
+    return 0; /* UI Layout */
+  if (len >= 2 && (fname[len - 2] == '.' &&
+                   (fname[len - 1] == 'c' || fname[len - 1] == 'h')))
+    return 1; /* Sorgente C */
+  if (len >= 7 && g_rt && g_rt->strcmp &&
+      g_rt->strcmp(fname + len - 7, ".nsproj") == 0)
+    return 2; /* Progetto */
+  if (len >= 4 && g_rt && g_rt->strcmp &&
+      g_rt->strcmp(fname + len - 4, ".ini") == 0)
+    return 3; /* Config */
+  return 4;   /* Risorsa */
+}
+
+static uint8_t st_default_copy_for_usage(uint8_t u) {
+  return (u == 0 || u == 3 || u == 4) ? 1 : 0;
+}
+
+static void st_add_proj_file_entry(const char *name, uint8_t old_cnt,
+                                   const st_proj_file_t *old_list) {
+  if (!name || !name[0] || g_pfile_cnt >= ST_MAX_PFILES)
+    return;
+  for (int i = 0; i < g_pfile_cnt; i++) {
+    if (g_rt && g_rt->strcmp && g_rt->strcmp(g_pfiles[i].name, name) == 0)
+      return;
+  }
+  st_proj_file_t *f = &g_pfiles[g_pfile_cnt++];
+  dll_strcpy(f->name, name, sizeof(f->name));
+  f->usage = st_classify_usage(name);
+  f->copy_mode = st_default_copy_for_usage(f->usage);
+  for (uint8_t j = 0; j < old_cnt; j++) {
+    if (g_rt && g_rt->strcmp && g_rt->strcmp(old_list[j].name, name) == 0) {
+      f->copy_mode = old_list[j].copy_mode;
+      break;
+    }
+  }
+}
+
+static void st_refresh_project_files(void) {
+  st_proj_file_t prev[ST_MAX_PFILES];
+  uint8_t prev_cnt = (uint8_t)g_pfile_cnt;
+  for (uint8_t i = 0; i < prev_cnt; i++)
+    prev[i] = g_pfiles[i];
+  g_pfile_cnt = 0;
+
+  if (g_rt && g_rt->readdir && g_rt->alloc && g_rt->free) {
+    ns_dirent_t *ents = (ns_dirent_t *)g_rt->alloc(sizeof(ns_dirent_t) * 16);
+    if (ents) {
+      int32_t cnt = g_rt->readdir(g_proj_dir, ents, 16);
+      for (int32_t i = 0; i < cnt; i++) {
+        if (ents[i].is_directory || ents[i].name[0] == '.')
+          continue;
+        st_add_proj_file_entry(ents[i].name, prev_cnt, prev);
+      }
+      g_rt->free(ents);
+    }
+  }
+  char pfname[40];
+  if (g_rt && g_rt->snprintf)
+    g_rt->snprintf(pfname, sizeof(pfname), "%s.nsproj", g_proj_name);
+  else
+    dll_strcpy(pfname, "NewOSApp.nsproj", sizeof(pfname));
+  st_add_proj_file_entry("studio_form.xuiml", prev_cnt, prev);
+  st_add_proj_file_entry("studio_app.c", prev_cnt, prev);
+  st_add_proj_file_entry(pfname, prev_cnt, prev);
+  st_add_proj_file_entry("app.ini", prev_cnt, prev);
+}
+
+static void st_apply_copy_preset(int preset) {
+  st_refresh_project_files();
+  for (int i = 0; i < g_pfile_cnt; i++) {
+    uint8_t u = g_pfiles[i].usage;
+    if (preset == 0) {
+      g_pfiles[i].copy_mode = (u == 0 || u == 3 || u == 4) ? 1 : 0;
+    } else if (preset == 1) {
+      g_pfiles[i].copy_mode = (u == 3) ? 2 : 1;
+    } else {
+      g_pfiles[i].copy_mode = 1;
+    }
+  }
+  g_proj_dirty = true;
+  const char *pnames[3] = {"Solo Runtime", "Sorgenti + SDK", "Copia Tutto"};
+  if (g_rt && g_rt->snprintf) {
+    char msg[76];
+    g_rt->snprintf(msg, sizeof(msg), "[PROJ] Preset copia output: %s",
+                   pnames[preset >= 0 && preset < 3 ? preset : 0]);
+    st_push_output(msg);
+    dll_strcpy(g_status, msg, sizeof(g_status));
+  }
 }
 
 static void st_deploy_project(void) {
   if (!g_rt || !g_rt->snprintf || !g_rt->alloc || !g_rt->free)
     return;
   st_save_project();
+  st_refresh_project_files();
   char app_dir[128];
   g_rt->snprintf(app_dir, sizeof(app_dir), "C:\\ProgramFile\\%s", g_proj_name);
   if (!g_rt->file_exists || !g_rt->file_exists("C:\\ProgramFile"))
@@ -946,33 +1102,48 @@ static void st_deploy_project(void) {
   if (!g_rt->file_exists || !g_rt->file_exists(app_dir))
     g_rt->mkdir(app_dir, true);
 
-  char *xbuf = (char *)g_rt->alloc(4096);
-  if (xbuf) {
-    int xlen = st_build_xuiml(xbuf, 4096);
-    char xp[160];
-    g_rt->snprintf(xp, sizeof(xp), "%s\\studio_form.xuiml", app_dir);
-    g_rt->file_write(xp, xbuf, (uint32_t)xlen, true);
-    g_rt->free(xbuf);
+  int copied = 0, skipped = 0;
+  for (int i = 0; i < g_pfile_cnt; i++) {
+    const st_proj_file_t *pf = &g_pfiles[i];
+    if (pf->copy_mode == 0) {
+      skipped++;
+      continue;
+    }
+    char dp[168];
+    g_rt->snprintf(dp, sizeof(dp), "%s\\%s", app_dir, pf->name);
+    if (pf->copy_mode == 2 && g_rt->file_exists && g_rt->file_exists(dp)) {
+      skipped++;
+      continue;
+    }
+    if (g_rt->strcmp && g_rt->strcmp(pf->name, "app.ini") == 0) {
+      char ini[256];
+      int ilen = g_rt->snprintf(
+          ini, sizeof(ini),
+          "[AppManifest]\nName=%s\nVersion=1.%d\n"
+          "Runtime=NSRT.DLL+XUIML.DLL\nTarget=%s\n",
+          g_proj_name, g_proj_ver_minor,
+          g_proj_target_efi ? "x86_64+EFI" : "x86_64");
+      if (g_rt->file_write(dp, ini, (uint32_t)ilen, true))
+        copied++;
+    } else {
+      char sp[168];
+      st_proj_path(sp, sizeof(sp), pf->name);
+      uint32_t sz = 0;
+      void *d = g_rt->file_read ? g_rt->file_read(sp, &sz) : NULL;
+      if (d && sz > 0) {
+        if (g_rt->file_write(dp, d, sz, true))
+          copied++;
+        g_rt->free(d);
+      }
+    }
   }
-  char cp[160], ip[160], ini[256];
-  g_rt->snprintf(cp, sizeof(cp), "%s\\studio_app.c", app_dir);
-  size_t clen = g_rt->strlen ? g_rt->strlen(g_c_code) : 0;
-  g_rt->file_write(cp, g_c_code, (uint32_t)clen, true);
-
-  int ilen = g_rt->snprintf(ini, sizeof(ini),
-                            "[AppManifest]\nName=%s\nVersion=1.0\n"
-                            "Runtime=NSRT.DLL+XUIML.DLL\nTarget=x86_64\n",
-                            g_proj_name);
-  g_rt->snprintf(ip, sizeof(ip), "%s\\app.ini", app_dir);
-  bool ok = g_rt->file_write(ip, ini, (uint32_t)ilen, true);
   char msg[76];
   g_rt->snprintf(msg, sizeof(msg),
-                 ok ? "[DEPLOY] Pubblicato in C:\\ProgramFile\\%s"
-                    : "[ERR] Deploy in C:\\ProgramFile fallito",
-                 g_proj_name);
+                 "[DEPLOY] %s: %d copiati, %d esclusi -> C:\\ProgramFile",
+                 g_proj_name, copied, skipped);
   st_push_output(msg);
   dll_strcpy(g_status, msg, sizeof(g_status));
-  if (ok && g_rt->notify)
+  if (copied > 0 && g_rt->notify)
     g_rt->notify("NewOS Studio - Publish", msg);
 }
 
@@ -1297,6 +1468,36 @@ static void studio_draw(window_t *win) {
       vs_draw_btn(p, tx + 10, body_y + 50 + i * 30, tw - 20, 24, tb_items[i],
                   false);
     }
+  } else if (g_doc_tab == 3) {
+    g_api->gfx_draw_string(tx + 10, body_y + 6, "Strumenti Progetto", p->text,
+                           0, true);
+    g_api->gfx_draw_string(tx + 10, body_y + 28, "v Personalizza",
+                           p->text_muted, 0, true);
+    if (g_rt && g_rt->snprintf) {
+      char tb1[32], tb2[32];
+      g_rt->snprintf(tb1, sizeof(tb1), "Target: %s",
+                     g_proj_target_efi ? "x86+EFI" : "x86_64");
+      g_rt->snprintf(tb2, sizeof(tb2), "Versione: 1.%d (+)",
+                     g_proj_ver_minor);
+      vs_draw_btn(p, tx + 10, body_y + 48, tw - 20, 23, tb1, false);
+      vs_draw_btn(p, tx + 10, body_y + 76, tw - 20, 23, tb2, false);
+    }
+
+    g_api->gfx_draw_string(tx + 10, body_y + 108, "v Preset Copia Output",
+                           p->text_muted, 0, true);
+    vs_draw_btn(p, tx + 10, body_y + 128, tw - 20, 23, "Solo Runtime", false);
+    vs_draw_btn(p, tx + 10, body_y + 156, tw - 20, 23, "Sorgenti + SDK",
+                false);
+    vs_draw_btn(p, tx + 10, body_y + 184, tw - 20, 23, "Copia Tutto", false);
+    vs_draw_btn(p, tx + 10, body_y + 212, tw - 20, 23, "Aggiorna Lista",
+                false);
+
+    g_api->gfx_draw_string(tx + 10, body_y + 244, "v Compila & Deploy",
+                           p->text_muted, 0, true);
+    vs_draw_btn(p, tx + 10, body_y + 264, tw - 20, 24, "Verifica & Compila",
+                true);
+    vs_draw_btn(p, tx + 10, body_y + 294, tw - 20, 24, "Pubblica Eseguibile",
+                true);
   } else {
     if (g_code_lines_cnt == 0)
       st_run_code_analysis();
@@ -1359,8 +1560,8 @@ static void studio_draw(window_t *win) {
                            g_doc_tab == 1 ? p->accent : p->text_muted, 0, true);
     g_api->gfx_draw_string(rx + 22, body_y + 88, "studio_app.c [Code]",
                            g_doc_tab == 2 ? p->accent : p->text_muted, 0, true);
-    g_api->gfx_draw_string(rx + 22, body_y + 108, proj_f, p->status_ok, 0,
-                           true);
+    g_api->gfx_draw_string(rx + 22, body_y + 108, proj_f,
+                           g_doc_tab == 3 ? p->accent : p->status_ok, 0, true);
   } else {
     g_api->gfx_draw_string(rx + 10, body_y + 28, "Soluzione 'NewOSApp'",
                            p->text, 0, true);
@@ -1409,10 +1610,10 @@ static void studio_draw(window_t *win) {
   /* Document Tabs */
   if (!p->is_glass)
     g_api->gfx_fill_rect(mx, body_y, mw, 26, p->bg_header);
-  const char *doc_tabs[] = {"Form1.xuiml [Design]", "Form1.xuiml",
-                            "studio_app.c"};
-  int32_t tab_w = 180;
-  for (int t = 0; t < 3; t++) {
+  const char *doc_tabs[] = {"Form1 [Design]", "Form1 [XML]", "studio_app.c",
+                            "Progetto [.nsproj]"};
+  int32_t tab_w = 140;
+  for (int t = 0; t < 4; t++) {
     int32_t ttx = mx + t * tab_w;
     if (p->is_glass && g_api->gfx_fill_rounded_alpha) {
       g_api->gfx_fill_rounded_alpha(
@@ -1486,6 +1687,71 @@ static void studio_draw(window_t *win) {
       vs_draw_code_lines(p, mx, doc_y, mw, doc_h, xbuf);
       g_rt->free(xbuf);
     }
+  } else if (g_doc_tab == 3) {
+    if (g_pfile_cnt == 0)
+      st_refresh_project_files();
+    vs_draw_surface(p, mx, doc_y, mw, doc_h, p->bg_editor, 165);
+    if (g_rt && g_rt->snprintf) {
+      char hdr[96], sub[96];
+      g_rt->snprintf(hdr, sizeof(hdr),
+                     "Configurazione Progetto: %s  (v1.%d  |  %s)",
+                     g_proj_name, g_proj_ver_minor,
+                     g_proj_target_efi ? "x86_64+EFI" : "x86_64");
+      g_rt->snprintf(sub, sizeof(sub),
+                     "Cartella Output Eseguibile: C:\\ProgramFile\\%s",
+                     g_proj_name);
+      g_api->gfx_draw_string(mx + 14, doc_y + 10, hdr, p->accent, 0, true);
+      g_api->gfx_draw_string(mx + 14, doc_y + 28, sub, p->text_muted, 0, true);
+    }
+    g_api->gfx_fill_rect(mx + 12, doc_y + 48, mw - 24, 20, p->bg_header);
+    g_api->gfx_draw_string(mx + 20, doc_y + 52, "File del Progetto",
+                           p->text, 0, true);
+    g_api->gfx_draw_string(mx + 235, doc_y + 52, "Utilizzo", p->text, 0, true);
+    g_api->gfx_draw_string(mx + mw - 182, doc_y + 52, "Copia in Output",
+                           p->text, 0, true);
+
+    static const char *const u_lbls[5] = {"UI Layout", "Sorgente C",
+                                          "Progetto", "Config", "Risorsa"};
+    static const char *const c_lbls[3] = {"Non copiare  v", "Copia sempre v",
+                                          "Solo se nuovo v"};
+    int max_rows = (doc_h - 80) / 32;
+    if (max_rows > g_pfile_cnt)
+      max_rows = g_pfile_cnt;
+    for (int i = 0; i < max_rows; i++) {
+      int32_t ry_f = doc_y + 72 + i * 32;
+      const st_proj_file_t *pf = &g_pfiles[i];
+      vs_draw_surface(p, mx + 12, ry_f, mw - 24, 28, p->bg_panel, 185);
+      g_api->gfx_draw_string(mx + 20, ry_f + 7, pf->name, p->text, 0, true);
+      g_api->gfx_draw_string(mx + 235, ry_f + 7,
+                             u_lbls[pf->usage < 5 ? pf->usage : 4],
+                             pf->usage == 0 ? p->status_ok : p->text_muted, 0,
+                             true);
+      int32_t cbx = mx + mw - 182;
+      bool is_open = (g_open_combo_idx == i);
+      g_api->gfx_fill_rect(cbx, ry_f + 3, 162, 22, p->bg_editor);
+      g_api->gfx_draw_rect(cbx, ry_f + 3, 162, 22,
+                           is_open ? p->accent : p->border);
+      g_api->gfx_draw_string(cbx + 8, ry_f + 7,
+                             c_lbls[pf->copy_mode < 3 ? pf->copy_mode : 0],
+                             pf->copy_mode == 0 ? p->text_muted : p->accent, 0,
+                             true);
+    }
+    /* Dropdown a singola scelta disegnato sopra le righe */
+    if (g_open_combo_idx >= 0 && g_open_combo_idx < max_rows) {
+      int32_t cbx = mx + mw - 182;
+      int32_t ddy = doc_y + 72 + g_open_combo_idx * 32 + 25;
+      static const char *const opts[3] = {"Non copiare", "Copia sempre",
+                                          "Solo se nuovo"};
+      g_api->gfx_fill_rect(cbx, ddy, 162, 66, p->bg_panel);
+      g_api->gfx_draw_rect(cbx, ddy, 162, 66, p->accent);
+      for (int o = 0; o < 3; o++) {
+        bool sel = (g_pfiles[g_open_combo_idx].copy_mode == (uint8_t)o);
+        if (sel)
+          g_api->gfx_fill_rect(cbx + 1, ddy + 1 + o * 22, 160, 20, p->accent);
+        g_api->gfx_draw_string(cbx + 8, ddy + 4 + o * 22, opts[o],
+                               sel ? p->accent_text : p->text, 0, true);
+      }
+    }
   } else {
     vs_draw_code_lines(p, mx, doc_y, mw, doc_h, g_c_code);
   }
@@ -1525,9 +1791,9 @@ static void studio_draw(window_t *win) {
     g_api->gfx_fill_rect(pmx + 60, pmy + 37, 130, 22, p->bg_editor);
     g_api->gfx_draw_rect(pmx + 60, pmy + 37, 130, 22,
                          g_edit_proj_name ? p->accent : p->border);
-    g_api->gfx_draw_string(pmx + 65, pmy + 41,
-                           g_new_proj_buf[0] ? g_new_proj_buf : "App_...",
-                           g_new_proj_buf[0] ? p->text : p->text_muted, 0, true);
+    g_api->gfx_draw_string(
+        pmx + 65, pmy + 41, g_new_proj_buf[0] ? g_new_proj_buf : "App_...",
+        g_new_proj_buf[0] ? p->text : p->text_muted, 0, true);
 
     const char *tpl_lbls[3] = {"Vuoto", "SDK App", "SysInfo"};
     for (int t = 0; t < 3; t++) {
@@ -1566,8 +1832,8 @@ static void studio_draw(window_t *win) {
     if (show_cnt == 0) {
       g_api->gfx_draw_string(
           pmx + 16, pmy + 126,
-          "Nessuna cartella trovata. Premi '+ Crea' o 'Salva'.",
-          p->text_muted, 0, true);
+          "Nessuna cartella trovata. Premi '+ Crea' o 'Salva'.", p->text_muted,
+          0, true);
     }
   }
 
@@ -1675,7 +1941,8 @@ static void studio_mouse(window_t *win, int32_t lx, int32_t ly, bool clicked) {
     return;
   }
 
-  /* Menu Bar: File / Progetto aprono Gestione Progetti; Compila verifica il progetto */
+  /* Menu Bar: File / Progetto aprono Gestione Progetti; Compila verifica il
+   * progetto */
   if (ry >= 0 && ry < 24 && (rx < 44 || (rx >= 200 && rx < 275))) {
     st_refresh_project_list();
     g_show_proj_mgr = !g_show_proj_mgr;
@@ -1790,6 +2057,41 @@ static void studio_mouse(window_t *win, int32_t lx, int32_t ly, bool clicked) {
         st_exec_action(2 + ti);
         return;
       }
+    } else if (g_doc_tab == 3) {
+      if (ry >= body_y + 48 && ry < body_y + 71) {
+        g_proj_target_efi = !g_proj_target_efi;
+        g_proj_dirty = true;
+        return;
+      }
+      if (ry >= body_y + 76 && ry < body_y + 99) {
+        g_proj_ver_minor = (g_proj_ver_minor + 1) % 10;
+        g_proj_dirty = true;
+        return;
+      }
+      if (ry >= body_y + 128 && ry < body_y + 151) {
+        st_apply_copy_preset(0);
+        return;
+      }
+      if (ry >= body_y + 156 && ry < body_y + 179) {
+        st_apply_copy_preset(1);
+        return;
+      }
+      if (ry >= body_y + 184 && ry < body_y + 207) {
+        st_apply_copy_preset(2);
+        return;
+      }
+      if (ry >= body_y + 212 && ry < body_y + 235) {
+        st_refresh_project_files();
+        return;
+      }
+      if (ry >= body_y + 264 && ry < body_y + 288) {
+        st_build_verify_project();
+        return;
+      }
+      if (ry >= body_y + 294 && ry < body_y + 318) {
+        st_deploy_project();
+        return;
+      }
     } else if (g_doc_tab == 1 || g_doc_tab == 2) {
       if (ry >= body_y + 106 && ry < body_y + 132) {
         st_run_code_analysis();
@@ -1813,13 +2115,16 @@ static void studio_mouse(window_t *win, int32_t lx, int32_t ly, bool clicked) {
   }
 
   /* Esplora Soluzione clicks */
-  if (rx >= rx_panel && ry >= body_y + 46 && ry < body_y + 108) {
+  if (rx >= rx_panel && ry >= body_y + 46 && ry < body_y + 128) {
     int si = (ry - (body_y + 46)) / 20;
-    if (si >= 0 && si <= 2) {
+    if (si >= 0 && si <= 3) {
       g_doc_tab = si;
       g_edit_code = (si == 2);
+      g_open_combo_idx = -1;
       g_scroll_x = 0;
       g_scroll_y = 0;
+      if (si == 3)
+        st_refresh_project_files();
       return;
     }
   }
@@ -1848,14 +2153,49 @@ static void studio_mouse(window_t *win, int32_t lx, int32_t ly, bool clicked) {
 
   /* Document Well Tabs */
   if (rx >= mx && rx < rx_panel && ry >= body_y && ry < body_y + 26) {
-    int t = (rx - mx) / 180;
-    if (t >= 0 && t < 3) {
+    int t = (rx - mx) / 140;
+    if (t >= 0 && t < 4) {
       g_doc_tab = t;
       g_edit_code = (t == 2);
+      g_open_combo_idx = -1;
       g_scroll_x = 0;
       g_scroll_y = 0;
+      if (t == 3)
+        st_refresh_project_files();
       return;
     }
+  }
+
+  /* Combobox a singola scelta in Modalita' Progetto (tab 3) */
+  if (g_doc_tab == 3 && rx >= mx && rx < rx_panel && ry >= body_y + 26 &&
+      ry < body_y + mid_h) {
+    int32_t doc_y = body_y + 26, doc_h = mid_h - 30;
+    int max_rows = (doc_h - 80) / 32;
+    if (max_rows > g_pfile_cnt)
+      max_rows = g_pfile_cnt;
+    int32_t cbx = mx + mw - 182;
+    if (g_open_combo_idx >= 0 && g_open_combo_idx < max_rows) {
+      int32_t ddy = doc_y + 72 + g_open_combo_idx * 32 + 25;
+      if (rx >= cbx && rx < cbx + 162 && ry >= ddy && ry < ddy + 66) {
+        int opt = (ry - ddy) / 22;
+        if (opt >= 0 && opt < 3) {
+          g_pfiles[g_open_combo_idx].copy_mode = (uint8_t)opt;
+          g_proj_dirty = true;
+        }
+        g_open_combo_idx = -1;
+        return;
+      }
+      g_open_combo_idx = -1;
+      return;
+    }
+    for (int i = 0; i < max_rows; i++) {
+      int32_t ry_f = doc_y + 72 + i * 32;
+      if (rx >= cbx && rx < cbx + 162 && ry >= ry_f + 3 && ry < ry_f + 25) {
+        g_open_combo_idx = i;
+        return;
+      }
+    }
+    return;
   }
 
   /* ScrollViewer click su Code Viewer (tab 1 e tab 2) */
