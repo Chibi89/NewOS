@@ -161,6 +161,15 @@ static bool g_edit_code = false;
 static uint64_t g_last_click_tick = 0;
 static int g_last_click_idx = -1;
 
+/* Gestione Progetti (.nsproj) */
+static char g_proj_name[32] = "NewOSApp";
+static char g_proj_dir[128] = "C:\\User\\Projects\\NewOSApp";
+static int g_proj_seq = 1;
+static bool g_proj_dirty = false;
+static bool g_show_proj_mgr = false;
+static char g_proj_list[8][32];
+static int g_proj_list_cnt = 0;
+
 static char g_c_code[2048];
 static char g_output_lines[4][76];
 static char g_status[80] =
@@ -477,11 +486,86 @@ static void st_add_control(st_ctrl_type_t type) {
   c->y = 128;
   g_sel_idx = g_ctrl_count++;
   g_doc_tab = 0;
+  g_proj_dirty = true;
   st_regen_c_code(NULL);
   st_push_output("Aggiunto nuovo controllo al form.");
   dll_strcpy(g_status,
              "Controllo aggiunto - Doppio click per generare handler C",
              sizeof(g_status));
+}
+
+static void st_proj_path(char *dst, int cap, const char *filename) {
+  if (g_rt && g_rt->snprintf) {
+    g_rt->snprintf(dst, (size_t)cap, "%s\\%s", g_proj_dir, filename);
+  } else if (dst && cap > 0) {
+    dst[0] = '\0';
+  }
+}
+
+static void st_ensure_projects_root(void) {
+  if (!g_rt || !g_rt->mkdir)
+    return;
+  if (!g_rt->file_exists || !g_rt->file_exists("C:\\User"))
+    g_rt->mkdir("C:\\User", true);
+  if (!g_rt->file_exists || !g_rt->file_exists("C:\\User\\Projects"))
+    g_rt->mkdir("C:\\User\\Projects", true);
+  if (!g_rt->file_exists || !g_rt->file_exists(g_proj_dir))
+    g_rt->mkdir(g_proj_dir, true);
+}
+
+static void st_refresh_project_list(void) {
+  g_proj_list_cnt = 0;
+  if (!g_rt || !g_rt->readdir || !g_rt->alloc || !g_rt->free)
+    return;
+  ns_dirent_t *ents = (ns_dirent_t *)g_rt->alloc(sizeof(ns_dirent_t) * 16);
+  if (!ents)
+    return;
+  int32_t cnt = g_rt->readdir("C:\\User\\Projects", ents, 16);
+  for (int32_t i = 0; i < cnt && g_proj_list_cnt < 8; i++) {
+    if (!ents[i].is_directory || ents[i].name[0] == '.')
+      continue;
+    bool dup = false;
+    for (int j = 0; j < g_proj_list_cnt; j++) {
+      if (g_rt->strcmp && g_rt->strcmp(g_proj_list[j], ents[i].name) == 0) {
+        dup = true;
+        break;
+      }
+    }
+    if (!dup)
+      dll_strcpy(g_proj_list[g_proj_list_cnt++], ents[i].name, 32);
+  }
+  g_rt->free(ents);
+}
+
+static int st_parse_int_tok(const char **pp, char sep) {
+  const char *s = *pp;
+  int sign = 1, val = 0;
+  if (*s == '-') {
+    sign = -1;
+    s++;
+  }
+  while (*s >= '0' && *s <= '9') {
+    val = val * 10 + (*s - '0');
+    s++;
+  }
+  if (*s == sep)
+    s++;
+  *pp = s;
+  return val * sign;
+}
+
+static void st_read_str_tok(const char **pp, char sep, char *out, int cap) {
+  const char *s = *pp;
+  int i = 0;
+  while (*s && *s != sep && *s != '\n' && *s != '\r') {
+    if (i < cap - 1)
+      out[i++] = *s;
+    s++;
+  }
+  out[i] = '\0';
+  if (*s == sep)
+    s++;
+  *pp = s;
 }
 
 static int st_build_xuiml(char *out, int max_len) {
@@ -523,33 +607,204 @@ static int st_build_xuiml(char *out, int max_len) {
 static bool st_export_xuiml(void) {
   if (!g_rt)
     return false;
+  st_ensure_projects_root();
   char *buf = (char *)g_rt->alloc(4096);
   if (!buf)
     return false;
+  char xpath[160];
+  st_proj_path(xpath, sizeof(xpath), "studio_form.xuiml");
   int len = st_build_xuiml(buf, 4096);
-  bool ok =
-      g_rt->file_write("C:\\User\\studio_form.xuiml", buf, (uint32_t)len, true);
+  bool ok = g_rt->file_write(xpath, buf, (uint32_t)len, true);
   g_rt->free(buf);
-  st_push_output(ok ? "[BUILD] Esportato C:\\User\\studio_form.xuiml"
-                    : "[ERR] Fallito export .xuiml");
-  dll_strcpy(g_status,
-             ok ? "Esportato: C:\\User\\studio_form.xuiml" : "Errore export!",
-             sizeof(g_status));
+  if (g_rt->snprintf) {
+    char msg[76];
+    g_rt->snprintf(msg, sizeof(msg),
+                   ok ? "[BUILD] Esportato %s\\studio_form.xuiml"
+                      : "[ERR] Fallito export .xuiml",
+                   g_proj_name);
+    st_push_output(msg);
+    dll_strcpy(g_status, ok ? xpath : "Errore export!", sizeof(g_status));
+  }
   return ok;
 }
 
 static void st_export_c_app(void) {
   if (!g_rt)
     return;
+  st_ensure_projects_root();
+  char cpath[160];
+  st_proj_path(cpath, sizeof(cpath), "studio_app.c");
   size_t len = g_rt->strlen ? g_rt->strlen(g_c_code) : 0;
-  bool ok =
-      g_rt->file_write("C:\\User\\studio_app.c", g_c_code, (uint32_t)len, true);
-  st_push_output(
-      ok ? "[BUILD] Salvato C:\\User\\studio_app.c (NewSoft SDK v3.0)"
-         : "[ERR] Fallito export studio_app.c");
-  dll_strcpy(g_status,
-             ok ? "Salvato: C:\\User\\studio_app.c" : "Errore salvataggio C!",
-             sizeof(g_status));
+  bool ok = g_rt->file_write(cpath, g_c_code, (uint32_t)len, true);
+  if (g_rt->snprintf) {
+    char msg[76];
+    g_rt->snprintf(msg, sizeof(msg),
+                   ok ? "[BUILD] Salvato %s\\studio_app.c (SDK v3.0)"
+                      : "[ERR] Fallito export studio_app.c",
+                   g_proj_name);
+    st_push_output(msg);
+    dll_strcpy(g_status, ok ? cpath : "Errore salvataggio C!",
+               sizeof(g_status));
+  }
+}
+
+static bool st_save_project(void) {
+  if (!g_rt || !g_rt->snprintf || !g_rt->alloc || !g_rt->free)
+    return false;
+  st_ensure_projects_root();
+  bool ok_x = st_export_xuiml();
+  st_export_c_app();
+
+  char *pbuf = (char *)g_rt->alloc(2048);
+  if (!pbuf)
+    return false;
+  int pos = 0;
+  pos += g_rt->snprintf(pbuf + pos, 2048 - (size_t)pos,
+                        "[NewOSProject]\nname=%s\nseq=%d\nctrl_count=%d\n",
+                        g_proj_name, g_seq, g_ctrl_count);
+  for (int i = 0; i < g_ctrl_count && pos < 1900; i++) {
+    const st_ctrl_t *c = &g_ctrls[i];
+    pos += g_rt->snprintf(pbuf + pos, 2048 - (size_t)pos,
+                          "ctrl_%d=%d|%s|%s|%d|%d|%d|%d\n", i, (int)c->type,
+                          c->id, c->text, (int)c->x, (int)c->y, (int)c->w,
+                          (int)c->h);
+  }
+  char pfname[48], ppath[176];
+  g_rt->snprintf(pfname, sizeof(pfname), "%s.nsproj", g_proj_name);
+  st_proj_path(ppath, sizeof(ppath), pfname);
+  bool ok_p = g_rt->file_write(ppath, pbuf, (uint32_t)pos, true);
+  g_rt->free(pbuf);
+
+  if (ok_p && ok_x) {
+    g_proj_dirty = false;
+    st_refresh_project_list();
+    char msg[76];
+    g_rt->snprintf(msg, sizeof(msg), "[PROJ] Progetto '%s' salvato in C:\\User\\Projects",
+                   g_proj_name);
+    st_push_output(msg);
+    dll_strcpy(g_status, msg, sizeof(g_status));
+    if (g_rt->notify)
+      g_rt->notify("NewOS Studio", msg);
+  }
+  return ok_p;
+}
+
+static bool st_load_project_file(const char *nsproj_path) {
+  if (!g_rt || !g_rt->file_read || !nsproj_path || !nsproj_path[0])
+    return false;
+  uint32_t sz = 0;
+  char *data = (char *)g_rt->file_read(nsproj_path, &sz);
+  if (!data || sz == 0)
+    return false;
+
+  /* Ricava g_proj_dir tagliando l'ultimo '\' */
+  int last_slash = -1;
+  for (int i = 0; nsproj_path[i]; i++) {
+    if (nsproj_path[i] == '\\' || nsproj_path[i] == '/')
+      last_slash = i;
+  }
+  if (last_slash > 0 && last_slash < (int)sizeof(g_proj_dir)) {
+    for (int i = 0; i < last_slash; i++)
+      g_proj_dir[i] = nsproj_path[i];
+    g_proj_dir[last_slash] = '\0';
+  }
+
+  g_ctrl_count = 0;
+  g_seq = 1;
+  const char *p = data;
+  const char *end = data + sz;
+  while (p < end && *p) {
+    if (g_rt->strncmp && g_rt->strncmp(p, "name=", 5) == 0) {
+      p += 5;
+      st_read_str_tok(&p, '\n', g_proj_name, sizeof(g_proj_name));
+    } else if (g_rt->strncmp && g_rt->strncmp(p, "seq=", 4) == 0) {
+      p += 4;
+      g_seq = st_parse_int_tok(&p, '\n');
+    } else if (g_rt->strncmp && g_rt->strncmp(p, "ctrl_", 5) == 0 &&
+               g_rt->strncmp(p, "ctrl_count=", 11) != 0) {
+      while (p < end && *p && *p != '=')
+        p++;
+      if (*p == '=')
+        p++;
+      if (g_ctrl_count < ST_MAX_CTRLS) {
+        st_ctrl_t *c = &g_ctrls[g_ctrl_count++];
+        c->type = (st_ctrl_type_t)st_parse_int_tok(&p, '|');
+        st_read_str_tok(&p, '|', c->id, sizeof(c->id));
+        st_read_str_tok(&p, '|', c->text, sizeof(c->text));
+        c->x = st_parse_int_tok(&p, '|');
+        c->y = st_parse_int_tok(&p, '|');
+        c->w = st_parse_int_tok(&p, '|');
+        c->h = st_parse_int_tok(&p, '\n');
+      }
+    }
+    while (p < end && *p && *p != '\n')
+      p++;
+    if (p < end && *p == '\n')
+      p++;
+  }
+  g_rt->free(data);
+
+  if (g_ctrl_count == 0)
+    st_init_template();
+  g_sel_idx = (g_ctrl_count > 0) ? 0 : -1;
+
+  char cpath[160];
+  st_proj_path(cpath, sizeof(cpath), "studio_app.c");
+  uint32_t csz = 0;
+  char *cdata = g_rt->file_read(cpath, &csz);
+  if (cdata && csz > 0) {
+    size_t copy_n = csz < sizeof(g_c_code) - 1 ? csz : sizeof(g_c_code) - 1;
+    g_rt->memcpy(g_c_code, cdata, copy_n);
+    g_c_code[copy_n] = '\0';
+    g_rt->free(cdata);
+  } else {
+    st_regen_c_code(NULL);
+  }
+
+  g_proj_dirty = false;
+  g_show_proj_mgr = false;
+  g_doc_tab = 0;
+  g_edit_code = false;
+  g_edit_prop_text = false;
+  st_run_code_analysis();
+  if (g_rt->snprintf) {
+    char msg[76];
+    g_rt->snprintf(msg, sizeof(msg), "[PROJ] Aperto progetto '%s' (%d controlli)",
+                   g_proj_name, g_ctrl_count);
+    st_push_output(msg);
+    dll_strcpy(g_status, msg, sizeof(g_status));
+  }
+  return true;
+}
+
+static bool st_load_project_by_name(const char *name) {
+  if (!g_rt || !g_rt->snprintf || !name || !name[0])
+    return false;
+  char path[176];
+  g_rt->snprintf(path, sizeof(path), "C:\\User\\Projects\\%s\\%s.nsproj", name,
+                 name);
+  return st_load_project_file(path);
+}
+
+static void st_new_project(void) {
+  if (!g_rt || !g_rt->snprintf)
+    return;
+  g_proj_seq++;
+  g_rt->snprintf(g_proj_name, sizeof(g_proj_name), "App_%d", g_proj_seq);
+  g_rt->snprintf(g_proj_dir, sizeof(g_proj_dir), "C:\\User\\Projects\\%s",
+                 g_proj_name);
+  st_init_template();
+  g_show_proj_mgr = false;
+  st_save_project();
+}
+
+static void st_open_comdlg_cb(const char *path, void *ud) {
+  (void)ud;
+  if (path && path[0]) {
+    if (!st_load_project_file(path)) {
+      st_push_output("[ERR] File .nsproj non valido o illeggibile.");
+    }
+  }
 }
 
 static void st_preview_event(nsrt_app_t *app, const char *id, void *ctx) {
@@ -564,12 +819,12 @@ static void st_preview_event(nsrt_app_t *app, const char *id, void *ctx) {
 }
 
 static void st_launch_preview(void) {
-  if (!st_export_xuiml())
+  if (!st_save_project())
     return;
-  st_export_c_app();
+  char xpath[160];
+  st_proj_path(xpath, sizeof(xpath), "studio_form.xuiml");
   nsrt_app_t *p = g_rt->create_xuiml_app("NewOS Studio - Anteprima Live", 420,
-                                         280, "C:\\User\\studio_form.xuiml",
-                                         st_preview_event, NULL);
+                                         280, xpath, st_preview_event, NULL);
   st_push_output(p ? "[RUN] Anteprima Live avviata con XUIML.DLL + NSRT.DLL"
                    : "[ERR] Impossibile avviare anteprima");
   dll_strcpy(g_status,
@@ -730,11 +985,11 @@ typedef struct {
   int act;
 } vs_rect_btn_t;
 static const vs_rect_btn_t g_tb_btns[] = {
-    {8, 28, 64, 22, "Nuovo", 1},
-    {78, 28, 108, 22, "Salva XUIML", 8},
-    {192, 28, 84, 22, "Salva C", 9},
-    {282, 28, 140, 22, "> Avvia Preview", 7},
-    {428, 28, 76, 22, "Elimina", 16}};
+    {8, 28, 92, 22, "Nuovo Prog.", 1},
+    {106, 28, 92, 22, "Progetti...", 20},
+    {204, 28, 92, 22, "Salva Prog.", 21},
+    {302, 28, 136, 22, "> Avvia Preview", 7},
+    {444, 28, 76, 22, "Elimina", 16}};
 
 static const vs_rect_btn_t g_prop_btns[] = {
     {0, 152, 46, 20, "X-10", 10},   {50, 152, 46, 20, "X+10", 11},
@@ -824,11 +1079,22 @@ static void studio_draw(window_t* win) {
 
     /* Esplora Soluzione (sopra) */
     g_api->gfx_draw_string(rx + 10, body_y + 6, "Esplora Soluzione", p->text, 0, true);
-    g_api->gfx_draw_string(rx + 10, body_y + 28, "Soluzione 'NewOSApp'", p->text, 0, true);
-    g_api->gfx_draw_string(rx + 22, body_y + 48, "studio_form.xuiml [Design]", g_doc_tab == 0 ? p->accent : p->text_muted, 0, true);
-    g_api->gfx_draw_string(rx + 22, body_y + 68, "studio_form.xuiml [XML]",    g_doc_tab == 1 ? p->accent : p->text_muted, 0, true);
-    g_api->gfx_draw_string(rx + 22, body_y + 88, "studio_app.c [Code]",       g_doc_tab == 2 ? p->accent : p->text_muted, 0, true);
-    g_api->gfx_draw_string(rx + 22, body_y + 108,"SDK: NSRT.DLL + XUIML",     p->status_ok, 0, true);
+    if (g_rt && g_rt->snprintf) {
+        char sol_hdr[44], proj_f[40];
+        g_rt->snprintf(sol_hdr, sizeof(sol_hdr), "Soluzione '%s'%s", g_proj_name, g_proj_dirty ? " *" : "");
+        g_rt->snprintf(proj_f, sizeof(proj_f), "%s.nsproj", g_proj_name);
+        g_api->gfx_draw_string(rx + 10, body_y + 28, sol_hdr, p->text, 0, true);
+        g_api->gfx_draw_string(rx + 22, body_y + 48, "studio_form.xuiml [Design]", g_doc_tab == 0 ? p->accent : p->text_muted, 0, true);
+        g_api->gfx_draw_string(rx + 22, body_y + 68, "studio_form.xuiml [XML]",    g_doc_tab == 1 ? p->accent : p->text_muted, 0, true);
+        g_api->gfx_draw_string(rx + 22, body_y + 88, "studio_app.c [Code]",       g_doc_tab == 2 ? p->accent : p->text_muted, 0, true);
+        g_api->gfx_draw_string(rx + 22, body_y + 108, proj_f,                     p->status_ok, 0, true);
+    } else {
+        g_api->gfx_draw_string(rx + 10, body_y + 28, "Soluzione 'NewOSApp'", p->text, 0, true);
+        g_api->gfx_draw_string(rx + 22, body_y + 48, "studio_form.xuiml [Design]", g_doc_tab == 0 ? p->accent : p->text_muted, 0, true);
+        g_api->gfx_draw_string(rx + 22, body_y + 68, "studio_form.xuiml [XML]",    g_doc_tab == 1 ? p->accent : p->text_muted, 0, true);
+        g_api->gfx_draw_string(rx + 22, body_y + 88, "studio_app.c [Code]",       g_doc_tab == 2 ? p->accent : p->text_muted, 0, true);
+        g_api->gfx_draw_string(rx + 22, body_y + 108,"SDK: NSRT.DLL + XUIML",     p->status_ok, 0, true);
+    }
 
     /* Proprieta' (sotto) */
     int32_t py = body_y + 134;
@@ -948,6 +1214,39 @@ static void studio_draw(window_t* win) {
         g_api->gfx_draw_string(mx + 10, oy + 26 + i * 16, g_output_lines[i], p->text_muted, 0, true);
     }
 
+    /* Overlay Modale: Gestione Progetti (C:\User\Projects) */
+    if (g_show_proj_mgr) {
+        int32_t pmx = mx + 20, pmy = doc_y + 16;
+        int32_t pmw = mw - 40, pmh = doc_h - 32;
+        vs_draw_surface(p, pmx, pmy, pmw, pmh, p->bg_panel, 245);
+        g_api->gfx_fill_rect(pmx + 1, pmy + 1, pmw - 2, 28, p->accent);
+        g_api->gfx_draw_string(pmx + 12, pmy + 7, "Gestione Progetti  (C:\\User\\Projects)", p->accent_text, 0, true);
+        vs_draw_btn(p, pmx + pmw - 72, pmy + 3, 64, 22, "Chiudi", false);
+
+        vs_draw_btn(p, pmx + 14, pmy + 40, 148, 24, "+ Nuovo Progetto", true);
+        vs_draw_btn(p, pmx + 170, pmy + 40, 130, 24, "Salva Corrente", false);
+        vs_draw_btn(p, pmx + 308, pmy + 40, 172, 24, "Sfoglia .nsproj...", false);
+
+        g_api->gfx_draw_string(pmx + 14, pmy + 76, "Progetti su disco:", p->text_muted, 0, true);
+        int show_cnt = g_proj_list_cnt;
+        if (show_cnt > 6) show_cnt = 6;
+        for (int i = 0; i < show_cnt; i++) {
+            int32_t ry_row = pmy + 98 + i * 34;
+            bool is_cur = (g_rt && g_rt->strcmp && g_rt->strcmp(g_proj_list[i], g_proj_name) == 0);
+            vs_draw_surface(p, pmx + 14, ry_row, pmw - 28, 28, p->bg_editor, 195);
+            if (g_rt && g_rt->snprintf) {
+                char row_lbl[96];
+                g_rt->snprintf(row_lbl, sizeof(row_lbl), "%s  (C:\\User\\Projects\\%s)%s",
+                               g_proj_list[i], g_proj_list[i], is_cur ? "  [Attivo]" : "");
+                g_api->gfx_draw_string(pmx + 24, ry_row + 6, row_lbl, is_cur ? p->accent : p->text, 0, true);
+            }
+            vs_draw_btn(p, pmx + pmw - 92, ry_row + 3, 68, 22, "Apri", !is_cur);
+        }
+        if (show_cnt == 0) {
+            g_api->gfx_draw_string(pmx + 16, pmy + 104, "Nessuna cartella trovata. Premi '+ Nuovo Progetto' o 'Salva Corrente'.", p->text_muted, 0, true);
+        }
+    }
+
     /* 5. Barra di Stato */
     int32_t sy = cy + ch - 24;
     g_api->gfx_fill_rect(cx, sy, cw, 24, p->accent);
@@ -961,7 +1260,16 @@ static void studio_draw(window_t* win) {
 
 static void st_exec_action(int act) {
   if (act == 1) {
-    st_init_template();
+    st_new_project();
+    return;
+  }
+  if (act == 20) {
+    st_refresh_project_list();
+    g_show_proj_mgr = !g_show_proj_mgr;
+    return;
+  }
+  if (act == 21) {
+    st_save_project();
     return;
   }
   if (act == 2) {
@@ -1021,6 +1329,7 @@ static void st_exec_action(int act) {
     st_regen_c_code(NULL);
     st_push_output("[IDE] Controllo rimosso dal form.");
   }
+  g_proj_dirty = true;
 }
 
 static void studio_mouse(window_t *win, int32_t lx, int32_t ly, bool clicked) {
@@ -1035,6 +1344,13 @@ static void studio_mouse(window_t *win, int32_t lx, int32_t ly, bool clicked) {
     if (ry >= 0 && ry < 24 && rx >= cw - 165) {
         g_force_dark_theme = !g_force_dark_theme;
         st_push_output(g_force_dark_theme ? "[UI] Tema impostato su: VS Dark" : "[UI] Tema agganciato al Sistema (Auto)");
+        return;
+    }
+
+    /* Menu Bar: File / Progetto aprono Gestione Progetti */
+    if (ry >= 0 && ry < 24 && (rx < 44 || (rx >= 200 && rx < 275))) {
+        st_refresh_project_list();
+        g_show_proj_mgr = !g_show_proj_mgr;
         return;
     }
 
@@ -1056,6 +1372,46 @@ static void studio_mouse(window_t *win, int32_t lx, int32_t ly, bool clicked) {
   int32_t tw = 184;
   int32_t rw = 244;
   int32_t rx_panel = cw - rw;
+  int32_t mx = tw, mw = rx_panel - mx;
+
+  /* Gestione click nel modale Gestione Progetti */
+  if (g_show_proj_mgr) {
+    int32_t doc_y = body_y + 26, doc_h = mid_h - 30;
+    int32_t pmx = mx + 20, pmy = doc_y + 16;
+    int32_t pmw = mw - 40, pmh = doc_h - 32;
+    if (rx >= pmx && rx < pmx + pmw && ry >= pmy && ry < pmy + pmh) {
+      if (rx >= pmx + pmw - 72 && rx < pmx + pmw - 8 && ry >= pmy + 3 && ry < pmy + 25) {
+        g_show_proj_mgr = false;
+        return;
+      }
+      if (ry >= pmy + 40 && ry < pmy + 64) {
+        if (rx >= pmx + 14 && rx < pmx + 162) {
+          st_new_project();
+          return;
+        }
+        if (rx >= pmx + 170 && rx < pmx + 302) {
+          st_save_project();
+          return;
+        }
+        if (rx >= pmx + 308 && rx < pmx + 480 && g_rt && g_rt->open_file_dialog) {
+          g_show_proj_mgr = false;
+          g_rt->open_file_dialog("C:\\User\\Projects", st_open_comdlg_cb, NULL);
+          return;
+        }
+      }
+      int show_cnt = g_proj_list_cnt > 6 ? 6 : g_proj_list_cnt;
+      for (int i = 0; i < show_cnt; i++) {
+        int32_t ry_row = pmy + 98 + i * 34;
+        if (ry >= ry_row && ry < ry_row + 28 && rx >= pmx + pmw - 92 && rx < pmx + pmw - 24) {
+          st_load_project_by_name(g_proj_list[i]);
+          return;
+        }
+      }
+      return;
+    }
+    g_show_proj_mgr = false;
+    return;
+  }
 
   /* Pannello sinistro: Toolbox (Design) o Strumenti Codice (Code Viewer) */
   if (rx >= 10 && rx < tw - 12) {
@@ -1124,7 +1480,6 @@ static void studio_mouse(window_t *win, int32_t lx, int32_t ly, bool clicked) {
   }
 
   /* Document Well Tabs */
-  int32_t mx = tw, mw = rx_panel - mx;
   if (rx >= mx && rx < rx_panel && ry >= body_y && ry < body_y + 26) {
     int t = (rx - mx) / 180;
     if (t >= 0 && t < 3) {
@@ -1206,6 +1561,7 @@ static void studio_key(window_t *win, char c) {
     if (c >= 32 && c < 127 && len < 46) {
       s->text[len] = c;
       s->text[len + 1] = '\0';
+      g_proj_dirty = true;
     }
     return;
   }
@@ -1215,8 +1571,10 @@ static void studio_key(window_t *win, char c) {
     while (g_c_code[len])
       len++;
     if (c == '\b') {
-      if (len > 0)
+      if (len > 0) {
         g_c_code[len - 1] = '\0';
+        g_proj_dirty = true;
+      }
       return;
     }
     if (c == '\r')
@@ -1224,6 +1582,7 @@ static void studio_key(window_t *win, char c) {
     if ((c == '\n' || (c >= 32 && c < 127)) && len < sizeof(g_c_code) - 2) {
       g_c_code[len] = c;
       g_c_code[len + 1] = '\0';
+      g_proj_dirty = true;
     }
   }
 }
@@ -1233,8 +1592,12 @@ static void studio_open(void) {
     return;
   if (!g_rt)
     g_rt = nsrt_load_library(g_api);
-  if (g_ctrl_count == 0)
-    st_init_template();
+  if (g_ctrl_count == 0) {
+    if (!st_load_project_by_name("NewOSApp")) {
+      st_init_template();
+      st_save_project();
+    }
+  }
 
   uint32_t sw = g_api->gfx_get_width ? g_api->gfx_get_width() : 1024;
   uint32_t sh = g_api->gfx_get_height ? g_api->gfx_get_height() : 768;
