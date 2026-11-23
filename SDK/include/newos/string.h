@@ -4,7 +4,7 @@
 #ifndef NEWOS_SDK_STRING_H
 #define NEWOS_SDK_STRING_H
 
-#include "../nsrt.h"
+#include <nsrt.h>
 
 static inline bool ns_str_eq(const nsrt_api_t* rt, const char* a, const char* b) {
     return (rt && rt->strcmp) ? (rt->strcmp(a, b) == 0) : false;

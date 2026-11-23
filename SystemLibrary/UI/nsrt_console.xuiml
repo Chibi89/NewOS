@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Form id="nsrt_console" title="NewSoft Runtime (NSRT.DLL) - Dev Console" width="480" height="390">
     <Tab id="tab_overview" title="Runtime e ABI" x="8" w="140">
-        <GroupBox title=" NewSoft Runtime v2.0 (C:\NewOS\SystemLibrary\NSRT.DLL) " x="10" y="36" w="448" h="112" />
+        <GroupBox title=" NewSoft Runtime v3.0 (C:\NewOS\SystemLibrary\NSRT.DLL) " x="10" y="36" w="448" h="112" />
         <Label text="Stato Runtime:   ATTIVO (Out-of-Kernel NOSM+CRC32)" x="24" y="58" color="0x107C41" />
         <Label text="Motore UI:       XUIML.DLL + COMCTL.DLL + ICONS.DLL" x="24" y="80" />
-        <Label text="Header SDK:      C:\NewOS\SDK\include\newos\sdk.h (+examples)" x="24" y="102" />
+        <Label text="Header SDK:      C:\NewOS\SDK\include\newos\sdk.h (21 namespaces)" x="24" y="102" />
         <Label text="Sandbox ACL:     Scrittura consentita in C:\ProgramFile\ e C:\User\" x="24" y="124" color="0x64748B" />
 
-        <GroupBox title=" Test Rapido API Runtime (Memoria / ACL / SDK v2.0) " x="10" y="156" w="448" h="132" />
+        <GroupBox title=" Test Rapido API Runtime (Memoria / ACL / SDK v3.0) " x="10" y="156" w="448" h="132" />
         <List id="lst_tests" x="22" y="178" w="424" h="98" row_h="22" />
     </Tab>
 

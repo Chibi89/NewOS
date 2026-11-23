@@ -10,15 +10,40 @@
 #ifndef SYSTEM_LIBRARY_NSRT_H
 #define SYSTEM_LIBRARY_NSRT_H
 
+#ifndef NEWOS_SDK_TYPES_H
 #include <types.h>
 #include <screen_modules.h>
+#else
+#ifndef SCREEN_MODULES_H
+typedef struct kernel_api_s kernel_api_t;
+#endif
+#endif
 
 #define NSRT_MAGIC   0x5452534Eu /* 'NSRT' */
-#define NSRT_VERSION 0x00020000u /* v2.0 */
+#define NSRT_VERSION 0x00030000u /* v3.0 */
 
 typedef struct nsrt_app nsrt_app_t;
 
 typedef void (*nsrt_event_cb)(nsrt_app_t* app, const char* control_id, void* user_ctx);
+
+/* Data e ora RTC compatibile binariamente con rtc_time_t */
+typedef struct {
+    uint8_t  second;
+    uint8_t  minute;
+    uint8_t  hour;
+    uint8_t  day;
+    uint8_t  month;
+    uint32_t year;
+} ns_datetime_t;
+
+/* Stato mouse SDK compatibile binariamente con mouse_state_t */
+typedef struct {
+    int32_t x;
+    int32_t y;
+    bool    left_button;
+    bool    right_button;
+    bool    middle_button;
+} ns_mouse_state_t;
 
 /* Voce directory SDK compatibile binariamente con vfs_dirent_t */
 typedef struct {
@@ -72,7 +97,7 @@ typedef struct {
     bool     (*is_protected)(const char* path);
     int      (*drive_list)(char* out_letters, int max_drives);
 
-    /* Logging, Timing & Sistema */
+    /* Logging, Timing, Input & Sistema */
     void        (*log)(const char* tag, const char* msg);
     int         (*get_log_count)(void);
     const char* (*get_log_line)(int idx);
@@ -80,6 +105,11 @@ typedef struct {
     uint64_t    (*get_ticks)(void);
     void        (*sleep_ms)(uint32_t ms);
     bool        (*get_sys_info)(ns_sys_info_t* out_info);
+    void        (*get_rtc_time)(ns_datetime_t* out_dt);
+    void        (*mouse_get_state)(ns_mouse_state_t* out_state);
+    bool        (*keyboard_has_char)(void);
+    char        (*keyboard_get_char)(void);
+    uint32_t    (*crc32)(const void* data, size_t len);
 
     /* Audio & Multimedia */
     void    (*play_sound)(int sound_id);
@@ -87,6 +117,7 @@ typedef struct {
     void    (*stop_sound)(void);
     void    (*set_volume)(uint8_t vol);
     uint8_t (*get_volume)(void);
+    bool    (*ac97_is_available)(void);
 
     /* Rete, Browser & Notifiche */
     uint32_t (*dns_resolve)(const char* hostname);
@@ -131,6 +162,7 @@ typedef struct {
 
 typedef const nsrt_api_t* (*nsrt_dll_entry_fn)(const kernel_api_t* api);
 
+#ifdef SCREEN_MODULES_H
 static inline const nsrt_api_t* nsrt_load_library(const kernel_api_t* api) {
     if (!api || !api->vfs_read_entire_file || !api->screen_mgr_verify_module) return NULL;
     uint32_t sz = 0;
@@ -159,5 +191,6 @@ static inline const nsrt_api_t* nsrt_load_library(const kernel_api_t* api) {
     }
     return rt;
 }
+#endif /* SCREEN_MODULES_H */
 
 #endif

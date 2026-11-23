@@ -82,20 +82,24 @@ static void nsrt_console_event(nsrt_app_t* app, const char* id, void* ctx) {
         bool user_ok = g_nsrt->file_write("C:\\User\\nsrt_test.txt", "NSRT OK", 7, true);
         g_nsrt->list_add(app, "lst_tests", user_ok ? "[PASS] VFS Write C:\\User\\nsrt_test.txt OK" : "[FAIL] VFS Write");
 
-        bool sdk_ok = g_nsrt->file_exists("C:\\NewOS\\SDK\\include\\newos\\sdk.h");
+        bool sdk_ok = g_nsrt->file_exists("C:\\NewOS\\SDK\\include\\newos\\sdk.h") &&
+                      g_nsrt->file_exists("C:\\NewOS\\SDK\\include\\stdint.h");
         ns_sys_info_t si;
+        ns_datetime_t dt;
         char sbuf[72];
-        if (sdk_ok && g_nsrt->get_sys_info && g_nsrt->get_sys_info(&si)) {
-            g_nsrt->snprintf(sbuf, sizeof(sbuf), "[PASS] SDK v2.0 + SysInfo (%ux%u, %d drv)",
-                             si.screen_w, si.screen_h, (int)si.drive_count);
+        if (sdk_ok && g_nsrt->get_sys_info && g_nsrt->get_sys_info(&si) && g_nsrt->get_rtc_time) {
+            g_nsrt->get_rtc_time(&dt);
+            uint32_t crc = g_nsrt->crc32("NSRT", 4);
+            g_nsrt->snprintf(sbuf, sizeof(sbuf), "[PASS] SDK v3.0 (%u:%u) CRC=%X",
+                             (unsigned)dt.hour, (unsigned)dt.minute, crc);
             g_nsrt->list_add(app, "lst_tests", sbuf);
         } else {
-            g_nsrt->list_add(app, "lst_tests", "[FAIL] SDK v2.0 / SysInfo");
+            g_nsrt->list_add(app, "lst_tests", "[FAIL] SDK v3.0 / SysInfo");
         }
 
-        g_nsrt->log("TEST", "Verifica API NSRT v2.0 completata");
+        g_nsrt->log("TEST", "Verifica API NSRT v3.0 completata");
         nsrt_sync_logs(app);
-        g_nsrt->set_text(app, "lbl_status", "Verifica Runtime NSRT.DLL v2.0: 4/4 PASS!");
+        g_nsrt->set_text(app, "lbl_status", "Verifica Runtime NSRT.DLL v3.0: 4/4 PASS!");
     }
 }
 

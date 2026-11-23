@@ -9,9 +9,16 @@
 #ifndef SYSTEM_LIBRARY_XUIML_H
 #define SYSTEM_LIBRARY_XUIML_H
 
+#ifndef NEWOS_SDK_TYPES_H
 #include <types.h>
 #include <screen_modules.h>
 #include <gui/wm.h>
+#else
+#ifndef SCREEN_MODULES_H
+typedef struct kernel_api_s kernel_api_t;
+typedef struct window window_t;
+#endif
+#endif
 
 typedef struct xuiml_doc xuiml_doc_t;
 
@@ -34,6 +41,7 @@ typedef struct {
 
 typedef const xuiml_api_t* (*xuiml_dll_entry_fn)(const kernel_api_t* api);
 
+#ifdef SCREEN_MODULES_H
 static inline const xuiml_api_t* xuiml_load_library(const kernel_api_t* api) {
     if (!api || !api->vfs_read_entire_file || !api->screen_mgr_verify_module) return NULL;
     uint32_t sz = 0;
@@ -62,5 +70,6 @@ static inline const xuiml_api_t* xuiml_load_library(const kernel_api_t* api) {
     }
     return xapi;
 }
+#endif /* SCREEN_MODULES_H */
 
 #endif

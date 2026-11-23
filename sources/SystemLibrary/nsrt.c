@@ -589,6 +589,51 @@ static void nsrt_list_clear(nsrt_app_t* app, const char* id) {
 static void nsrt_list_add(nsrt_app_t* app, const char* id, const char* item) {
     if (app && app->xapi && app->doc) app->xapi->list_add(app->doc, id, item);
 }
+static void nsrt_get_rtc_time(ns_datetime_t* out_dt) {
+    if (!out_dt) return;
+    if (g_api && g_api->rtc_get_time) {
+        g_api->rtc_get_time((void*)out_dt);
+    } else {
+        nsrt_memset(out_dt, 0, sizeof(ns_datetime_t));
+    }
+}
+
+static void nsrt_mouse_get_state(ns_mouse_state_t* out_state) {
+    if (!out_state) return;
+    if (g_api && g_api->mouse_get_state) {
+        g_api->mouse_get_state((mouse_state_t*)out_state);
+    } else {
+        nsrt_memset(out_state, 0, sizeof(ns_mouse_state_t));
+    }
+}
+
+static bool nsrt_keyboard_has_char(void) {
+    return (g_api && g_api->keyboard_has_char) ? g_api->keyboard_has_char() : false;
+}
+
+static char nsrt_keyboard_get_char(void) {
+    return (g_api && g_api->keyboard_get_char) ? g_api->keyboard_get_char() : 0;
+}
+
+static uint32_t nsrt_crc32(const void* data, size_t len) {
+    if (!data || len == 0) return 0;
+    const uint8_t* p = (const uint8_t*)data;
+    uint32_t crc = 0xFFFFFFFFu;
+    for (size_t i = 0; i < len; i++) {
+        crc ^= p[i];
+        for (int b = 0; b < 8; b++) {
+            uint32_t mask = (uint32_t)-(int32_t)(crc & 1u);
+            crc = (crc >> 1) ^ (0xEDB88320u & mask);
+        }
+    }
+    return ~crc;
+}
+
+static bool nsrt_ac97_is_available(void) {
+    const kernel_ext_api_t* ext = g_api ? (const kernel_ext_api_t*)g_api->ext_api : NULL;
+    return (ext && ext->ac97_is_available) ? ext->ac97_is_available() : false;
+}
+
 static void* nsrt_get_window_handle(nsrt_app_t* app) {
     return app ? (void*)app->win : NULL;
 }
@@ -625,11 +670,17 @@ static const nsrt_api_t g_nsrt_api = {
     .get_ticks        = nsrt_get_ticks,
     .sleep_ms         = nsrt_sleep_ms,
     .get_sys_info     = nsrt_get_sys_info,
+    .get_rtc_time     = nsrt_get_rtc_time,
+    .mouse_get_state  = nsrt_mouse_get_state,
+    .keyboard_has_char = nsrt_keyboard_has_char,
+    .keyboard_get_char = nsrt_keyboard_get_char,
+    .crc32            = nsrt_crc32,
     .play_sound       = nsrt_play_sound,
     .play_wav         = nsrt_play_wav,
     .stop_sound       = nsrt_stop_sound,
     .set_volume       = nsrt_set_volume,
     .get_volume       = nsrt_get_volume,
+    .ac97_is_available = nsrt_ac97_is_available,
     .dns_resolve      = nsrt_dns_resolve,
     .net_is_connected = nsrt_net_is_connected,
     .net_get_ip       = nsrt_net_get_ip,
@@ -666,7 +717,7 @@ const nsrt_api_t* nsrt_dll_entry(const kernel_api_t* api) {
     nsrt_apply_relocs();
     g_api = api;
     if (g_nsrt_log_count == 0) {
-        nsrt_log("NSRT", "NewSoft Runtime v2.0 inizializzato");
+        nsrt_log("NSRT", "NewSoft Runtime v3.0 inizializzato");
     }
     return &g_nsrt_api;
 }
