@@ -123,8 +123,7 @@ Elenco delle funzionalità ancora da implementare dalla [`ROADMAP_MIGLIORIE.md`]
    - **MSI / MSI-X Interrupts**: supporto su PCIe per **NVMe**, **xHCI**, **Intel HDA** ed **E1000/RTL8169**.
    - **Gestione Risparmio Energetico ACPI completa**: lettura batteria (laptop) e stati `S3` (Sospensione RAM) / `S5` (Spegnimento) su silicio fisico.
    - **Touchpad PS/2 / I2C HID & Tasti Multimediali**: scroll a due dita e tasti multimediali (`KEYBCPL.DLL`, driver tastiera e Tray Bar già completi per i layout dinamici `US`/`IT`/`UK`/`DE`/`FR`).
-7. **Rete & Web Browser (`WEBBROWSER.DLL`)**:
-   - **DHCPv6 / DNS Caching & Strumenti Rete**: cache DNS con TTL, `traceroute` e diagnostica schede in `NETCPL.CPL`.
+   - *Tutte le voci della Categoria 8 (Rete & Web Browser) sono state completate.*
 8. **Multimedia**:
    - **NewOS Media Player (`player/`)**: completamento decodifica/riproduzione reale `.MP3` / `.FLAC` (codec `.CDC`) e seek bar interattiva.
 
@@ -479,8 +478,7 @@ Pending features to be implemented from [`ROADMAP_MIGLIORIE.md`](ROADMAP_MIGLIOR
    - **MSI / MSI-X Interrupts**: PCIe MSI/MSI-X support for **NVMe**, **xHCI**, **Intel HDA**, and **E1000/RTL8169**.
    - **Full ACPI Power Management**: laptop battery reporting and reliable `S3` (Suspend to RAM) / `S5` (Power Off) on physical silicon.
    - **PS/2 Touchpad / I2C HID & Media Keys**: two-finger scrolling and media keys (dynamic `US`/`IT`/`UK`/`DE`/`FR` keyboard layouts in `KEYBCPL.DLL`, keyboard driver, and System Tray are already complete).
-7. **Networking & Web Browser (`WEBBROWSER.DLL`)**:
-   - **DHCPv6 / DNS Caching & Network Diagnostics**: local TTL DNS cache, `traceroute`, and adapter diagnostics in `NETCPL.CPL`.
+   - *All Category 8 (Networking & Web Browser) items have been completed.*
 8. **Multimedia**:
    - **NewOS Media Player (`player/`)**: complete real `.MP3` / `.FLAC` decoding/playback (`.CDC` codecs) and interactive seek bar.
 

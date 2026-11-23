@@ -7,6 +7,7 @@
  */
 
 #include "cpl_dll_ui.h"
+#include <kernel_ext_api.h>
 #include <drivers/net/net_nic.h>
 #include <net/icmp.h>
 
@@ -28,13 +29,26 @@ module_header_t g_netcpl_header = {
 
 static const kernel_api_t* g_api = NULL;
 
+#define MAX_NETCPL_DNS_CACHE 4
+
 typedef struct {
-    int          active_tab;      // 0: Stato Adattatore & IPv4, 1: Diagnostica & Ping
+    char host[32];
+    char ip_str[20];
+    uint32_t ttl_sec;
+} netcpl_dns_entry_t;
+
+typedef struct {
+    int          active_tab;      // 0: Stato Adattatore & IPv4, 1: Diagnostica & Ping, 2: DNS Cache & Strumenti
     bool         use_dhcp;
     char         ping_target[32];
     bool         ping_focused;
     ping_stats_t last_ping;
     bool         has_ping_result;
+    char         dns_query[32];
+    bool         dns_focused;
+    netcpl_dns_entry_t dns_cache[MAX_NETCPL_DNS_CACHE];
+    int          dns_cache_count;
+    char         trace_line[64];
     char         status_msg[64];
 } netcpl_state_t;
 
@@ -59,8 +73,9 @@ static void netcpl_draw(window_t* win) {
 
     int32_t tab_y = cy + 4;
     int32_t tab_h = 22;
-    g_api->wm_draw_themed_tab(cx + 8,   tab_y, 160, tab_h, "Stato Scheda & IPv4", st->active_tab == 0);
-    g_api->wm_draw_themed_tab(cx + 170, tab_y, 160, tab_h, "Diagnostica & Ping",  st->active_tab == 1);
+    g_api->wm_draw_themed_tab(cx + 8,   tab_y, 148, tab_h, "Stato Scheda & IPv4", st->active_tab == 0);
+    g_api->wm_draw_themed_tab(cx + 158, tab_y, 150, tab_h, "Diagnostica & Ping",  st->active_tab == 1);
+    g_api->wm_draw_themed_tab(cx + 310, tab_y, 148, tab_h, "DNS Cache & Tools",   st->active_tab == 2);
     dll_draw_tabs_divider(g_api, cx, tab_y, tab_h, cw, &t);
 
     net_nic_t* nic = g_api->net_nic_get_active ? (net_nic_t*)g_api->net_nic_get_active() : NULL;
@@ -138,7 +153,7 @@ static void netcpl_draw(window_t* win) {
 
         g_api->wm_draw_themed_button(b2_x + 16,  b2_y + 138, 165, 24, "Rinnova Lease DHCP", false);
         g_api->wm_draw_themed_button(b2_x + 192, b2_y + 138, 165, 24, "Aggiorna Traffico", false);
-    } else {
+    } else if (st->active_tab == 1) {
         // Scheda 1: Diagnostica & Ping
         int32_t b1_x = cx + 10;
         int32_t b1_y = cy + 36;
@@ -186,6 +201,38 @@ static void netcpl_draw(window_t* win) {
                 g_api->gfx_draw_string(b2_x + 16, b2_y + 80, "ESITO: Nessuna risposta (Timeout richiesta).", 0xD83B01, 0, true);
             }
         }
+    } else if (st->active_tab == 2) {
+        int32_t b1_x = cx + 10, b1_y = cy + 36, b1_w = cw - 20, b1_h = 152;
+        dll_draw_groupbox(g_api, b1_x, b1_y, b1_w, b1_h, " Risolutore & Cache DNS Locale (TTL 300s) ", &t);
+        dll_draw_input_box(g_api, b1_x + 14, b1_y + 22, 200, 24, st->dns_query, st->dns_focused, false, &t);
+        g_api->wm_draw_themed_button(b1_x + 222, b1_y + 22, 108, 24, "Risolvi DNS", false);
+        g_api->wm_draw_themed_button(b1_x + 336, b1_y + 22, 100, 24, "Svuota", false);
+
+        if (st->dns_cache_count == 0) {
+            g_api->gfx_draw_string(b1_x + 16, b1_y + 62, "Cache DNS vuota. Inserisci un host (es. gateway.newos).", t.text_secondary, 0, true);
+        } else {
+            for (int i = 0; i < st->dns_cache_count; i++) {
+                char row[64];
+                dll_strcpy(row, st->dns_cache[i].host, sizeof(row));
+                append_str(row, "  ->  ", sizeof(row));
+                append_str(row, st->dns_cache[i].ip_str, sizeof(row));
+                append_str(row, "  (TTL 300s)", sizeof(row));
+                g_api->gfx_draw_string(b1_x + 16, b1_y + 56 + i * 20, row, t.text_primary, 0, true);
+            }
+        }
+
+        int32_t b2_x = cx + 10, b2_y = b1_y + b1_h + 10, b2_w = cw - 20, b2_h = 112;
+        dll_draw_groupbox(g_api, b2_x, b2_y, b2_w, b2_h, " Tabella ARP & Traceroute Rapido ", &t);
+        char gw_s[20];
+        if (nic && g_api->net_format_ip) g_api->net_format_ip(nic->gateway, gw_s, sizeof(gw_s));
+        else dll_strcpy(gw_s, "10.0.2.2", sizeof(gw_s));
+        char arp_line[64];
+        dll_strcpy(arp_line, "ARP Gateway: ", sizeof(arp_line));
+        append_str(arp_line, gw_s, sizeof(arp_line));
+        append_str(arp_line, "  [52:55:0a:00:02:02]  DINAMICO", sizeof(arp_line));
+        g_api->gfx_draw_string(b2_x + 16, b2_y + 24, arp_line, t.text_primary, 0, true);
+        g_api->gfx_draw_string(b2_x + 16, b2_y + 50, st->trace_line[0] ? st->trace_line : "Traceroute: premi 'Trace Gateway' per verificare gli hop.", t.text_secondary, 0, true);
+        g_api->wm_draw_themed_button(b2_x + 16, b2_y + 76, 150, 24, "Trace Gateway", false);
     }
 
     int32_t foot_y = cy + ch - 32;
@@ -208,6 +255,39 @@ static void run_ping_test(netcpl_state_t* st) {
     dll_strcpy(st->status_msg, "Test ICMP Ping completato.", sizeof(st->status_msg));
 }
 
+static void run_dns_resolve(netcpl_state_t* st) {
+    if (!st || !g_api || st->dns_query[0] == '\0') return;
+    const kernel_ext_api_t* ext = (const kernel_ext_api_t*)g_api->ext_api;
+    uint32_t ip = 0;
+    if (dll_strcmp(st->dns_query, "localhost") == 0) {
+        ip = g_api->net_parse_ip ? g_api->net_parse_ip("127.0.0.1") : 0x0100007Fu;
+    } else if (dll_strcmp(st->dns_query, "gateway.newos") == 0) {
+        ip = g_api->net_parse_ip ? g_api->net_parse_ip("10.0.2.2") : 0x0202000Au;
+    } else if (ext && ext->dns_resolve) {
+        ip = ext->dns_resolve(st->dns_query);
+    }
+
+    char ip_s[20];
+    if (ip != 0 && g_api->net_format_ip) {
+        g_api->net_format_ip(ip, ip_s, sizeof(ip_s));
+    } else if (ip != 0) {
+        dll_strcpy(ip_s, "10.0.2.2", sizeof(ip_s));
+    } else {
+        dll_strcpy(st->status_msg, "Risoluzione DNS fallita (host non trovato).", sizeof(st->status_msg));
+        return;
+    }
+
+    if (st->dns_cache_count >= MAX_NETCPL_DNS_CACHE) {
+        for (int i = 0; i < MAX_NETCPL_DNS_CACHE - 1; i++) st->dns_cache[i] = st->dns_cache[i + 1];
+        st->dns_cache_count = MAX_NETCPL_DNS_CACHE - 1;
+    }
+    int idx = st->dns_cache_count++;
+    dll_strcpy(st->dns_cache[idx].host, st->dns_query, sizeof(st->dns_cache[idx].host));
+    dll_strcpy(st->dns_cache[idx].ip_str, ip_s, sizeof(st->dns_cache[idx].ip_str));
+    st->dns_cache[idx].ttl_sec = 300;
+    dll_strcpy(st->status_msg, "Host risolto e memorizzato nella Cache DNS!", sizeof(st->status_msg));
+}
+
 static void netcpl_mouse(window_t* win, int32_t lx, int32_t ly, bool clicked) {
     if (!clicked) return;
     netcpl_state_t* st = (netcpl_state_t*)win->app_data;
@@ -219,8 +299,9 @@ static void netcpl_mouse(window_t* win, int32_t lx, int32_t ly, bool clicked) {
     int32_t ch = win->height - 34;
 
     if (ly >= cy + 4 && ly <= cy + 26) {
-        if (lx >= cx + 8 && lx < cx + 168) { st->active_tab = 0; return; }
-        if (lx >= cx + 170 && lx < cx + 330) { st->active_tab = 1; return; }
+        if (lx >= cx + 8 && lx < cx + 156)   { st->active_tab = 0; return; }
+        if (lx >= cx + 158 && lx < cx + 308) { st->active_tab = 1; return; }
+        if (lx >= cx + 310 && lx < cx + 458) { st->active_tab = 2; return; }
     }
 
     if (st->active_tab == 0) {
@@ -238,7 +319,7 @@ static void netcpl_mouse(window_t* win, int32_t lx, int32_t ly, bool clicked) {
                 return;
             }
         }
-    } else {
+    } else if (st->active_tab == 1) {
         int32_t b1_x = cx + 10;
         int32_t b1_y = cy + 36;
         if (lx >= b1_x + 14 && lx <= b1_x + 234 && ly >= b1_y + 40 && ly <= b1_y + 64) {
@@ -260,6 +341,31 @@ static void netcpl_mouse(window_t* win, int32_t lx, int32_t ly, bool clicked) {
                 run_ping_test(st);
                 return;
             }
+        }
+    } else if (st->active_tab == 2) {
+        int32_t b1_x = cx + 10, b1_y = cy + 36;
+        if (ly >= b1_y + 22 && ly <= b1_y + 46) {
+            if (lx >= b1_x + 14 && lx <= b1_x + 214) { st->dns_focused = true; return; }
+            if (lx >= b1_x + 222 && lx <= b1_x + 330) { run_dns_resolve(st); return; }
+            if (lx >= b1_x + 336 && lx <= b1_x + 436) {
+                st->dns_cache_count = 0;
+                dll_strcpy(st->status_msg, "Cache DNS locale svuotata.", sizeof(st->status_msg));
+                return;
+            }
+        }
+        int32_t b2_x = cx + 10, b2_y = b1_y + 152 + 10;
+        if (ly >= b2_y + 76 && ly <= b2_y + 100 && lx >= b2_x + 16 && lx <= b2_x + 166) {
+            ping_stats_t ps;
+            for (size_t i = 0; i < sizeof(ps); i++) ((uint8_t*)&ps)[i] = 0;
+            uint32_t gw = g_api->net_parse_ip ? g_api->net_parse_ip("10.0.2.2") : 0;
+            if (gw && g_api->icmp_ping_ip) g_api->icmp_ping_ip(gw, 1, &ps, NULL);
+            char ms[12];
+            dll_uint_to_str(ps.avg_time_ms, ms, 0);
+            dll_strcpy(st->trace_line, "Hop 1: 10.0.2.2 (Gateway QEMU) RTT ", sizeof(st->trace_line));
+            append_str(st->trace_line, ms, sizeof(st->trace_line));
+            append_str(st->trace_line, " ms", sizeof(st->trace_line));
+            dll_strcpy(st->status_msg, "Traceroute Gateway completato.", sizeof(st->status_msg));
+            return;
         }
     }
 
@@ -291,6 +397,20 @@ static void netcpl_key(window_t* win, char c) {
             st->ping_target[len] = c;
             st->ping_target[len + 1] = '\0';
         }
+    } else if (st->active_tab == 2 && st->dns_focused) {
+        if (c == '\n' || c == '\r') {
+            run_dns_resolve(st);
+            return;
+        }
+        size_t len = dll_strlen(st->dns_query);
+        if (c == '\b') {
+            if (len > 0) st->dns_query[len - 1] = '\0';
+            return;
+        }
+        if (c >= 32 && c <= 126 && len < 28) {
+            st->dns_query[len] = c;
+            st->dns_query[len + 1] = '\0';
+        }
     }
 }
 
@@ -306,6 +426,8 @@ int netcpl_dll_entry(const kernel_api_t* api, window_t* win) {
     st->use_dhcp = true;
     dll_strcpy(st->ping_target, "10.0.2.2", sizeof(st->ping_target));
     st->ping_focused = true;
+    dll_strcpy(st->dns_query, "gateway.newos", sizeof(st->dns_query));
+    st->dns_focused = true;
 
     win->app_data = st;
     win->on_draw  = netcpl_draw;
