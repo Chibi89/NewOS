@@ -30,19 +30,29 @@ void icons_init(void) {
     }
     if (dll_data && dll_sz >= sizeof(module_header_t)) {
         if (screen_mgr_verify_module(dll_data, dll_sz, MODULE_TYPE_SYSTEM_LIBRARY, "ICONS")) {
-            const module_header_t* h = (const module_header_t*)dll_data;
-            icons_dll_entry_fn entry = (icons_dll_entry_fn)((const uint8_t*)dll_data + h->entry_offset);
-            uint32_t mico_sz = 0;
-            const uint8_t* mico = entry(screen_mgr_get_api(), &mico_sz);
-            if (mico && mico_sz >= 2048 && mico[0] == 'M' && mico[1] == 'I' && mico[2] == 'C' && mico[3] == 'O') {
-                icon_pkg_buf = (uint8_t*)dll_data;
-                icon_mico_ptr = mico;
-                icon_mico_sz = mico_sz;
-                icons_loaded = true;
-                return;
+            uint8_t* exec_buf = (uint8_t*)kmalloc(dll_sz + 4096);
+            if (exec_buf) {
+                memcpy(exec_buf, dll_data, dll_sz);
+                memset(exec_buf + dll_sz, 0, 4096);
+                kfree(dll_data);
+                const module_header_t* h = (const module_header_t*)exec_buf;
+                icons_dll_entry_fn entry = (icons_dll_entry_fn)(exec_buf + h->entry_offset);
+                uint32_t mico_sz = 0;
+                const uint8_t* mico = entry(NULL, &mico_sz);
+                if (mico && mico_sz >= 2048 && mico[0] == 'M' && mico[1] == 'I' && mico[2] == 'C' && mico[3] == 'O') {
+                    icon_pkg_buf = exec_buf;
+                    icon_mico_ptr = mico;
+                    icon_mico_sz = mico_sz;
+                    icons_loaded = true;
+                    return;
+                }
+                kfree(exec_buf);
+            } else {
+                kfree(dll_data);
             }
+        } else {
+            kfree(dll_data);
         }
-        kfree(dll_data);
     }
 
     // 2. Fallback su lettura a blocchi diretti dal disco ATA/AHCI (LBA 1024 per Boot Menu pre-VFS)

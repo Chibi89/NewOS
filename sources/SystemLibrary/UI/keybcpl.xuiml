@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Form id="keybcpl_form" title="Proprieta' Tastiera (KEYBOARD.CPL)" width="460" height="400">
+    <Tab id="tab_speed" title="Velocita'" x="8" w="110">
+        <GroupBox title=" Ripetizione Caratteri " x="10" y="36" w="428" h="176" />
+        <Label text="Ritardo di ripetizione:" x="24" y="58" />
+        <Label text="Lungo" x="24" y="82" color="0x64748B" />
+        <Slider id="sld_delay" min="1" max="4" value="3" x="80" y="80" w="230" />
+        <Label text="Breve" x="322" y="82" color="0x64748B" />
+        <Label text="Velocita' di ripetizione:" x="24" y="114" />
+        <Label text="Lenta" x="24" y="138" color="0x64748B" />
+        <Slider id="sld_speed" min="1" max="10" value="8" x="80" y="136" w="230" />
+        <Label text="Veloce" x="322" y="138" color="0x64748B" />
+        <Label text="Casella di prova (digita e tieni premuto un tasto):" x="24" y="164" />
+        <TextBox id="txt_test" text="" x="24" y="182" w="400" h="24" focused="1" />
+
+        <GroupBox title=" Frequenza Lampeggio Cursore " x="10" y="220" w="428" h="70" />
+        <Label text="Lenta" x="24" y="254" color="0x64748B" />
+        <Slider id="sld_blink" min="1" max="10" value="6" x="80" y="252" w="230" />
+        <Label text="Veloce" x="322" y="254" color="0x64748B" />
+    </Tab>
+
+    <Tab id="tab_hw" title="Hardware" x="120" w="110">
+        <GroupBox title=" Dispositivi Tastiera Installati " x="10" y="36" w="428" h="110" />
+        <List id="lst_hw" x="22" y="58" w="404" h="76" row_h="28" />
+
+        <GroupBox title=" Proprieta' del Dispositivo " x="10" y="156" w="428" h="132" />
+        <Label id="lbl_hw_mfg" text="Produttore: (Tastiere standard x86_64)" x="24" y="180" />
+        <Label id="lbl_hw_loc" text="Ubicazione: Controller i8042 (Porte 0x60, 0x64 - IRQ 1)" x="24" y="204" />
+        <Label text="Stato periferica: Il dispositivo funziona correttamente." x="24" y="228" color="0x107C41" />
+        <Label text="Driver attivo: C:\NewOS\Driver\KEYBOARD.SYS" x="24" y="252" color="0x64748B" />
+    </Tab>
+
+    <Tab id="tab_layout" title="Layout" x="232" w="100">
+        <GroupBox title=" Layout Tastiera e Mappatura Tasti " x="10" y="36" w="428" h="252" />
+        <List id="lst_layout" x="22" y="60" w="404" h="170" row_h="26" />
+        <Label text="Suggerimento: puoi cambiare layout anche dalla barra in basso a destra." x="24" y="260" color="0x64748B" />
+    </Tab>
+
+    <Label id="lbl_status" text="" x="12" y="314" color="0x107C41" />
+    <Button id="btn_apply" text="Applica" x="184" y="334" w="80" h="24" />
+    <Button id="btn_ok" text="OK" x="272" y="334" w="80" h="24" />
+    <Button id="btn_close" text="Chiudi" x="360" y="334" w="80" h="24" />
+</Form>

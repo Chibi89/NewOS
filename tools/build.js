@@ -584,7 +584,8 @@ const systemLibraries = [
     { src: 'SystemLibrary/seccpl.c', ini: 'SystemLibrary/SECCPL.INI', out: 'SECCPL.DLL', iniOut: 'SECCPL.INI', extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
     { src: 'SystemLibrary/comctl_dll.c', ini: 'SystemLibrary/COMCTL.INI', out: 'COMCTL.DLL', iniOut: 'COMCTL.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
     { src: 'SystemLibrary/startmenu_dll.c', ini: 'SystemLibrary/STARTMENU.INI', out: 'STARTMENU.DLL', iniOut: 'STARTMENU.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
-    { src: 'SystemLibrary/icons_dll.c', ini: 'SystemLibrary/ICONS.INI', out: 'ICONS.DLL', iniOut: 'ICONS.INI', extraFlags: `-Wno-unused-function -Wno-unused-parameter` }
+    { src: 'SystemLibrary/icons_dll.c', ini: 'SystemLibrary/ICONS.INI', out: 'ICONS.DLL', iniOut: 'ICONS.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
+    { src: 'SystemLibrary/xuiml.c', ini: 'SystemLibrary/XUIML.INI', out: 'XUIML.DLL', iniOut: 'XUIML.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` }
 ];
 
 const targetLibDir = path.join(BIN_DIR, 'NewOS', 'SystemLibrary');
@@ -705,6 +706,19 @@ for (const sl of systemLibraries) {
 // 6c. Organizza e Popola l'albero completo NewOS V1 dentro build/bin/
 const { organizeBuildBin } = require('./tree_manager');
 organizeBuildBin(ROOT, BIN_DIR);
+
+// Copia i file UI dichiarativi (.xuiml) in NewOS/SystemLibrary/UI/
+const uiSrcDir = path.join(ROOT, 'SystemLibrary', 'UI');
+const uiDstDir = path.join(BIN_DIR, 'NewOS', 'SystemLibrary', 'UI');
+if (fs.existsSync(uiSrcDir)) {
+    if (!fs.existsSync(uiDstDir)) fs.mkdirSync(uiDstDir, { recursive: true });
+    for (const f of fs.readdirSync(uiSrcDir)) {
+        if (f.toLowerCase().endsWith('.xuiml')) {
+            fs.copyFileSync(path.join(uiSrcDir, f), path.join(uiDstDir, f));
+        }
+    }
+    console.log(`[OK] Risorse XUIML sincronizzate in NewOS/SystemLibrary/UI/`);
+}
 
 // Bonifica radice build/bin: rimozione cartelle legacy (C:\SYSTEM\) e file sparsi fuori da C:\NewOS\ (Regola 6)
 const legacySys = path.join(BIN_DIR, 'SYSTEM');

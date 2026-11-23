@@ -24,8 +24,23 @@ module_header_t g_icons_header = {
 };
 #endif
 
+static volatile uint32_t g_reloc_info[2] = { 0x52454C4Fu, 0xCAFEBABEu };
+
+static void icons_apply_relocs(void) {
+    if (g_reloc_info[0] != 0x52454C4Fu || g_reloc_info[1] == 0xCAFEBABEu) return;
+    uintptr_t base = (uintptr_t)&g_icons_header;
+    const uint32_t* tbl = (const uint32_t*)(base + g_reloc_info[1]);
+    uint32_t count = tbl[0];
+    for (uint32_t i = 0; i < count; i++) {
+        uint32_t off = tbl[1 + i];
+        *(uint64_t*)(base + off) += (uint64_t)base;
+    }
+    g_reloc_info[0] = 0;
+}
+
 __attribute__((section(".text.entry"), used))
 const uint8_t* icons_dll_entry(const kernel_api_t* api, uint32_t* out_size) {
+    icons_apply_relocs();
     (void)api;
     if (out_size) *out_size = g_icons_mico_size;
     return g_icons_mico_data;
