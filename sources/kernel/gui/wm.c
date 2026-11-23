@@ -7,6 +7,7 @@
 #include <drivers/keyboard.h>
 #include <drivers/power.h>
 #include <drivers/rtc.h>
+#include <drivers/timer.h>
 #include <fs/registry.h>
 #include <fs/vfs.h>
 #include <fs/vfs_cache.h>
@@ -77,7 +78,8 @@ typedef struct {
 
 static wm_toast_t g_toasts[WM_MAX_TOASTS];
 static int g_toast_count = 0;
-static int g_toast_banner_ticks = 0;
+static uint64_t g_toast_remaining_ticks = 0;
+static uint64_t g_toast_last_sys_tick = 0;
 static bool g_notif_center_open = false;
 
 void wm_push_toast(const char *title, const char *msg, int icon) {
@@ -96,7 +98,8 @@ void wm_push_toast(const char *title, const char *msg, int icon) {
   rtc_time_t now;
   rtc_get_time(&now);
   mini_snprintf(t->time_str, sizeof(t->time_str), "%02d:%02d", now.hour, now.minute);
-  g_toast_banner_ticks = 220;
+  g_toast_remaining_ticks = 500; // 5 secondi esatti (PIT 100 Hz)
+  g_toast_last_sys_tick = timer_get_ticks();
 }
 
 static void wm_snap_window(window_t *w, int zone, int32_t sw, int32_t ty) {
@@ -1680,19 +1683,30 @@ void wm_render(void) {
     }
   }
 
-  // Popup Toast temporaneo (angolo in basso a destra)
-  if (g_toast_banner_ticks > 0 && g_toast_count > 0 && !g_notif_center_open) {
-    g_toast_banner_ticks--;
-    wm_toast_t *lt = &g_toasts[g_toast_count - 1];
+  // Popup Toast temporaneo (angolo in basso a destra: auto-chiusura dopo 5s se il mouse non e' sopra)
+  if (g_toast_remaining_ticks > 0 && g_toast_count > 0 && !g_notif_center_open) {
     int32_t tw = 310, th = 62;
     int32_t tx_b = (int32_t)sw - tw - 12;
     int32_t ty_b = ty - th - 10;
-    gfx_draw_drop_shadow(tx_b, ty_b, tw, th, 8);
-    gfx_fill_rounded_alpha(tx_b, ty_b, tw, th, 8, 0x1E293B, 232);
-    gfx_draw_rounded_rect(tx_b, ty_b, tw, th, 8, 0x60A5FA);
-    gfx_draw_icon_32(tx_b + 10, ty_b + 15, lt->icon);
-    gfx_draw_string(tx_b + 50, ty_b + 12, lt->title, 0xF8FAFC, 0, true);
-    gfx_draw_string(tx_b + 50, ty_b + 32, lt->msg, 0xCBD5E1, 0, true);
+    mouse_state_t ms;
+    mouse_get_state(&ms);
+    bool hover_toast = (ms.x >= tx_b && ms.x < tx_b + tw && ms.y >= ty_b && ms.y < ty_b + th);
+    uint64_t now_tick = timer_get_ticks();
+    uint64_t dt = (now_tick >= g_toast_last_sys_tick) ? (now_tick - g_toast_last_sys_tick) : 0;
+    g_toast_last_sys_tick = now_tick;
+    if (!hover_toast) {
+      if (dt >= g_toast_remaining_ticks) g_toast_remaining_ticks = 0;
+      else g_toast_remaining_ticks -= dt;
+    }
+    if (g_toast_remaining_ticks > 0) {
+      wm_toast_t *lt = &g_toasts[g_toast_count - 1];
+      gfx_draw_drop_shadow(tx_b, ty_b, tw, th, 8);
+      gfx_fill_rounded_alpha(tx_b, ty_b, tw, th, 8, 0x1E293B, 232);
+      gfx_draw_rounded_rect(tx_b, ty_b, tw, th, 8, hover_toast ? 0x93C5FD : 0x60A5FA);
+      gfx_draw_icon_32(tx_b + 10, ty_b + 15, lt->icon);
+      gfx_draw_string(tx_b + 50, ty_b + 12, lt->title, 0xF8FAFC, 0, true);
+      gfx_draw_string(tx_b + 50, ty_b + 32, lt->msg, 0xCBD5E1, 0, true);
+    }
   }
 
   // Centro Notifiche (aperto dal campanellino nella System Tray)
@@ -2297,7 +2311,7 @@ void wm_update(mouse_state_t *mouse, char key) {
       if (mouse->x >= nx + nw - 68 && mouse->x <= nx + nw - 12 &&
           mouse->y >= ny + 7 && mouse->y <= ny + 27) {
         g_toast_count = 0;
-        g_toast_banner_ticks = 0;
+        g_toast_remaining_ticks = 0;
         prev_mouse_left = mouse->left_button;
         prev_mouse_right = mouse->right_button;
         return;
@@ -2342,7 +2356,7 @@ void wm_update(mouse_state_t *mouse, char key) {
     }
     if (mouse->x >= bell_x && mouse->x < tray_x && mouse->y >= ty) {
       g_notif_center_open = !g_notif_center_open;
-      g_toast_banner_ticks = 0;
+      g_toast_remaining_ticks = 0;
       prev_mouse_left = mouse->left_button;
       prev_mouse_right = mouse->right_button;
       return;
