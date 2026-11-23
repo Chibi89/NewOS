@@ -125,8 +125,6 @@ Elenco delle funzionalità ancora da implementare dalla [`ROADMAP_MIGLIORIE.md`]
    - **Gestione Risparmio Energetico ACPI completa**: lettura batteria (laptop) e stati `S3` (Sospensione RAM) / `S5` (Spegnimento) su silicio fisico.
    - **Touchpad PS/2 / I2C HID & Tasti Multimediali**: scroll a due dita e tasti multimediali (`KEYBCPL.DLL`, driver tastiera e Tray Bar già completi per i layout dinamici `US`/`IT`/`UK`/`DE`/`FR`).
 7. **Rete & Web Browser (`WEBBROWSER.DLL`)**:
-   - **Cache HTTP su disco & Cookie/Cronologia**: salvataggio persistente in `C:\User\<Utente>\AppData\`.
-   - **Browser Multi-Tab & Download Manager**: schede multiple in `WEBBROWSER.DLL` e download in `C:\User\<Utente>\Downloads\` con progress bar `COMCTL`.
    - **DHCPv6 / DNS Caching & Strumenti Rete**: cache DNS con TTL, `traceroute` e diagnostica schede in `NETCPL.CPL`.
 8. **Multimedia**:
    - **NewOS Media Player (`player/`)**: completamento decodifica/riproduzione reale `.MP3` / `.FLAC` (codec `.CDC`) e seek bar interattiva.
@@ -484,8 +482,6 @@ Pending features to be implemented from [`ROADMAP_MIGLIORIE.md`](ROADMAP_MIGLIOR
    - **Full ACPI Power Management**: laptop battery reporting and reliable `S3` (Suspend to RAM) / `S5` (Power Off) on physical silicon.
    - **PS/2 Touchpad / I2C HID & Media Keys**: two-finger scrolling and media keys (dynamic `US`/`IT`/`UK`/`DE`/`FR` keyboard layouts in `KEYBCPL.DLL`, keyboard driver, and System Tray are already complete).
 7. **Networking & Web Browser (`WEBBROWSER.DLL`)**:
-   - **Disk HTTP Cache, Cookies & History**: persistent storage in `C:\User\<User>\AppData\`.
-   - **Multi-Tab Browser & Download Manager**: multiple tabs in `WEBBROWSER.DLL` and downloads to `C:\User\<User>\Downloads\` with `COMCTL` progress bar.
    - **DHCPv6 / DNS Caching & Network Diagnostics**: local TTL DNS cache, `traceroute`, and adapter diagnostics in `NETCPL.CPL`.
 8. **Multimedia**:
    - **NewOS Media Player (`player/`)**: complete real `.MP3` / `.FLAC` decoding/playback (`.CDC` codecs) and interactive seek bar.

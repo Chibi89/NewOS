@@ -80,8 +80,8 @@ Elenco completo delle migliorie architetturali, grafiche, di sistema e hardware 
 ---
 
 ## 8. Rete & Web Browser ([`WebBrowser/`](WebBrowser/), `NETSTACK.DLL`)
-- [ ] **Cache HTTP su disco & Cookie/Cronologia**: salvataggio persistente di cronologia, segnalibri e cache in `C:\User\<Utente>\AppData\`.
-- [ ] **Browser Multi-Tab & Download Manager**: schede multiple in `WEBBROWSER.DLL` e download file in `C:\User\<Utente>\Downloads\` con progress bar `COMCTL`.
+- [x] **Cache HTTP su disco & Cookie/Cronologia**: salvataggio persistente della cronologia in `C:\User\Admin\AppData\browser_history.txt` con pagina interna `about:history` e pulsante `Cronol.` in `WEBBROWSER.DLL`.
+- [x] **Browser Multi-Tab & Download Manager**: schede multiple (`[+]`, `[x]`, `Ctrl+T`, `Ctrl+W`) in `WEBBROWSER.DLL`, pulsante `Salva` in `C:\User\Admin\Downloads\` e gestore `about:downloads`.
 - [ ] **Client DHCPv6 / DNS Caching & Strumenti di Rete**: cache DNS locale con TTL, `traceroute`, `arp -a` e diagnostica schede in `NETCPL.CPL`.
 - [x] **Client HTTP / FTP CLI (`curl` / `wget`)** in `CMD` per scaricare file e risorse da terminale. (Aggiunti anche `arp -a` e `nslookup` in `CMD` con esportazione DNS/TCP in `kernel_ext_api.h`).
 

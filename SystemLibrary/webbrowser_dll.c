@@ -75,6 +75,10 @@ int module_main(const kernel_api_t *api, webbrowser_dll_params_t *p) {
 #define gfx_get_pixel            g_dll_api->gfx_get_pixel
 #define gfx_draw_icon_16         g_dll_api->gfx_draw_icon_16
 #define vfs_read_entire_file     g_dll_api->vfs_read_entire_file
+#define vfs_write_entire_file_inplace g_dll_api->vfs_write_entire_file_inplace
+#define vfs_exists               g_dll_api->vfs_exists
+#define vfs_create               g_dll_api->vfs_create
+#define vfs_mkdir                g_dll_api->vfs_mkdir
 #define screen_mgr_verify_module g_dll_api->screen_mgr_verify_module
 #define screen_mgr_get_api()     g_dll_api
 #define fontmgr_get_ttf_glyph    g_dll_api->fontmgr_get_ttf_glyph

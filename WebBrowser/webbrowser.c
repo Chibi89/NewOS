@@ -83,6 +83,23 @@ typedef struct {
   int16_t img_idx;
 } browser_elem_t;
 
+#define MAX_BROWSER_TABS 5
+#define MAX_DOWNLOADS 8
+#define MAX_PERSIST_HIST 20
+
+typedef struct {
+  char url[MAX_URL_LEN];
+  char title[32];
+  int32_t scroll_y;
+} browser_tab_t;
+
+typedef struct {
+  char filename[48];
+  char url[MAX_URL_LEN];
+  uint32_t size;
+  bool done;
+} browser_download_t;
+
 typedef struct {
   char current_url[MAX_URL_LEN];
   char edit_url[MAX_URL_LEN];
@@ -96,6 +113,15 @@ typedef struct {
   int history_back_count;
   char history_fwd[MAX_HISTORY][MAX_URL_LEN];
   int history_fwd_count;
+
+  // Multi-Tab, Download Manager e Cronologia persistente
+  browser_tab_t tabs[MAX_BROWSER_TABS];
+  int num_tabs;
+  int active_tab;
+  browser_download_t downloads[MAX_DOWNLOADS];
+  int num_downloads;
+  char visit_history[MAX_PERSIST_HIST][MAX_URL_LEN];
+  int visit_count;
 
   // Buffer pagina (allocato dinamicamente fino a 512 KB)
   char *raw_html;
@@ -136,6 +162,146 @@ static void browser_clear_images(browser_state_t *state) {
     state->imgs[i].attempted = false;
   }
   state->num_imgs = 0;
+}
+
+static void browser_ensure_user_dirs(void) {
+  if (!vfs_exists("C:\\User")) vfs_mkdir("C:\\User");
+  if (!vfs_exists("C:\\User\\Admin")) vfs_mkdir("C:\\User\\Admin");
+  if (!vfs_exists("C:\\User\\Admin\\Downloads")) vfs_mkdir("C:\\User\\Admin\\Downloads");
+  if (!vfs_exists("C:\\User\\Admin\\AppData")) vfs_mkdir("C:\\User\\Admin\\AppData");
+}
+
+static void browser_record_history(browser_state_t *state, const char *url) {
+  if (!state || !url || !url[0]) return;
+  if (strcmp(url, "about:history") == 0 || strcmp(url, "about:downloads") == 0) return;
+
+  if (state->visit_count == 0 || strcmp(state->visit_history[0], url) != 0) {
+    int limit = (state->visit_count < MAX_PERSIST_HIST) ? state->visit_count : (MAX_PERSIST_HIST - 1);
+    for (int i = limit; i > 0; i--) {
+      strcpy(state->visit_history[i], state->visit_history[i - 1]);
+    }
+    strncpy(state->visit_history[0], url, MAX_URL_LEN - 1);
+    state->visit_history[0][MAX_URL_LEN - 1] = '\0';
+    if (state->visit_count < MAX_PERSIST_HIST) state->visit_count++;
+  }
+
+  browser_ensure_user_dirs();
+  char *buf = (char *)kmalloc(4096);
+  if (buf) {
+    buf[0] = '\0';
+    size_t pos = 0;
+    for (int i = 0; i < state->visit_count; i++) {
+      size_t ulen = strlen(state->visit_history[i]);
+      if (pos + ulen + 2 >= 4096) break;
+      memcpy(buf + pos, state->visit_history[i], ulen);
+      pos += ulen;
+      buf[pos++] = '\n';
+    }
+    buf[pos] = '\0';
+    if (!vfs_exists("C:\\User\\Admin\\AppData\\browser_history.txt")) {
+      vfs_create("C:\\User\\Admin\\AppData\\browser_history.txt");
+    }
+    vfs_write_entire_file_inplace("C:\\User\\Admin\\AppData\\browser_history.txt", buf, (uint32_t)pos);
+    kfree(buf);
+  }
+}
+
+static void browser_save_current_download(browser_state_t *state) {
+  if (!state || !state->raw_html || state->raw_html_len == 0) return;
+  browser_ensure_user_dirs();
+
+  char fname[48];
+  const char *src = state->current_url;
+  const char *slash = strrchr(src, '/');
+  const char *cand = (slash && slash[1]) ? (slash + 1) : "pagina";
+  size_t fi = 0;
+  while (cand[fi] && cand[fi] != '?' && cand[fi] != '&' && fi < 32) {
+    char c = cand[fi];
+    if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+        (c >= '0' && c <= '9') || c == '.' || c == '_' || c == '-') {
+      fname[fi] = c;
+    } else {
+      fname[fi] = '_';
+    }
+    fi++;
+  }
+  if (fi == 0) {
+    strcpy(fname, "pagina");
+    fi = 6;
+  }
+  fname[fi] = '\0';
+  if (!strchr(fname, '.')) {
+    strncat(fname, ".htm", sizeof(fname) - strlen(fname) - 1);
+  }
+
+  char full_path[128];
+  mini_snprintf(full_path, sizeof(full_path), "C:\\User\\Admin\\Downloads\\%s", fname);
+  if (!vfs_exists(full_path)) vfs_create(full_path);
+  bool ok = vfs_write_entire_file_inplace(full_path, state->raw_html, state->raw_html_len);
+
+  if (ok) {
+    int idx = (state->num_downloads < MAX_DOWNLOADS) ? state->num_downloads++ : (MAX_DOWNLOADS - 1);
+    if (idx == MAX_DOWNLOADS - 1 && state->num_downloads == MAX_DOWNLOADS) {
+      for (int i = 0; i < MAX_DOWNLOADS - 1; i++) state->downloads[i] = state->downloads[i + 1];
+    }
+    strncpy(state->downloads[idx].filename, fname, sizeof(state->downloads[idx].filename) - 1);
+    strncpy(state->downloads[idx].url, state->current_url, MAX_URL_LEN - 1);
+    state->downloads[idx].size = state->raw_html_len;
+    state->downloads[idx].done = true;
+    mini_snprintf(state->status_msg, sizeof(state->status_msg),
+                  "Download completato: C:\\User\\Admin\\Downloads\\%s (%u B)",
+                  fname, (unsigned)state->raw_html_len);
+  } else {
+    mini_snprintf(state->status_msg, sizeof(state->status_msg),
+                  "Errore salvataggio in Downloads");
+  }
+}
+
+static void generate_downloads_page(browser_state_t *state) {
+  char *p = state->raw_html;
+  size_t cap = MAX_HTML_SIZE;
+  int len = mini_snprintf(p, cap,
+      "<html><head><title>Gestore Download - NewOS</title></head>"
+      "<body bgcolor=\"#F8FAFC\">"
+      "<h1>Gestore Download (C:\\User\\Admin\\Downloads\\)</h1>"
+      "<p>File scaricati nella sessione corrente e salvati su disco VFS:</p><hr>");
+  if (state->num_downloads == 0) {
+    len += mini_snprintf(p + len, cap - len,
+        "<p><i>Nessun download completato. Usa il pulsante 'Salva' nella toolbar per salvare una pagina o risorsa.</i></p>");
+  } else {
+    for (int i = state->num_downloads - 1; i >= 0; i--) {
+      len += mini_snprintf(p + len, cap - len,
+          "<p><b>[100%% Completato] %s</b> — %u byte<br>"
+          "Origine: %s<br>Percorso: C:\\User\\Admin\\Downloads\\%s</p><hr>",
+          state->downloads[i].filename, (unsigned)state->downloads[i].size,
+          state->downloads[i].url, state->downloads[i].filename);
+    }
+  }
+  len += mini_snprintf(p + len, cap - len,
+      "<p><a href=\"about:home\">Torna alla Home</a></p></body></html>");
+  state->raw_html_len = (uint32_t)len;
+}
+
+static void generate_history_page(browser_state_t *state) {
+  char *p = state->raw_html;
+  size_t cap = MAX_HTML_SIZE;
+  int len = mini_snprintf(p, cap,
+      "<html><head><title>Cronologia & Cache - NewOS</title></head>"
+      "<body bgcolor=\"#F8FAFC\">"
+      "<h1>Cronologia Navigazione (C:\\User\\Admin\\AppData\\)</h1>"
+      "<p>URL visitati salvati su disco:</p><hr>");
+  if (state->visit_count == 0) {
+    len += mini_snprintf(p + len, cap - len, "<p><i>Cronologia vuota.</i></p>");
+  } else {
+    for (int i = 0; i < state->visit_count; i++) {
+      len += mini_snprintf(p + len, cap - len,
+          "<p>%d. <a href=\"%s\">%s</a></p>",
+          i + 1, state->visit_history[i], state->visit_history[i]);
+    }
+  }
+  len += mini_snprintf(p + len, cap - len,
+      "<hr><p><a href=\"about:home\">Torna alla Home</a></p></body></html>");
+  state->raw_html_len = (uint32_t)len;
 }
 
 static void resolve_img_url(const char *base_url, const char *src, char *out, size_t out_sz) {
@@ -1555,6 +1721,10 @@ static void browser_load_url(browser_state_t *state, const char *url,
     const char *page = url + 6;
     if (strcmp(page, "network") == 0) {
       generate_network_page(state);
+    } else if (strcmp(page, "downloads") == 0) {
+      generate_downloads_page(state);
+    } else if (strcmp(page, "history") == 0) {
+      generate_history_page(state);
     } else if (strcmp(page, "rules") == 0) {
       generate_rules_page(state);
     } else if (strcmp(page, "browser") == 0 || strcmp(page, "info") == 0) {
@@ -1970,6 +2140,14 @@ static void browser_navigate(window_t *win, const char *target_url,
 
   int32_t vp_w = win->width - 12;
   browser_load_url(state, norm_url, vp_w);
+  browser_record_history(state, norm_url);
+
+  if (state->num_tabs > 0 && state->active_tab >= 0 && state->active_tab < state->num_tabs) {
+    strncpy(state->tabs[state->active_tab].url, norm_url, MAX_URL_LEN - 1);
+    strncpy(state->tabs[state->active_tab].title, state->page_title, 31);
+    state->tabs[state->active_tab].title[31] = '\0';
+    state->tabs[state->active_tab].scroll_y = 0;
+  }
 
   // Aggiorna titolo della finestra del Window Manager
   if (strstr(state->page_title, "Web Browser")) {
@@ -2037,6 +2215,21 @@ static void browser_draw(window_t *win) {
   gfx_draw_bevel_rect(x + 126, tb_y + 3, 50, 22, false);
   gfx_draw_string(x + 134, tb_y + 6, "Home", COLOR_WINDOWTEXT, 0, true);
 
+  // [ Salva ] (Download pagina corrente in C:\User\Admin\Downloads\)
+  gfx_fill_rect(x + 182, tb_y + 3, 58, 22, COLOR_BTNFACE);
+  gfx_draw_bevel_rect(x + 182, tb_y + 3, 58, 22, false);
+  gfx_draw_string(x + 191, tb_y + 6, "Salva", 0x0055AA, 0, true);
+
+  // [ Downloads ]
+  gfx_fill_rect(x + 244, tb_y + 3, 88, 22, COLOR_BTNFACE);
+  gfx_draw_bevel_rect(x + 244, tb_y + 3, 88, 22, false);
+  gfx_draw_string(x + 252, tb_y + 6, "Downloads", COLOR_WINDOWTEXT, 0, true);
+
+  // [ Cronol. ]
+  gfx_fill_rect(x + 336, tb_y + 3, 76, 22, COLOR_BTNFACE);
+  gfx_draw_bevel_rect(x + 336, tb_y + 3, 76, 22, false);
+  gfx_draw_string(x + 344, tb_y + 6, "Cronol.", COLOR_WINDOWTEXT, 0, true);
+
   // Icona del globo / connessione animata sulla destra della toolbar
   gfx_draw_bevel_rect(x + w - 34, tb_y + 3, 26, 22, true);
   gfx_draw_icon_16(x + w - 29, tb_y + 6, ICON_NET);
@@ -2090,9 +2283,35 @@ static void browser_draw(window_t *win) {
   }
   gfx_draw_bevel_rect(x + 2, fav_y + 21, w - 4, 2, true);
 
+  // 5b. Barra delle Schede (Multi-Tab)
+  int32_t tab_y = fav_y + 23;
+  gfx_fill_rect(x + 2, tab_y, w - 4, 22, 0xCBD5E1);
+  int32_t tx = x + 6;
+  for (int ti = 0; ti < state->num_tabs; ti++) {
+    bool is_act = (ti == state->active_tab);
+    int32_t tw = 132;
+    if (tx + tw + 30 > x + w - 4) break;
+    gfx_fill_rect(tx, tab_y + 2, tw, 20, is_act ? COLOR_WINDOW : 0xE2E8F0);
+    gfx_draw_bevel_rect(tx, tab_y + 2, tw, 20, !is_act);
+    char lbl[15];
+    const char *src_t = state->tabs[ti].title[0] ? state->tabs[ti].title : "Nuova Scheda";
+    strncpy(lbl, src_t, 12);
+    lbl[12] = '\0';
+    gfx_draw_string(tx + 6, tab_y + 6, lbl, COLOR_WINDOWTEXT, 0, true);
+    if (state->num_tabs > 1) {
+      gfx_draw_string(tx + tw - 14, tab_y + 6, "x", 0x64748B, 0, true);
+    }
+    tx += tw + 3;
+  }
+  if (state->num_tabs < MAX_BROWSER_TABS && tx + 24 < x + w - 4) {
+    gfx_fill_rect(tx, tab_y + 3, 22, 18, COLOR_BTNFACE);
+    gfx_draw_bevel_rect(tx, tab_y + 3, 22, 18, false);
+    gfx_draw_string(tx + 7, tab_y + 5, "+", COLOR_WINDOWTEXT, 0, true);
+  }
+
   // 6. Area di Rendering Contenuto HTML (Sunken White Viewport)
   int32_t vp_x = x + 4;
-  int32_t vp_y = fav_y + 24;
+  int32_t vp_y = tab_y + 23;
   int32_t vp_w = w - 8;
   int32_t vp_h = h - (vp_y - y) - 24;
 
@@ -2317,8 +2536,9 @@ static void browser_mouse(window_t *win, int32_t local_x, int32_t local_y,
   int32_t tb_y = 42;
   int32_t ab_y = tb_y + 30;
   int32_t fav_y = ab_y + 26;
+  int32_t tab_y = fav_y + 23;
   int32_t vp_x = 4;
-  int32_t vp_y = fav_y + 24;
+  int32_t vp_y = tab_y + 23;
   int32_t vp_w = w - 8;
   int32_t vp_h = h - vp_y - 24;
 
@@ -2387,6 +2607,57 @@ static void browser_mouse(window_t *win, int32_t local_x, int32_t local_y,
     // [ Home ]
     if (local_x >= 126 && local_x <= 176) {
       browser_navigate(win, BROWSER_DEFAULT_HOME, true);
+      return;
+    }
+
+    // [ Salva ]
+    if (local_x >= 182 && local_x <= 240) {
+      browser_save_current_download(state);
+      return;
+    }
+
+    // [ Downloads ]
+    if (local_x >= 244 && local_x <= 332) {
+      browser_navigate(win, "about:downloads", true);
+      return;
+    }
+
+    // [ Cronol. ]
+    if (local_x >= 336 && local_x <= 412) {
+      browser_navigate(win, "about:history", true);
+      return;
+    }
+  }
+
+  // Clic sulla Barra delle Schede (Multi-Tab)
+  if (local_y >= tab_y && local_y <= tab_y + 22) {
+    int32_t tx = 6;
+    for (int ti = 0; ti < state->num_tabs; ti++) {
+      int32_t tw = 132;
+      if (tx + tw + 30 > w - 4) break;
+      if (local_x >= tx && local_x < tx + tw) {
+        if (state->num_tabs > 1 && local_x >= tx + tw - 18) {
+          for (int k = ti; k < state->num_tabs - 1; k++) state->tabs[k] = state->tabs[k + 1];
+          state->num_tabs--;
+          if (state->active_tab >= state->num_tabs) state->active_tab = state->num_tabs - 1;
+          browser_navigate(win, state->tabs[state->active_tab].url, false);
+        } else if (ti != state->active_tab) {
+          state->tabs[state->active_tab].scroll_y = state->scroll_y;
+          state->active_tab = ti;
+          browser_navigate(win, state->tabs[ti].url, false);
+          state->scroll_y = state->tabs[ti].scroll_y;
+        }
+        return;
+      }
+      tx += tw + 3;
+    }
+    if (state->num_tabs < MAX_BROWSER_TABS && local_x >= tx && local_x <= tx + 24) {
+      state->tabs[state->active_tab].scroll_y = state->scroll_y;
+      state->active_tab = state->num_tabs++;
+      strcpy(state->tabs[state->active_tab].url, BROWSER_DEFAULT_HOME);
+      strcpy(state->tabs[state->active_tab].title, "Nuova Scheda");
+      state->tabs[state->active_tab].scroll_y = 0;
+      browser_navigate(win, BROWSER_DEFAULT_HOME, false);
       return;
     }
   }
@@ -2499,8 +2770,26 @@ static void browser_key(window_t *win, char c) {
       return;
     }
   } else {
+    // Ctrl+T (20): nuova scheda; Ctrl+W (23): chiudi scheda corrente
+    if (c == 20 && state->num_tabs < MAX_BROWSER_TABS) {
+      state->tabs[state->active_tab].scroll_y = state->scroll_y;
+      state->active_tab = state->num_tabs++;
+      strcpy(state->tabs[state->active_tab].url, BROWSER_DEFAULT_HOME);
+      strcpy(state->tabs[state->active_tab].title, "Nuova Scheda");
+      state->tabs[state->active_tab].scroll_y = 0;
+      browser_navigate(win, BROWSER_DEFAULT_HOME, false);
+      return;
+    }
+    if (c == 23 && state->num_tabs > 1) {
+      int ti = state->active_tab;
+      for (int k = ti; k < state->num_tabs - 1; k++) state->tabs[k] = state->tabs[k + 1];
+      state->num_tabs--;
+      if (state->active_tab >= state->num_tabs) state->active_tab = state->num_tabs - 1;
+      browser_navigate(win, state->tabs[state->active_tab].url, false);
+      return;
+    }
     // Tasti di scorrimento pagina
-    int32_t vp_h = win->height - 128 - 24;
+    int32_t vp_h = win->height - 151 - 24;
     if (c == 'w' || c == 'W' || c == 0x11) { // Up
       if (state->scroll_y > 0)
         state->scroll_y -= 24;
@@ -2566,6 +2855,8 @@ static window_t *browser_create_window(const char *initial_url) {
   }
   state->raw_html[0] = '\0';
   state->hover_elem = -1;
+  state->num_tabs = 1;
+  state->active_tab = 0;
 
   win->app_data = state;
   win->on_draw = browser_draw;
