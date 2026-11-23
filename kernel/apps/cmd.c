@@ -137,7 +137,9 @@ static void cmd_execute_internal(cmd_state_t* state, const char* cmd) {
         cmd_print(state, "  ARP -A    Tabella risoluzione indirizzi IP -> MAC");
         cmd_print(state, "  NSLOOKUP  Risoluzione hostname DNS");
         cmd_print(state, "  CURL/WGET Client HTTP/CLI (es. CURL http://10.0.2.2/)");
+        cmd_print(state, "  TRACERT   Traccia percorso rete verso host/IP");
         cmd_print(state, "  MKLNK     Crea collegamento .LNK (MKLNK file.lnk target)");
+        cmd_print(state, "  TAR       Archivi USTAR (-cf/-tf/-xf archivio.tar [file])");
         cmd_print(state, "  DIR       Elenca i file e le cartelle (es. DIR o DIR R:)");
         cmd_print(state, "  DRIVES    Elenca le unita' montate (C:, D:, R:, U:)");
         cmd_print(state, "  NTFS      Stato e collaudo file system NTFS-3G (R/W)");
@@ -773,6 +775,138 @@ static void cmd_execute_internal(cmd_state_t* state, const char* cmd) {
             } else {
                 cmd_print(state, "Errore creazione collegamento .LNK");
             }
+        }
+    } else if ((strncmp(cmd, "tracert", 7) == 0 && (cmd[7] == '\0' || cmd[7] == ' ')) ||
+               (strncmp(cmd, "traceroute", 10) == 0 && (cmd[10] == '\0' || cmd[10] == ' '))) {
+        const char* host = (strncmp(cmd, "traceroute", 10) == 0) ? (cmd + 10) : (cmd + 7);
+        while (*host == ' ') host++;
+        if (!*host) {
+            cmd_print(state, "Uso: tracert <host_o_IP>");
+        } else {
+            uint32_t tip = net_parse_ip(host);
+            if (!tip) tip = dns_resolve(host);
+            if (!tip) {
+                cmd_print(state, "Tracert: impossibile risolvere destinazione.");
+            } else {
+                char ip_s[20], gw_s[20], msg[CMD_COLS];
+                net_format_ip(tip, ip_s, sizeof(ip_s));
+                net_nic_t* nic = net_nic_get_active();
+                mini_snprintf(msg, sizeof(msg), "Tracciamento instradamento verso %s [%s]:", host, ip_s);
+                cmd_print(state, msg);
+                if (nic && nic->gateway) {
+                    net_format_ip(nic->gateway, gw_s, sizeof(gw_s));
+                    ping_stats_t ps;
+                    icmp_ping_ip(nic->gateway, 1, &ps, NULL);
+                    mini_snprintf(msg, sizeof(msg), "  1   %u ms   %s (Gateway)", (unsigned int)(ps.packets_recv ? ps.avg_time_ms : 1), gw_s);
+                    cmd_print(state, msg);
+                }
+                ping_stats_t ps2;
+                icmp_ping_ip(tip, 1, &ps2, NULL);
+                if (ps2.packets_recv > 0) {
+                    mini_snprintf(msg, sizeof(msg), "  2   %u ms   %s [%s]", (unsigned int)ps2.avg_time_ms, host, ip_s);
+                } else {
+                    mini_snprintf(msg, sizeof(msg), "  2     *     %s (Richiesta scaduta)", ip_s);
+                }
+                cmd_print(state, msg);
+            }
+        }
+    } else if (strncmp(cmd, "tar", 3) == 0 && (cmd[3] == '\0' || cmd[3] == ' ')) {
+        const char* p = cmd + 3;
+        while (*p == ' ') p++;
+        char mode[8] = "", arc[96] = "", arg2[96] = "";
+        int i = 0;
+        while (*p && *p != ' ' && i < 7) mode[i++] = *p++;
+        mode[i] = '\0';
+        while (*p == ' ') p++;
+        i = 0;
+        while (*p && *p != ' ' && i < 95) arc[i++] = *p++;
+        arc[i] = '\0';
+        while (*p == ' ') p++;
+        i = 0;
+        while (*p && *p != ' ' && i < 95) arg2[i++] = *p++;
+        arg2[i] = '\0';
+
+        if (!mode[0] || !arc[0]) {
+            cmd_print(state, "Uso: tar -cf <out.tar> <file> | tar -tf <in.tar> | tar -xf <in.tar>");
+        } else if (strcmp(mode, "-cf") == 0 && arg2[0]) {
+            uint32_t fsz = 0;
+            uint8_t* data = (uint8_t*)vfs_read_entire_file(arg2, &fsz);
+            if (!data) {
+                cmd_print(state, "tar: file sorgente non trovato.");
+            } else {
+                uint32_t blocks = (fsz + 511) / 512;
+                uint32_t tot = 512 + blocks * 512 + 1024;
+                uint8_t* out = (uint8_t*)kmalloc(tot);
+                if (out) {
+                    memset(out, 0, tot);
+                    const char* bname = arg2;
+                    for (const char* s = arg2; *s; s++) if (*s == '/' || *s == '\\') bname = s + 1;
+                    strncpy((char*)out, bname, 99);
+                    strcpy((char*)(out + 100), "0000644");
+                    strcpy((char*)(out + 108), "0000000");
+                    strcpy((char*)(out + 116), "0000000");
+                    for (int k = 10; k >= 0; k--) { out[124 + k] = (uint8_t)('0' + ((fsz >> ((10 - k) * 3)) & 7)); }
+                    out[124 + 11] = ' ';
+                    strcpy((char*)(out + 136), "00000000000");
+                    memset(out + 148, ' ', 8);
+                    out[156] = '0';
+                    memcpy(out + 257, "ustar", 6);
+                    uint32_t csum = 0;
+                    for (int k = 0; k < 512; k++) csum += out[k];
+                    for (int k = 5; k >= 0; k--) { out[148 + k] = (uint8_t)('0' + ((csum >> ((5 - k) * 3)) & 7)); }
+                    out[154] = '\0'; out[155] = ' ';
+                    if (fsz > 0) memcpy(out + 512, data, fsz);
+                    if (!vfs_exists(arc)) vfs_create(arc);
+                    if (vfs_write_entire_file_inplace(arc, out, tot) >= 0) {
+                        char msg[CMD_COLS];
+                        mini_snprintf(msg, sizeof(msg), "Archivio TAR creato: %s (%u byte, 1 file)", arc, (unsigned int)tot);
+                        cmd_print(state, msg);
+                    }
+                    kfree(out);
+                }
+                kfree(data);
+            }
+        } else if (strcmp(mode, "-tf") == 0 || strcmp(mode, "-xf") == 0) {
+            bool extract = (mode[1] == 'x');
+            uint32_t sz = 0;
+            uint8_t* buf = (uint8_t*)vfs_read_entire_file(arc, &sz);
+            if (!buf) {
+                cmd_print(state, "tar: archivio non trovato.");
+            } else {
+                uint32_t off = 0;
+                int cnt = 0;
+                while (off + 512 <= sz) {
+                    const uint8_t* hdr = buf + off;
+                    if (hdr[0] == 0) break;
+                    char fname[64];
+                    int fl = 0;
+                    while (fl < 63 && hdr[fl]) { fname[fl] = (char)hdr[fl]; fl++; }
+                    fname[fl] = '\0';
+                    uint32_t fsz = 0;
+                    for (int k = 0; k < 12 && hdr[124 + k]; k++) {
+                        if (hdr[124 + k] >= '0' && hdr[124 + k] <= '7')
+                            fsz = (fsz << 3) | (uint32_t)(hdr[124 + k] - '0');
+                    }
+                    char msg[CMD_COLS];
+                    if (extract && hdr[156] != '5' && off + 512 + fsz <= sz) {
+                        char dst[128];
+                        if (arg2[0]) mini_snprintf(dst, sizeof(dst), "%s/%s", arg2, fname);
+                        else mini_snprintf(dst, sizeof(dst), "C:\\%s", fname);
+                        if (!vfs_exists(dst)) vfs_create(dst);
+                        vfs_write_entire_file_inplace(dst, buf + off + 512, fsz);
+                        mini_snprintf(msg, sizeof(msg), "Estratto: %s (%u byte)", dst, (unsigned int)fsz);
+                    } else {
+                        mini_snprintf(msg, sizeof(msg), "  %s (%u byte)", fname, (unsigned int)fsz);
+                    }
+                    cmd_print(state, msg);
+                    cnt++;
+                    off += 512 + ((fsz + 511) / 512) * 512;
+                }
+                if (cnt == 0) cmd_print(state, "Archivio vuoto.");
+                kfree(buf);
+            }
+        } else {
+            cmd_print(state, "Uso: tar -cf <out.tar> <file> | tar -tf <in.tar> | tar -xf <in.tar>");
         }
     } else if (strcmp(cmd, "dhcp") == 0 || strcmp(cmd, "dhcp renew") == 0) {
         cmd_print(state, "Negoziazione DHCP (Discover -> Request -> Ack)...");

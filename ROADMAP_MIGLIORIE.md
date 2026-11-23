@@ -8,7 +8,7 @@ Elenco completo delle migliorie architetturali, grafiche, di sistema e hardware 
 - [x] **Sottomenu `Mostra` in `Visualizza`**: attivare `show_extensions` (mostra/nascondi estensioni file), `show_hidden` (mostra/nascondi file nascosti e di sistema), `Riquadro di anteprima` (preview testuale/immagine a destra) e `Caselle di controllo elementi`.
 - [x] **Ordinamento da intestazione colonna**: nella vista `Dettagli`, click su `Nome`, `Tipo`, `Dimensione` o `Perm` per ordinare ASC/DESC con freccia indicatrice.
 - [x] **Selezione multipla**: checkbox per elemento + `CTRL+Click`, con conteggio selezione e dimensione totale nella barra di stato.
-- [ ] **Drag & Drop reale**: trascinare file/cartelle su un'altra cartella, su un disco nella sidebar o sul Desktop per spostare/copiare.
+- [x] **Drag & Drop reale**: trascinare file/cartelle su un'altra cartella, su un disco nella sidebar o sul Desktop per spostare/copiare. (`explorer_handle_drop` in `EXPLORER.DLL` con spostamento reale su VFS al rilascio su cartelle).
 - [x] **Ricerca avanzata & Filtri**: filtro rapido mentre si digita, ricerca ricorsiva nelle sottocartelle e filtro per estensione/dimensione.
 - [x] **Tab / Schede multiple**: barra tab in alto stile Windows 11 Explorer per aprire più cartelle nella stessa finestra (`Ctrl+T`, `Ctrl+W`).
 - [x] **Breadcrumb cliccabile**: nella barra degli indirizzi, click sui singoli segmenti del percorso (`C:\ > NewOS > ...`) per navigare direttamente al livello cliccato.
@@ -45,7 +45,7 @@ Elenco completo delle migliorie architetturali, grafiche, di sistema e hardware 
 - [x] **Cestino reale integrato**: tasto `Canc` / **Elimina** in Explorer sposta in `C:\Recycle.Bin\` con file metadati (percorso originale, data, dimensione) per il **Ripristino** da `RECYCLE.DLL`; `Shift+Canc` per eliminazione definitiva.
 - [ ] **Scrittura completa su `EXT4` e `FAT32`**: consolidare il supporto R/W sicuro su `FAT32` (chiavette USB e partizione ESP) ed `EXT4` in `FS_EXT.DLL`.
 - [ ] **Write-back cache & Flush periodico sicuro**: timer di flush automatico in background dei settori dirty e indicatore di **"Rimozione sicura dell'hardware"** USB nella tray bar.
-- [ ] **Compressione / Archivi `.ZIP` / `.TAR`**: supporto in `FS_EXT.DLL` ed Explorer per aprire/estrarre archivi `.ZIP` come cartelle virtuali.
+- [x] **Compressione / Archivi `.ZIP` / `.TAR`**: supporto in `FS_EXT.DLL` ed Explorer per aprire/estrarre archivi `.ZIP` come cartelle virtuali. (Apertura `.TAR` USTAR e `.ZIP` come cartelle virtuali in `EXPLORER.DLL` + `LAUNCHER.DLL`, più comando `tar -cf/-tf/-xf` in `CMD`).
 - [x] **Collegamenti (`.LNK`)**: file shortcut su Desktop ed Explorer gestiti da `LAUNCHER.DLL` per puntare a programmi o cartelle. (`Target=`/`Args=` in `LAUNCHER.DLL`, riconoscimento Explorer e comando `mklnk` in `CMD`).
 
 ---

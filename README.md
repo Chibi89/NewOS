@@ -29,6 +29,11 @@
 <details>
 <summary><strong>Espandi per visualizzare gli aggiornamenti e i fix recenti</strong></summary>
 
+### 23 Novembre 2026
+- **Archivi `.TAR`/`.ZIP` Virtuali, Drag & Drop Reale & Strumenti CLI (`tar`, `tracert`)**:
+  - Aggiunta navigazione virtuale di archivi `.TAR` (USTAR) e `.ZIP` direttamente in [explorer.c](explorer/explorer.c) e tramite [launcher_dll.c](SystemLibrary/launcher_dll.c), più comando `tar` (`-cf`, `-tf`, `-xf`) e `tracert` in [cmd.c](kernel/apps/cmd.c).
+  - Implementato il **Drag & Drop reale** di file su cartelle in `EXPLORER.DLL` con spostamento su VFS tramite rilascio gestito in [wm.c](kernel/gui/wm.c).
+
 ### 22 Novembre 2026
 - **Nuovo Menu Start Unificato Moderno (`STARTMENU.DLL`) & Selettore `Personalizzazione`**:
   - Creato il menu Start out-of-kernel [startmenu_dll.c](SystemLibrary/startmenu_dll.c) ([startmenu_loader.c](kernel/gui/startmenu_loader.c)) con ricerca live unificata, sezione **Preferiti**, sezione **Tutto** con toggle **`Visualizzazione: Griglia | Elenco`** e badge **`Nuova`**, e footer utente/azioni rapide.
@@ -99,9 +104,7 @@
 
 Elenco delle funzionalità ancora da implementare dalla [`ROADMAP_MIGLIORIE.md`](ROADMAP_MIGLIORIE.md):
 
-1. **Shell & Esplora Risorse**:
-   - **Drag & Drop reale**: trascinamento file/cartelle su un'altra cartella, su un disco nella sidebar o sul Desktop per spostare o copiare.
-2. **UI & Libreria `COMCTL.DLL`**:
+1. **UI & Libreria `COMCTL.DLL`**:
    - **Migrazione completa delle app a `COMCTL.DLL`**: convertire `Task Manager`, `Regedit`, `Notepad`, `Calcolatrice` e le applet `.CPL` ai controlli standard `comctl_*`.
    - **Controlli `COMCTL` interattivi completi**: navigazione focus con `Tab`, frecce su `ListView`/`TreeView`/`ComboBox`, `PgUp`/`PgDn`, selezione testo con mouse/`Shift` e `Ctrl+C`/`Ctrl+V` nei campi input.
    - **Scaling DPI dinamico**: adattamento automatico di font, icone e padding per `1280x720`, `1600x900` e `1920x1080`.
@@ -109,7 +112,6 @@ Elenco delle funzionalità ancora da implementare dalla [`ROADMAP_MIGLIORIE.md`]
 3. **File System & Storage (`FS_EXT.DLL`)**:
    - **Scrittura completa su `EXT4` e `FAT32`**: consolidamento R/W sicuro su `FAT32` (USB e partizione ESP) ed `EXT4`.
    - **Write-back cache & Flush periodico sicuro**: flush automatico in background dei settori dirty e **"Rimozione sicura dell'hardware"** USB nella tray bar.
-   - **Archivi `.ZIP` / `.TAR`**: apertura ed estrazione come cartelle virtuali in `FS_EXT.DLL` ed Explorer.
 4. **Sicurezza & Multi-Utente**:
    - **Gestione multi-account reale (`USERACCT.CPL`)**: creazione di più utenti locali in `C:\User\<Nome>\` con password hashata, ruoli Standard/Amministratore e selezione utente in `LOGIN.MOD`.
    - **Dialogo UAC / Elevazione inline**: prompt password amministratore per operazioni protette da utenti Standard (`C:\NewOS\`, `HKLM` in `Regedit`, policy).
@@ -387,6 +389,11 @@ tools\qemu-system-x86_64.exe -cdrom NewOS_V1.iso -m 256M -vga std -device AC97 -
 <details>
 <summary><strong>Expand to view recent updates and fixes</strong></summary>
 
+### November 23, 2026
+- **Virtual `.TAR`/`.ZIP` Archives, Real Drag & Drop & CLI Tools (`tar`, `tracert`)**:
+  - Added virtual folder browsing for `.TAR` (USTAR) and `.ZIP` archives in [explorer.c](explorer/explorer.c) and [launcher_dll.c](SystemLibrary/launcher_dll.c), plus `tar` (`-cf`, `-tf`, `-xf`) and `tracert` commands in [cmd.c](kernel/apps/cmd.c).
+  - Implemented **real Drag & Drop** of files onto folders in `EXPLORER.DLL` with VFS move on release handled via [wm.c](kernel/gui/wm.c).
+
 ### November 22, 2026
 - **New Modern Unified Start Menu (`STARTMENU.DLL`) & `Personalization` Selector**:
   - Created the out-of-kernel Start Menu [startmenu_dll.c](SystemLibrary/startmenu_dll.c) ([startmenu_loader.c](kernel/gui/startmenu_loader.c)) with unified live search, **Pinned** (`Preferiti`) grid, **All Apps** (`Tutto`) with **`View: Grid | List`** toggle and **`Nuova`** badges, plus user/quick-actions footer.
@@ -457,9 +464,7 @@ tools\qemu-system-x86_64.exe -cdrom NewOS_V1.iso -m 256M -vga std -device AC97 -
 
 Pending features to be implemented from [`ROADMAP_MIGLIORIE.md`](ROADMAP_MIGLIORIE.md):
 
-1. **Shell & File Explorer**:
-   - **Real Drag & Drop**: dragging files/folders onto another folder, a sidebar drive, or the Desktop to move or copy.
-2. **UI & `COMCTL.DLL` Library**:
+1. **UI & `COMCTL.DLL` Library**:
    - **Full App Migration to `COMCTL.DLL`**: migrate `Task Manager`, `Regedit`, `Notepad`, `Calculator`, and `.CPL` applets to standard `comctl_*` controls.
    - **Full Interactive `COMCTL` Controls**: `Tab` focus traversal, arrow keys on `ListView`/`TreeView`/`ComboBox`, `PgUp`/`PgDn`, mouse/`Shift` text selection, and `Ctrl+C`/`Ctrl+V` in inputs.
    - **Dynamic DPI Scaling**: automatic font, icon, and padding scaling for `1280x720`, `1600x900`, and `1920x1080`.
@@ -467,7 +472,6 @@ Pending features to be implemented from [`ROADMAP_MIGLIORIE.md`](ROADMAP_MIGLIOR
 3. **File System & Storage (`FS_EXT.DLL`)**:
    - **Full R/W on `EXT4` & `FAT32`**: harden safe read/write support for `FAT32` (USB drives and ESP) and `EXT4`.
    - **Write-back Cache & Safe Periodic Flush**: background dirty-sector flushing and USB **"Safely Remove Hardware"** tray indicator.
-   - **`.ZIP` / `.TAR` Archives**: open and extract archives as virtual folders in `FS_EXT.DLL` and Explorer.
 4. **Security & Multi-User**:
    - **Real Multi-Account Management (`USERACCT.CPL`)**: create multiple local users in `C:\User\<Name>\` with hashed passwords, Standard/Administrator roles, and user selection in `LOGIN.MOD`.
    - **Inline UAC / Elevation Dialog**: administrator password prompt when a Standard user attempts protected actions (`C:\NewOS\`, `HKLM` in `Regedit`, policies).

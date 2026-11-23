@@ -405,6 +405,7 @@ typedef enum {
   FILE_CAT_APP,
   FILE_CAT_HTML,
   FILE_CAT_RULES,
+  FILE_CAT_ARCHIVE,
   FILE_CAT_FOLDER
 } explorer_file_category_t;
 
@@ -459,6 +460,11 @@ static explorer_file_category_t explorer_get_file_category(const char *name,
   // Regole NewOS
   if (strcasecmp(dot, ".nor") == 0) {
     return FILE_CAT_RULES;
+  }
+
+  // Archivi compressi (.TAR, .ZIP)
+  if (strcasecmp(dot, ".tar") == 0 || strcasecmp(dot, ".zip") == 0) {
+    return FILE_CAT_ARCHIVE;
   }
 
   return FILE_CAT_DEFAULT;
@@ -554,6 +560,14 @@ static void explorer_classify_item(explorer_item_t *it) {
     it->icon_id = ICON_DOCUMENT;
     break;
 
+  case FILE_CAT_ARCHIVE:
+    if (dot && strcasecmp(dot, ".zip") == 0)
+      strcpy(it->desc, "Archivio ZIP");
+    else
+      strcpy(it->desc, "Archivio TAR");
+    it->icon_id = ICON_FOLDER;
+    break;
+
   default:
     if (dot && strcasecmp(dot, ".sys") == 0) {
       strcpy(it->desc, "Driver di periferica");
@@ -573,6 +587,93 @@ static void explorer_classify_item(explorer_item_t *it) {
     }
     break;
   }
+}
+
+static uint64_t parse_octal_u64(const char *s, int len) {
+  uint64_t v = 0;
+  for (int i = 0; i < len && s[i]; i++) {
+    if (s[i] == ' ') continue;
+    if (s[i] >= '0' && s[i] <= '7') v = (v << 3) | (uint64_t)(s[i] - '0');
+    else break;
+  }
+  return v;
+}
+
+static bool explorer_load_archive_items(explorer_state_t *state, const char *arc_path) {
+  const char *dot = strrchr(arc_path, '.');
+  if (!dot) return false;
+  bool is_tar = (strcasecmp(dot, ".tar") == 0);
+  bool is_zip = (strcasecmp(dot, ".zip") == 0);
+  if (!is_tar && !is_zip) return false;
+
+  uint32_t sz = 0;
+  uint8_t *buf = (uint8_t *)vfs_read_entire_file(arc_path, &sz);
+  if (!buf) return true;
+
+  if (is_tar) {
+    uint32_t off = 0;
+    while (off + 512 <= sz && state->num_items < MAX_EXPLORER_ITEMS) {
+      const uint8_t *hdr = buf + off;
+      if (hdr[0] == 0) break;
+      char fname[64];
+      int fl = 0;
+      while (fl < 63 && hdr[fl]) { fname[fl] = (char)hdr[fl]; fl++; }
+      fname[fl] = '\0';
+      uint64_t fsize = parse_octal_u64((const char *)(hdr + 124), 12);
+      bool is_dir = (hdr[156] == '5');
+      if (!state->search_active || !state->search_filter[0] ||
+          str_contains_nocase(fname, state->search_filter)) {
+        explorer_item_t *it = &state->items[state->num_items++];
+        strcpy(it->name, fname);
+        it->is_drive = false;
+        it->is_folder = is_dir;
+        it->size_bytes = fsize;
+        it->mtime = 0;
+        it->permissions = 0;
+        it->content[0] = '\0';
+        if (!is_dir && off + 512 < sz && fsize > 0) {
+          uint32_t cpy = (fsize < 250) ? (uint32_t)fsize : 250;
+          if (off + 512 + cpy <= sz) {
+            memcpy(it->content, buf + off + 512, cpy);
+            it->content[cpy] = '\0';
+          }
+        }
+        explorer_classify_item(it);
+      }
+      uint32_t blocks = (uint32_t)((fsize + 511) / 512);
+      off += 512 + blocks * 512;
+    }
+  } else if (is_zip) {
+    uint32_t off = 0;
+    while (off + 30 <= sz && state->num_items < MAX_EXPLORER_ITEMS) {
+      if (buf[off] != 0x50 || buf[off+1] != 0x4B || buf[off+2] != 0x03 || buf[off+3] != 0x04) break;
+      uint32_t comp_sz = *(uint32_t *)(buf + off + 18);
+      uint32_t uncomp_sz = *(uint32_t *)(buf + off + 22);
+      uint16_t fn_len = *(uint16_t *)(buf + off + 26);
+      uint16_t ex_len = *(uint16_t *)(buf + off + 28);
+      if (off + 30 + fn_len > sz) break;
+      char fname[64];
+      uint16_t cpy = (fn_len < 63) ? fn_len : 63;
+      memcpy(fname, buf + off + 30, cpy);
+      fname[cpy] = '\0';
+      bool is_dir = (cpy > 0 && fname[cpy - 1] == '/');
+      if (!state->search_active || !state->search_filter[0] ||
+          str_contains_nocase(fname, state->search_filter)) {
+        explorer_item_t *it = &state->items[state->num_items++];
+        strcpy(it->name, fname);
+        it->is_drive = false;
+        it->is_folder = is_dir;
+        it->size_bytes = uncomp_sz;
+        it->mtime = 0;
+        it->permissions = 0;
+        it->content[0] = '\0';
+        explorer_classify_item(it);
+      }
+      off += 30 + fn_len + ex_len + comp_sz;
+    }
+  }
+  kfree(buf);
+  return true;
 }
 
 static void explorer_load_items(explorer_state_t *state) {
@@ -858,25 +959,27 @@ static void explorer_load_items(explorer_state_t *state) {
       mini_snprintf(full_query, sizeof(full_query), "%c:/", drive_pfx);
     }
 
-    vfs_dirent_t entries[MAX_EXPLORER_ITEMS];
-    int32_t count = vfs_readdir(full_query, entries, MAX_EXPLORER_ITEMS);
-    if (count > 0) {
-      for (int32_t i = 0; i < count && state->num_items < MAX_EXPLORER_ITEMS;
-           i++) {
-        if (state->search_active && state->search_filter[0] != '\0') {
-          if (!str_contains_nocase(entries[i].name, state->search_filter))
-            continue;
+    if (!explorer_load_archive_items(state, full_query)) {
+      vfs_dirent_t entries[MAX_EXPLORER_ITEMS];
+      int32_t count = vfs_readdir(full_query, entries, MAX_EXPLORER_ITEMS);
+      if (count > 0) {
+        for (int32_t i = 0; i < count && state->num_items < MAX_EXPLORER_ITEMS;
+             i++) {
+          if (state->search_active && state->search_filter[0] != '\0') {
+            if (!str_contains_nocase(entries[i].name, state->search_filter))
+              continue;
+          }
+          explorer_item_t *it = &state->items[state->num_items++];
+          strncpy(it->name, entries[i].name, sizeof(it->name) - 1);
+          it->name[sizeof(it->name) - 1] = '\0';
+          it->is_drive = false;
+          it->is_folder = entries[i].is_directory;
+          it->size_bytes = entries[i].size;
+          it->mtime = entries[i].mtime;
+          it->permissions = entries[i].permissions;
+          it->content[0] = '\0';
+          explorer_classify_item(it);
         }
-        explorer_item_t *it = &state->items[state->num_items++];
-        strncpy(it->name, entries[i].name, sizeof(it->name) - 1);
-        it->name[sizeof(it->name) - 1] = '\0';
-        it->is_drive = false;
-        it->is_folder = entries[i].is_directory;
-        it->size_bytes = entries[i].size;
-        it->mtime = entries[i].mtime;
-        it->permissions = entries[i].permissions;
-        it->content[0] = '\0';
-        explorer_classify_item(it);
       }
     }
     break;
@@ -3628,6 +3731,8 @@ static void explorer_execute_selected(explorer_state_t *state) {
         app_browser_open_url(full_path);
       } else if (cat == FILE_CAT_RULES) {
         app_rules_viewer_open_file(full_path);
+      } else if (cat == FILE_CAT_ARCHIVE) {
+        explorer_navigate_to(state, EXPLORER_MODE_FOLDER, full_path);
       } else {
         const char *dot = strrchr(it->name, '.');
         if (dot && (strcasecmp(dot, ".sys") == 0)) {
@@ -3726,6 +3831,88 @@ static void explorer_execute_selected(explorer_state_t *state) {
   }
 }
 
+static void explorer_handle_drop(explorer_state_t *state, window_t *win,
+                                 int32_t mx, int32_t my) {
+  if (!state->is_dragging_item) return;
+  state->is_dragging_item = false;
+  int src_idx = state->drag_item_idx;
+  if (src_idx < 0 || src_idx >= state->num_items) return;
+  int32_t dx = mx - state->drag_start_x;
+  int32_t dy = my - state->drag_start_y;
+  if (dx * dx + dy * dy <= 100) return;
+
+  if (state->mode != EXPLORER_MODE_DRIVE_C &&
+      state->mode != EXPLORER_MODE_DRIVE_U &&
+      state->mode != EXPLORER_MODE_FOLDER) return;
+
+  int32_t cx = 4, cy = 24, cw = win->width - 8, ch = win->height - 28;
+  int32_t body_y = state->show_toolbar ? (cy + 74) : (cy + 22);
+  int32_t body_h = ch - (body_y - cy) - (state->show_statusbar ? 22 : 4);
+  int32_t side_w = 160;
+  bool has_preview = state->show_preview_pane && (cw - side_w - 6 >= 340);
+  int32_t prev_w = has_preview ? 172 : 0;
+  int32_t main_x = cx + side_w + 4;
+  int32_t main_w = cw - side_w - 6 - (has_preview ? (prev_w + 4) : 0);
+
+  int v_cols = 4;
+  int32_t row_h = 72, top_pad = 8, dyn_col_w = 88;
+  explorer_get_view_metrics(state, main_w, &v_cols, &row_h, &top_pad, &dyn_col_w);
+  int visible_rows = (body_h - top_pad - 8) / row_h;
+  if (visible_rows < 1) visible_rows = 1;
+
+  int drop_idx = -1;
+  for (int r = 0; r < visible_rows; r++) {
+    int cur_row = state->scroll_row + r;
+    for (int col = 0; col < v_cols; col++) {
+      int i = cur_row * v_cols + col;
+      if (i >= state->num_items) break;
+      int32_t ix = main_x + 8 + col * dyn_col_w;
+      int32_t iy = body_y + top_pad + r * row_h;
+      if (mx >= ix && mx <= ix + dyn_col_w && my >= iy && my <= iy + row_h) {
+        drop_idx = i;
+        break;
+      }
+    }
+    if (drop_idx >= 0) break;
+  }
+
+  if (drop_idx < 0 || drop_idx == src_idx || !state->items[drop_idx].is_folder)
+    return;
+
+  char drive_pfx = (state->mode == EXPLORER_MODE_DRIVE_U) ? 'U' : 'C';
+  char clean[128] = "";
+  if (state->mode == EXPLORER_MODE_FOLDER) {
+    const char *p = state->folder_name;
+    if (((p[0] >= 'A' && p[0] <= 'Z') || (p[0] >= 'a' && p[0] <= 'z')) && p[1] == ':') {
+      drive_pfx = (p[0] >= 'a' && p[0] <= 'z') ? (char)(p[0] - 32) : p[0];
+    }
+    explorer_clean_path(state->folder_name, clean, sizeof(clean));
+  }
+
+  char src_path[160], dst_path[160];
+  if (clean[0]) {
+    mini_snprintf(src_path, sizeof(src_path), "%c:/%s/%s", drive_pfx, clean, state->items[src_idx].name);
+    mini_snprintf(dst_path, sizeof(dst_path), "%c:/%s/%s/%s", drive_pfx, clean, state->items[drop_idx].name, state->items[src_idx].name);
+  } else {
+    mini_snprintf(src_path, sizeof(src_path), "%c:/%s", drive_pfx, state->items[src_idx].name);
+    mini_snprintf(dst_path, sizeof(dst_path), "%c:/%s/%s", drive_pfx, state->items[drop_idx].name, state->items[src_idx].name);
+  }
+
+  uint32_t fsz = 0;
+  uint8_t *data = (uint8_t *)vfs_read_entire_file(src_path, &fsz);
+  if (data) {
+    if (!vfs_exists(dst_path)) vfs_create(dst_path);
+    if (vfs_write_entire_file_inplace(dst_path, data, fsz) >= 0) {
+      vfs_unlink(src_path);
+      mini_snprintf(state->status_banner, sizeof(state->status_banner),
+                    "Spostato %s -> %s", state->items[src_idx].name, state->items[drop_idx].name);
+      state->status_banner_err = false;
+      explorer_load_items(state);
+    }
+    kfree(data);
+  }
+}
+
 static void explorer_mouse(window_t *win, int32_t mx, int32_t my,
                            bool clicked) {
   outb(0x3F8, 'E');
@@ -3738,11 +3925,13 @@ static void explorer_mouse(window_t *win, int32_t mx, int32_t my,
   outb(0x3F8, 'S');
   outb(0x3F8, 'E');
   outb(0x3F8, '\n');
-  if (!clicked)
-    return;
   explorer_state_t *state = (explorer_state_t *)win->app_data;
   if (!state)
     return;
+  if (!clicked) {
+    explorer_handle_drop(state, win, mx, my);
+    return;
+  }
 
   int32_t cx = 4;
   int32_t cy = 24;
@@ -4533,8 +4722,15 @@ static void explorer_mouse(window_t *win, int32_t mx, int32_t my,
 
         explorer_select_single(state, i);
         state->last_click_time = now_ticks;
+        if (!state->items[i].is_drive && !state->items[i].is_folder) {
+          state->is_dragging_item = true;
+          state->drag_item_idx = i;
+          state->drag_start_x = mx;
+          state->drag_start_y = my;
+        }
 
         if (is_double_click) {
+          state->is_dragging_item = false;
           explorer_execute_selected(state);
         }
         return;

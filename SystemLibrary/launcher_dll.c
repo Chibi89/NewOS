@@ -257,6 +257,13 @@ static bool launch_file_by_ext(launcher_params_t* p, const char* path, const cha
         return true;
     }
 
+    // 2a. Archivi .TAR / .ZIP -> Esplora Risorse come cartella virtuale
+    if (ext && (strcasecmp(ext, ".tar") == 0 || strcasecmp(ext, ".zip") == 0)) {
+        app_explorer_open_folder(path);
+        set_handler(p, "EXPLORER.DLL (Archivio)");
+        return true;
+    }
+
     // 2b. Collegamenti (.LNK) -> Risoluzione Target= / Args= con protezione loop
     if (ext && strcasecmp(ext, ".lnk") == 0) {
         static int lnk_depth = 0;

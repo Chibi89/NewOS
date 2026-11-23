@@ -148,6 +148,12 @@ typedef struct {
     } tabs[4];
     int num_tabs;
     int active_tab;
+
+    // Stato Drag & Drop file/cartelle
+    bool is_dragging_item;
+    int drag_item_idx;
+    int32_t drag_start_x;
+    int32_t drag_start_y;
 } explorer_state_t;
 
 // Funzioni pubbliche di apertura

@@ -1900,6 +1900,13 @@ void wm_update(mouse_state_t *mouse, char key) {
       }
     }
     snap_zone = 0;
+    for (int i = MAX_WINDOWS - 1; i >= 0; i--) {
+      window_t *w = windows[i];
+      if (w && w->id == active_window_id && !w->is_minimized && w->on_mouse) {
+        w->on_mouse(w, mouse->x - w->x, mouse->y - w->y, false);
+        break;
+      }
+    }
 
     // Rilascio del trascinamento icona o esecuzione al clic
     if (dragging_icon_idx >= 0 && dragging_icon_idx < num_desktop_icons) {
