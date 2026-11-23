@@ -176,8 +176,13 @@ static int g_proj_seq = 1;
 static int g_proj_tpl = 1; /* 0 = Vuoto, 1 = SDK App, 2 = SysInfo */
 static bool g_proj_dirty = false;
 static bool g_show_proj_mgr = false;
+static bool g_wizard_mode = false;
 static bool g_edit_proj_name = false;
 static char g_new_proj_buf[24] = "";
+static int g_wiz_app_type = 0; /* 0=GUI, 1=Console */
+static int g_wiz_tpl = 1;
+static int g_wiz_target_efi = 0;
+static int g_wiz_icon_idx = 0;
 static char g_proj_list[8][32];
 static int g_proj_list_cnt = 0;
 
@@ -488,6 +493,11 @@ static void st_init_template(void) {
 }
 
 static void st_add_control(st_ctrl_type_t type) {
+  if (g_proj_app_type == 1) {
+    st_push_output("[BLOCCO] Progetto Console: impossibile inserire controlli GUI!");
+    dll_strcpy(g_status, "Bloccato: progetto Console non supporta file/controlli GUI", sizeof(g_status));
+    return;
+  }
   if (g_ctrl_count >= ST_MAX_CTRLS) {
     st_push_output("[WARN] Limite massimo controlli raggiunto (20).");
     return;
@@ -654,6 +664,8 @@ static int st_build_xuiml(char *out, int max_len) {
 static bool st_export_xuiml(void) {
   if (!g_rt)
     return false;
+  if (g_proj_app_type == 1)
+    return true; /* I progetti Console non generano file .xuiml */
   st_ensure_projects_root();
   char *buf = (char *)g_rt->alloc(4096);
   if (!buf)
@@ -840,9 +852,9 @@ static bool st_load_project_file(const char *nsproj_path) {
   }
   g_rt->free(data);
 
-  if (g_ctrl_count == 0)
+  if (g_ctrl_count == 0 && g_proj_app_type == 0)
     st_init_template();
-  g_sel_idx = (g_ctrl_count > 0) ? 0 : -1;
+  g_sel_idx = (g_proj_app_type == 0 && g_ctrl_count > 0) ? 0 : -1;
 
   char cpath[160];
   st_proj_path(cpath, sizeof(cpath), "studio_app.c");
@@ -859,9 +871,10 @@ static bool st_load_project_file(const char *nsproj_path) {
 
   g_proj_dirty = false;
   g_show_proj_mgr = false;
+  g_wizard_mode = false;
   g_edit_proj_name = false;
-  g_doc_tab = 0;
-  g_edit_code = false;
+  g_doc_tab = (g_proj_app_type == 1) ? 2 : 0;
+  g_edit_code = (g_proj_app_type == 1);
   g_edit_prop_text = false;
   if (g_rt->reg_write_sz)
     g_rt->reg_write_sz("Software\\NewOSStudio", "LastProject", g_proj_name,
@@ -891,6 +904,46 @@ static void st_apply_project_template(int tpl) {
   g_ctrl_count = 0;
   g_seq = 1;
   g_edit_prop_text = false;
+  if (g_proj_app_type == 1) {
+    /* Progetto Console (Prompt dei Comandi): ZERO controlli/file GUI */
+    g_sel_idx = -1;
+    g_doc_tab = 2;
+    g_edit_code = true;
+    if (!g_rt || !g_rt->snprintf)
+      return;
+    if (tpl == 1) {
+      g_rt->snprintf(
+          g_c_code, sizeof(g_c_code),
+          "// studio_app.c - Console Diagnostica Sistema (No GUI)\n"
+          "#include <newos/sdk.h>\n\n"
+          "void app_main(const kernel_api_t* kapi) {\n"
+          "    const nsrt_api_t* rt = nsrt_load_library(kapi);\n"
+          "    if (!rt) return;\n"
+          "    ns_sys_info_t info;\n"
+          "    if (rt->get_sys_info(&info)) {\n"
+          "        rt->serial_print(\"[CLI] Diagnostica CPU/RAM OK\\n\");\n"
+          "    }\n"
+          "    NS_LOG_INFO(\"Diagnostica Console completata\");\n"
+          "}\n");
+    } else if (tpl == 2) {
+      g_rt->snprintf(
+          g_c_code, sizeof(g_c_code),
+          "// studio_app.c - Servizio Console / Daemon (No GUI)\n"
+          "#include <newos/sdk.h>\n\n"
+          "void app_main(const kernel_api_t* kapi) {\n"
+          "    const nsrt_api_t* rt = nsrt_load_library(kapi);\n"
+          "    if (!rt) return;\n"
+          "    char ver[32];\n"
+          "    rt->reg_read_sz(\"OS\\\\Version\", \"Build\", ver, 32);\n"
+          "    rt->serial_print(\"[SVC] Servizio Console attivo\\n\");\n"
+          "    NS_LOG_INFO(\"Servizio CLI avviato\");\n"
+          "}\n");
+    } else {
+      st_regen_c_code(NULL);
+    }
+    return;
+  }
+
   g_edit_code = false;
   g_doc_tab = 0;
   if (tpl == 0) {
@@ -954,10 +1007,18 @@ static void st_new_project(void) {
     g_proj_seq++;
     g_rt->snprintf(g_proj_name, sizeof(g_proj_name), "App_%d", g_proj_seq);
   }
+  g_proj_app_type = g_wiz_app_type;
+  g_proj_tpl = g_wiz_tpl;
+  g_proj_target_efi = g_wiz_target_efi;
+  g_proj_icon_idx = g_wiz_icon_idx;
+  g_proj_ver_minor = 0;
+  g_proj_build_num = 100;
+  g_pfile_cnt = 0;
   g_rt->snprintf(g_proj_dir, sizeof(g_proj_dir), "C:\\User\\Projects\\%s",
                  g_proj_name);
   st_apply_project_template(g_proj_tpl);
   g_show_proj_mgr = false;
+  g_wizard_mode = false;
   g_edit_proj_name = false;
   st_save_project();
 }
@@ -1065,6 +1126,11 @@ static void st_add_proj_file_entry(const char *name, uint8_t old_cnt,
   st_proj_file_t *f = &g_pfiles[g_pfile_cnt++];
   dll_strcpy(f->name, name, sizeof(f->name));
   f->usage = st_classify_usage(name);
+  if (g_proj_app_type == 1 && f->usage == 0) {
+    /* Nei progetti Console sono vietati i file UI (.xuiml) */
+    g_pfile_cnt--;
+    return;
+  }
   f->copy_mode = st_default_copy_for_usage(f->usage);
   for (uint8_t j = 0; j < old_cnt; j++) {
     if (g_rt && g_rt->strcmp && g_rt->strcmp(old_list[j].name, name) == 0) {
@@ -1098,7 +1164,8 @@ static void st_refresh_project_files(void) {
     g_rt->snprintf(pfname, sizeof(pfname), "%s.nsproj", g_proj_name);
   else
     dll_strcpy(pfname, "NewOSApp.nsproj", sizeof(pfname));
-  st_add_proj_file_entry("studio_form.xuiml", prev_cnt, prev);
+  if (g_proj_app_type == 0)
+    st_add_proj_file_entry("studio_form.xuiml", prev_cnt, prev);
   st_add_proj_file_entry("studio_app.c", prev_cnt, prev);
   st_add_proj_file_entry(pfname, prev_cnt, prev);
   st_add_proj_file_entry("app.ini", prev_cnt, prev);
@@ -1353,6 +1420,17 @@ static void st_preview_event(nsrt_app_t *app, const char *id, void *ctx) {
 static void st_launch_preview(void) {
   if (!st_save_project())
     return;
+  if (g_proj_app_type == 1) {
+    char msg[76];
+    g_rt->snprintf(msg, sizeof(msg),
+                   "[CONSOLE RUN] Avviato '%s' (Subsystem: CONSOLE, No GUI)",
+                   g_proj_name);
+    st_push_output(msg);
+    dll_strcpy(g_status, msg, sizeof(g_status));
+    if (g_rt->notify)
+      g_rt->notify("NewOS Console Runner", msg);
+    return;
+  }
   char xpath[160];
   st_proj_path(xpath, sizeof(xpath), "studio_form.xuiml");
   nsrt_app_t *p = g_rt->create_xuiml_app("NewOS Studio - Anteprima Live", 420,
@@ -1728,14 +1806,29 @@ static void studio_draw(window_t *win) {
                    g_proj_dirty ? " *" : "");
     g_rt->snprintf(proj_f, sizeof(proj_f), "%s.nsproj", g_proj_name);
     g_api->gfx_draw_string(rx + 10, body_y + 28, sol_hdr, p->text, 0, true);
-    g_api->gfx_draw_string(rx + 22, body_y + 48, "studio_form.xuiml [Design]",
-                           g_doc_tab == 0 ? p->accent : p->text_muted, 0, true);
-    g_api->gfx_draw_string(rx + 22, body_y + 68, "studio_form.xuiml [XML]",
-                           g_doc_tab == 1 ? p->accent : p->text_muted, 0, true);
-    g_api->gfx_draw_string(rx + 22, body_y + 88, "studio_app.c [Code]",
-                           g_doc_tab == 2 ? p->accent : p->text_muted, 0, true);
-    g_api->gfx_draw_string(rx + 22, body_y + 108, proj_f,
-                           g_doc_tab == 3 ? p->accent : p->status_ok, 0, true);
+    if (g_proj_app_type == 0) {
+      g_api->gfx_draw_string(rx + 22, body_y + 48, "studio_form.xuiml [Design]",
+                             g_doc_tab == 0 ? p->accent : p->text_muted, 0,
+                             true);
+      g_api->gfx_draw_string(rx + 22, body_y + 68, "studio_form.xuiml [XML]",
+                             g_doc_tab == 1 ? p->accent : p->text_muted, 0,
+                             true);
+      g_api->gfx_draw_string(rx + 22, body_y + 88, "studio_app.c [Code]",
+                             g_doc_tab == 2 ? p->accent : p->text_muted, 0,
+                             true);
+      g_api->gfx_draw_string(rx + 22, body_y + 108, proj_f,
+                             g_doc_tab == 3 ? p->accent : p->status_ok, 0,
+                             true);
+    } else {
+      g_api->gfx_draw_string(rx + 22, body_y + 48, "studio_app.c [Console]",
+                             g_doc_tab == 2 ? p->accent : p->text_muted, 0,
+                             true);
+      g_api->gfx_draw_string(rx + 22, body_y + 68, proj_f,
+                             g_doc_tab == 3 ? p->accent : p->status_ok, 0,
+                             true);
+      g_api->gfx_draw_string(rx + 22, body_y + 88, "(No GUI - Solo Console)",
+                             p->text_muted, 0, true);
+    }
   } else {
     g_api->gfx_draw_string(rx + 10, body_y + 28, "Soluzione 'NewOSApp'",
                            p->text, 0, true);
@@ -1784,24 +1877,48 @@ static void studio_draw(window_t *win) {
   /* Document Tabs */
   if (!p->is_glass)
     g_api->gfx_fill_rect(mx, body_y, mw, 26, p->bg_header);
-  const char *doc_tabs[] = {"Form1 [Design]", "Form1 [XML]", "studio_app.c",
-                            "Progetto [.nsproj]"};
-  int32_t tab_w = 140;
-  for (int t = 0; t < 4; t++) {
-    int32_t ttx = mx + t * tab_w;
-    if (p->is_glass && g_api->gfx_fill_rounded_alpha) {
-      g_api->gfx_fill_rounded_alpha(
-          ttx, body_y, tab_w - 4, 24, 5,
-          (g_doc_tab == t ? p->bg_editor : p->bg_panel) & 0x00FFFFFFu,
-          (g_doc_tab == t) ? 215 : 130);
-    } else {
-      g_api->gfx_fill_rect(ttx, body_y, tab_w - 1, 26,
-                           (g_doc_tab == t) ? p->bg_editor : p->bg_header);
+  if (g_proj_app_type == 0) {
+    const char *doc_tabs[] = {"Form1 [Design]", "Form1 [XML]", "studio_app.c",
+                              "Progetto [.nsproj]"};
+    int32_t tab_w = 140;
+    for (int t = 0; t < 4; t++) {
+      int32_t ttx = mx + t * tab_w;
+      if (p->is_glass && g_api->gfx_fill_rounded_alpha) {
+        g_api->gfx_fill_rounded_alpha(
+            ttx, body_y, tab_w - 4, 24, 5,
+            (g_doc_tab == t ? p->bg_editor : p->bg_panel) & 0x00FFFFFFu,
+            (g_doc_tab == t) ? 215 : 130);
+      } else {
+        g_api->gfx_fill_rect(ttx, body_y, tab_w - 1, 26,
+                             (g_doc_tab == t) ? p->bg_editor : p->bg_header);
+      }
+      if (g_doc_tab == t)
+        g_api->gfx_fill_rect(ttx + 4, body_y, tab_w - 12, 2, p->accent);
+      g_api->gfx_draw_string(ttx + 10, body_y + 5, doc_tabs[t],
+                             (g_doc_tab == t) ? p->text : p->text_muted, 0,
+                             true);
     }
-    if (g_doc_tab == t)
-      g_api->gfx_fill_rect(ttx + 4, body_y, tab_w - 12, 2, p->accent);
-    g_api->gfx_draw_string(ttx + 10, body_y + 5, doc_tabs[t],
-                           (g_doc_tab == t) ? p->text : p->text_muted, 0, true);
+  } else {
+    const char *cli_tabs[] = {"studio_app.c [CLI]", "Progetto [.nsproj]"};
+    const int cli_ids[2] = {2, 3};
+    int32_t tab_w = 175;
+    for (int t = 0; t < 2; t++) {
+      int32_t ttx = mx + t * tab_w;
+      bool active = (g_doc_tab == cli_ids[t]);
+      if (p->is_glass && g_api->gfx_fill_rounded_alpha) {
+        g_api->gfx_fill_rounded_alpha(
+            ttx, body_y, tab_w - 4, 24, 5,
+            (active ? p->bg_editor : p->bg_panel) & 0x00FFFFFFu,
+            active ? 215 : 130);
+      } else {
+        g_api->gfx_fill_rect(ttx, body_y, tab_w - 1, 26,
+                             active ? p->bg_editor : p->bg_header);
+      }
+      if (active)
+        g_api->gfx_fill_rect(ttx + 4, body_y, tab_w - 12, 2, p->accent);
+      g_api->gfx_draw_string(ttx + 10, body_y + 5, cli_tabs[t],
+                             active ? p->text : p->text_muted, 0, true);
+    }
   }
 
   int32_t doc_y = body_y + 26;
@@ -1950,65 +2067,95 @@ static void studio_draw(window_t *win) {
                            p->text_muted, 0, true);
   }
 
-  /* Overlay Modale: Gestione Progetti (C:\User\Projects) */
+  /* Overlay Modale: Wizard Nuovo Progetto / Gestione Progetti */
   if (g_show_proj_mgr) {
     int32_t pmx = mx + 20, pmy = doc_y + 12;
     int32_t pmw = mw - 40, pmh = doc_h - 24;
     vs_draw_surface(p, pmx, pmy, pmw, pmh, p->bg_panel, 245);
     g_api->gfx_fill_rect(pmx + 1, pmy + 1, pmw - 2, 28, p->accent);
-    g_api->gfx_draw_string(pmx + 12, pmy + 7,
-                           "Gestione Progetti  (C:\\User\\Projects)",
-                           p->accent_text, 0, true);
+    g_api->gfx_draw_string(
+        pmx + 12, pmy + 7,
+        g_wizard_mode ? "Wizard Nuovo Progetto  (C:\\User\\Projects)"
+                      : "Gestione Progetti  (C:\\User\\Projects)",
+        p->accent_text, 0, true);
     vs_draw_btn(p, pmx + pmw - 72, pmy + 3, 64, 22, "Chiudi", false);
 
-    /* Riga 1: Nome personalizzato + Template + Crea */
-    g_api->gfx_draw_string(pmx + 14, pmy + 41, "Nome:", p->text_muted, 0, true);
-    g_api->gfx_fill_rect(pmx + 60, pmy + 37, 130, 22, p->bg_editor);
-    g_api->gfx_draw_rect(pmx + 60, pmy + 37, 130, 22,
-                         g_edit_proj_name ? p->accent : p->border);
-    g_api->gfx_draw_string(
-        pmx + 65, pmy + 41, g_new_proj_buf[0] ? g_new_proj_buf : "App_...",
-        g_new_proj_buf[0] ? p->text : p->text_muted, 0, true);
+    if (g_wizard_mode) {
+      g_api->gfx_draw_string(pmx + 16, pmy + 40,
+                             "1. Scegli Tipo Progetto (scelta definitiva):",
+                             p->text, 0, true);
+      vs_draw_btn(p, pmx + 16, pmy + 62, 238, 34, "[GUI] Desktop App (Form)",
+                  g_wiz_app_type == 0);
+      vs_draw_btn(p, pmx + 266, pmy + 62, 248, 34, "[CLI] Console (No GUI)",
+                  g_wiz_app_type == 1);
 
-    const char *tpl_lbls[3] = {"Vuoto", "SDK App", "SysInfo"};
-    for (int t = 0; t < 3; t++) {
-      vs_draw_btn(p, pmx + 196 + t * 70, pmy + 37, 66, 22, tpl_lbls[t],
-                  g_proj_tpl == t);
-    }
-    vs_draw_btn(p, pmx + 412, pmy + 37, 82, 22, "+ Crea", true);
-
-    /* Riga 2: Azioni progetto corrente */
-    vs_draw_btn(p, pmx + 14, pmy + 68, 96, 22, "Salva", false);
-    vs_draw_btn(p, pmx + 116, pmy + 68, 178, 22, "Pubblica (ProgramFile)",
-                false);
-    vs_draw_btn(p, pmx + 300, pmy + 68, 162, 22, "Sfoglia .nsproj...", false);
-
-    g_api->gfx_draw_string(pmx + 14, pmy + 100,
-                           "Progetti su disco:", p->text_muted, 0, true);
-    int show_cnt = g_proj_list_cnt;
-    if (show_cnt > 5)
-      show_cnt = 5;
-    for (int i = 0; i < show_cnt; i++) {
-      int32_t ry_row = pmy + 120 + i * 34;
-      bool is_cur = (g_rt && g_rt->strcmp &&
-                     g_rt->strcmp(g_proj_list[i], g_proj_name) == 0);
-      vs_draw_surface(p, pmx + 14, ry_row, pmw - 28, 28, p->bg_editor, 195);
-      if (g_rt && g_rt->snprintf) {
-        char row_lbl[64];
-        g_rt->snprintf(row_lbl, sizeof(row_lbl), "%s%s", g_proj_list[i],
-                       is_cur ? "  [Attivo]" : "");
-        g_api->gfx_draw_string(pmx + 24, ry_row + 6, row_lbl,
-                               is_cur ? p->accent : p->text, 0, true);
-      }
-      vs_draw_btn(p, pmx + pmw - 196, ry_row + 3, 54, 22, "Apri", !is_cur);
-      vs_draw_btn(p, pmx + pmw - 138, ry_row + 3, 58, 22, "Copia", false);
-      vs_draw_btn(p, pmx + pmw - 76, ry_row + 3, 52, 22, "Elim.", false);
-    }
-    if (show_cnt == 0) {
+      g_api->gfx_draw_string(pmx + 16, pmy + 110, "2. Nome Progetto:",
+                             p->text_muted, 0, true);
+      g_api->gfx_fill_rect(pmx + 155, pmy + 106, 200, 22, p->bg_editor);
+      g_api->gfx_draw_rect(pmx + 155, pmy + 106, 200, 22,
+                           g_edit_proj_name ? p->accent : p->border);
       g_api->gfx_draw_string(
-          pmx + 16, pmy + 126,
-          "Nessuna cartella trovata. Premi '+ Crea' o 'Salva'.", p->text_muted,
-          0, true);
+          pmx + 162, pmy + 110,
+          g_new_proj_buf[0] ? g_new_proj_buf : "App_...",
+          g_new_proj_buf[0] ? p->text : p->text_muted, 0, true);
+
+      g_api->gfx_draw_string(pmx + 16, pmy + 142, "3. Template Iniziale:",
+                             p->text_muted, 0, true);
+      const char *gui_tpls[3] = {"Vuoto (Form)", "SDK App", "SysInfo GUI"};
+      const char *cli_tpls[3] = {"CLI Base", "Diagnostica", "Daemon SVC"};
+      const char *const *tpls = g_wiz_app_type ? cli_tpls : gui_tpls;
+      for (int t = 0; t < 3; t++) {
+        vs_draw_btn(p, pmx + 16 + t * 166, pmy + 164, 156, 24, tpls[t],
+                    g_wiz_tpl == t);
+      }
+
+      g_api->gfx_draw_string(pmx + 16, pmy + 202,
+                             "4. Target & Icona Applicazione:", p->text_muted,
+                             0, true);
+      if (g_rt && g_rt->snprintf) {
+        char wt[32], wi[32];
+        g_rt->snprintf(wt, sizeof(wt), "Target: %s",
+                       g_wiz_target_efi ? "x86+EFI" : "x86_64");
+        g_rt->snprintf(wi, sizeof(wi), "   Icona: %s",
+                       g_proj_icon_names[g_wiz_icon_idx & 7]);
+        vs_draw_btn(p, pmx + 16, pmy + 224, 156, 24, wt, false);
+        vs_draw_btn(p, pmx + 182, pmy + 224, 174, 24, wi, false);
+        if (g_rt->gfx_draw_icon16)
+          g_rt->gfx_draw_icon16(pmx + 188, pmy + 228,
+                                g_proj_icons[g_wiz_icon_idx & 7]);
+      }
+
+      vs_draw_btn(p, pmx + 16, pmy + pmh - 40, 168, 28, "Crea Progetto", true);
+      vs_draw_btn(p, pmx + 196, pmy + pmh - 40, 160, 28, "Apri Esistenti...",
+                  false);
+    } else {
+      vs_draw_btn(p, pmx + 14, pmy + 40, 180, 24, "+ Wizard Nuovo Progetto",
+                  true);
+      vs_draw_btn(p, pmx + 202, pmy + 40, 110, 24, "Salva", false);
+      vs_draw_btn(p, pmx + 320, pmy + 40, 162, 24, "Sfoglia .nsproj...",
+                  false);
+
+      g_api->gfx_draw_string(pmx + 14, pmy + 76,
+                             "Progetti su disco:", p->text_muted, 0, true);
+      int show_cnt = g_proj_list_cnt;
+      if (show_cnt > 5)
+        show_cnt = 5;
+      for (int i = 0; i < show_cnt; i++) {
+        int32_t ry_row = pmy + 98 + i * 34;
+        bool is_cur = (g_rt && g_rt->strcmp &&
+                       g_rt->strcmp(g_proj_list[i], g_proj_name) == 0);
+        vs_draw_surface(p, pmx + 14, ry_row, pmw - 28, 28, p->bg_editor, 195);
+        if (g_rt && g_rt->snprintf) {
+          char row_lbl[64];
+          g_rt->snprintf(row_lbl, sizeof(row_lbl), "%s%s", g_proj_list[i],
+                         is_cur ? "  [Attivo]" : "");
+          g_api->gfx_draw_string(pmx + 24, ry_row + 6, row_lbl,
+                                 is_cur ? p->accent : p->text, 0, true);
+        }
+        vs_draw_btn(p, pmx + pmw - 196, ry_row + 3, 54, 22, "Apri", !is_cur);
+        vs_draw_btn(p, pmx + pmw - 138, ry_row + 3, 58, 22, "Copia", false);
+        vs_draw_btn(p, pmx + pmw - 76, ry_row + 3, 52, 22, "Elim.", false);
+      }
     }
   }
 
@@ -2027,11 +2174,14 @@ static void studio_draw(window_t *win) {
 
 static void st_exec_action(int act) {
   if (act == 1) {
-    st_new_project();
+    g_show_proj_mgr = true;
+    g_wizard_mode = true;
+    g_edit_proj_name = true;
     return;
   }
   if (act == 20) {
     st_refresh_project_list();
+    g_wizard_mode = false;
     g_show_proj_mgr = !g_show_proj_mgr;
     return;
   }
@@ -2149,7 +2299,7 @@ static void studio_mouse(window_t *win, int32_t lx, int32_t ly, bool clicked) {
   int32_t rx_panel = cw - rw;
   int32_t mx = tw, mw = rx_panel - mx;
 
-  /* Gestione click nel modale Gestione Progetti */
+  /* Gestione click nel modale Wizard Nuovo Progetto / Gestione Progetti */
   if (g_show_proj_mgr) {
     int32_t doc_y = body_y + 26, doc_h = mid_h - 30;
     int32_t pmx = mx + 20, pmy = doc_y + 12;
@@ -2158,39 +2308,76 @@ static void studio_mouse(window_t *win, int32_t lx, int32_t ly, bool clicked) {
       if (rx >= pmx + pmw - 72 && rx < pmx + pmw - 8 && ry >= pmy + 3 &&
           ry < pmy + 25) {
         g_show_proj_mgr = false;
+        g_wizard_mode = false;
         g_edit_proj_name = false;
         return;
       }
-      if (ry >= pmy + 37 && ry < pmy + 59) {
-        if (rx >= pmx + 60 && rx < pmx + 190) {
+      if (g_wizard_mode) {
+        if (ry >= pmy + 62 && ry < pmy + 96) {
+          if (rx >= pmx + 16 && rx < pmx + 254) {
+            g_wiz_app_type = 0;
+            if (g_wiz_icon_idx == 1)
+              g_wiz_icon_idx = 0;
+            return;
+          }
+          if (rx >= pmx + 266 && rx < pmx + 514) {
+            g_wiz_app_type = 1;
+            if (g_wiz_icon_idx == 0)
+              g_wiz_icon_idx = 1;
+            return;
+          }
+        }
+        if (ry >= pmy + 106 && ry < pmy + 128 && rx >= pmx + 155 &&
+            rx < pmx + 355) {
           g_edit_proj_name = true;
           g_edit_prop_text = false;
           g_edit_code = false;
           return;
         }
         g_edit_proj_name = false;
-        for (int t = 0; t < 3; t++) {
-          if (rx >= pmx + 196 + t * 70 && rx < pmx + 196 + t * 70 + 66) {
-            g_proj_tpl = t;
+        if (ry >= pmy + 164 && ry < pmy + 188) {
+          for (int t = 0; t < 3; t++) {
+            if (rx >= pmx + 16 + t * 166 && rx < pmx + 16 + t * 166 + 156) {
+              g_wiz_tpl = t;
+              return;
+            }
+          }
+        }
+        if (ry >= pmy + 224 && ry < pmy + 248) {
+          if (rx >= pmx + 16 && rx < pmx + 172) {
+            g_wiz_target_efi = !g_wiz_target_efi;
+            return;
+          }
+          if (rx >= pmx + 182 && rx < pmx + 356) {
+            g_wiz_icon_idx = (g_wiz_icon_idx + 1) & 7;
             return;
           }
         }
-        if (rx >= pmx + 412 && rx < pmx + 494) {
-          st_new_project();
+        if (ry >= pmy + pmh - 40 && ry < pmy + pmh - 12) {
+          if (rx >= pmx + 16 && rx < pmx + 184) {
+            st_new_project();
+            return;
+          }
+          if (rx >= pmx + 196 && rx < pmx + 356) {
+            st_refresh_project_list();
+            g_wizard_mode = false;
+            return;
+          }
+        }
+        return;
+      }
+      if (ry >= pmy + 40 && ry < pmy + 64) {
+        g_edit_proj_name = false;
+        if (rx >= pmx + 14 && rx < pmx + 194) {
+          g_wizard_mode = true;
+          g_edit_proj_name = true;
           return;
         }
-      }
-      if (ry >= pmy + 68 && ry < pmy + 90) {
-        g_edit_proj_name = false;
-        if (rx >= pmx + 14 && rx < pmx + 110) {
+        if (rx >= pmx + 202 && rx < pmx + 312) {
           st_save_project();
           return;
         }
-        if (rx >= pmx + 116 && rx < pmx + 294) {
-          st_deploy_project();
-          return;
-        }
-        if (rx >= pmx + 300 && rx < pmx + 462 && g_rt &&
+        if (rx >= pmx + 320 && rx < pmx + 482 && g_rt &&
             g_rt->open_file_dialog) {
           g_show_proj_mgr = false;
           g_rt->open_file_dialog("C:\\User\\Projects", st_open_comdlg_cb, NULL);
@@ -2199,7 +2386,7 @@ static void studio_mouse(window_t *win, int32_t lx, int32_t ly, bool clicked) {
       }
       int show_cnt = g_proj_list_cnt > 5 ? 5 : g_proj_list_cnt;
       for (int i = 0; i < show_cnt; i++) {
-        int32_t ry_row = pmy + 120 + i * 34;
+        int32_t ry_row = pmy + 98 + i * 34;
         if (ry >= ry_row && ry < ry_row + 28) {
           if (rx >= pmx + pmw - 196 && rx < pmx + pmw - 142) {
             st_load_project_by_name(g_proj_list[i]);
@@ -2218,6 +2405,7 @@ static void studio_mouse(window_t *win, int32_t lx, int32_t ly, bool clicked) {
       return;
     }
     g_show_proj_mgr = false;
+    g_wizard_mode = false;
     g_edit_proj_name = false;
     return;
   }
@@ -2239,16 +2427,8 @@ static void studio_mouse(window_t *win, int32_t lx, int32_t ly, bool clicked) {
         return;
       }
       if (ry >= body_y + 70 && ry < body_y + 92) {
-        g_proj_app_type = !g_proj_app_type;
-        if (g_proj_app_type == 1 && g_proj_icon_idx == 0)
-          g_proj_icon_idx = 1;
-        else if (g_proj_app_type == 0 && g_proj_icon_idx == 1)
-          g_proj_icon_idx = 0;
-        st_regen_c_code(NULL);
-        g_proj_dirty = true;
-        st_push_output(g_proj_app_type
-                           ? "[PROJ] Tipo app: Console (Prompt dei Comandi)"
-                           : "[PROJ] Tipo app: Desktop GUI (XUIML)");
+        st_push_output("[INFO] Il tipo GUI/Console si sceglie nel Wizard Nuovo Progetto.");
+        dll_strcpy(g_status, "Tipo progetto fissato dal Wizard (GUI vs Console)", sizeof(g_status));
         return;
       }
       if (ry >= body_y + 96 && ry < body_y + 118) {
@@ -2318,6 +2498,14 @@ static void studio_mouse(window_t *win, int32_t lx, int32_t ly, bool clicked) {
   /* Esplora Soluzione clicks */
   if (rx >= rx_panel && ry >= body_y + 46 && ry < body_y + 128) {
     int si = (ry - (body_y + 46)) / 20;
+    if (g_proj_app_type == 1) {
+      if (si == 0)
+        si = 2;
+      else if (si == 1)
+        si = 3;
+      else
+        return;
+    }
     if (si >= 0 && si <= 3) {
       g_doc_tab = si;
       g_edit_code = (si == 2);
@@ -2354,16 +2542,30 @@ static void studio_mouse(window_t *win, int32_t lx, int32_t ly, bool clicked) {
 
   /* Document Well Tabs */
   if (rx >= mx && rx < rx_panel && ry >= body_y && ry < body_y + 26) {
-    int t = (rx - mx) / 140;
-    if (t >= 0 && t < 4) {
-      g_doc_tab = t;
-      g_edit_code = (t == 2);
-      g_open_combo_idx = -1;
-      g_scroll_x = 0;
-      g_scroll_y = 0;
-      if (t == 3)
-        st_refresh_project_files();
-      return;
+    if (g_proj_app_type == 1) {
+      int t = (rx - mx) / 175;
+      if (t == 0 || t == 1) {
+        g_doc_tab = 2 + t;
+        g_edit_code = (g_doc_tab == 2);
+        g_open_combo_idx = -1;
+        g_scroll_x = 0;
+        g_scroll_y = 0;
+        if (g_doc_tab == 3)
+          st_refresh_project_files();
+        return;
+      }
+    } else {
+      int t = (rx - mx) / 140;
+      if (t >= 0 && t < 4) {
+        g_doc_tab = t;
+        g_edit_code = (t == 2);
+        g_open_combo_idx = -1;
+        g_scroll_x = 0;
+        g_scroll_y = 0;
+        if (t == 3)
+          st_refresh_project_files();
+        return;
+      }
     }
   }
 
