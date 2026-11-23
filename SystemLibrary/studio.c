@@ -442,10 +442,10 @@ static void vs_draw_btn(const vs_palette_t* p, int32_t x, int32_t y, int32_t w, 
 }
 
 static void vs_draw_code_lines(const vs_palette_t* p, int32_t x, int32_t y, int32_t w, int32_t h, const char* src) {
-    int32_t sb = 14;
+    int32_t sb = 8;
     vs_draw_surface(p, x, y, w, h, p->bg_editor, 220);
-    g_api->gfx_fill_rect(x + 2, y + 2, 34, h - sb - 4, p->bg_gutter);
-    g_api->gfx_fill_rect(x + 36, y + 2, 1, h - sb - 4, p->border);
+    g_api->gfx_fill_rect(x + 2, y + 4, 34, h - sb - 8, p->bg_gutter);
+    g_api->gfx_fill_rect(x + 36, y + 4, 1, h - sb - 8, p->border);
 
     /* 1. Calcola dimensioni totali del documento (righe e lunghezza massima riga) */
     int total_rows = 0;
@@ -511,33 +511,41 @@ static void vs_draw_code_lines(const vs_palette_t* p, int32_t x, int32_t y, int3
         row++;
     }
 
-    /* 4. Scrollbar Verticale (destra) */
-    int32_t vx = x + w - sb - 2, vy = y + 2, vh = h - sb - 4;
-    g_api->gfx_fill_rect(vx, vy, sb, vh, p->bg_header);
-    g_api->gfx_draw_rect(vx, vy, sb, vh, p->border);
-    int32_t vtrack_h = vh - 24;
-    if (vtrack_h > 10) {
-        int32_t vthumb_h = (total_rows > vis_rows) ? (vtrack_h * vis_rows) / total_rows : vtrack_h;
-        if (vthumb_h < 18) vthumb_h = 18;
-        int32_t vthumb_y = vy + 12 + ((max_sy > 0) ? ((vtrack_h - vthumb_h) * g_scroll_y) / max_sy : 0);
-        g_api->gfx_fill_rect(vx + 2, vthumb_y, sb - 4, vthumb_h, (max_sy > 0) ? p->accent : p->border);
+    /* 4. Scrollbar Verticale sottile (pillola 5px dentro track 8px) */
+    int32_t vx = x + w - sb - 4, vy = y + 6, vh = h - sb - 12;
+    if (vh > 16) {
+        if (g_api->gfx_fill_rounded_alpha) {
+            g_api->gfx_fill_rounded_alpha(vx, vy, sb, vh, 4, p->text_muted & 0x00FFFFFFu, 32);
+        }
+        int32_t vthumb_h = (total_rows > vis_rows) ? (vh * vis_rows) / total_rows : vh;
+        if (vthumb_h < 22) vthumb_h = 22;
+        int32_t vthumb_y = vy + ((max_sy > 0) ? ((vh - vthumb_h) * g_scroll_y) / max_sy : 0);
+        uint32_t vcol = (max_sy > 0) ? p->accent : p->text_muted;
+        uint8_t valpha = (max_sy > 0) ? 200 : 75;
+        if (g_api->gfx_fill_rounded_alpha) {
+            g_api->gfx_fill_rounded_alpha(vx + 1, vthumb_y, sb - 2, vthumb_h, 3, vcol & 0x00FFFFFFu, valpha);
+        } else {
+            g_api->gfx_fill_rect(vx + 1, vthumb_y, sb - 2, vthumb_h, vcol);
+        }
     }
-    g_api->gfx_draw_string(vx + 3, vy + 1, "^", p->text_muted, 0, true);
-    g_api->gfx_draw_string(vx + 3, vy + vh - 13, "v", p->text_muted, 0, true);
 
-    /* 5. Scrollbar Orizzontale (basso) */
-    int32_t hx = x + 37, hy = y + h - sb - 2, hw = w - 37 - sb - 3;
-    g_api->gfx_fill_rect(hx, hy, hw, sb, p->bg_header);
-    g_api->gfx_draw_rect(hx, hy, hw, sb, p->border);
-    int32_t htrack_w = hw - 24;
-    if (htrack_w > 10) {
-        int32_t hthumb_w = (max_cols > vis_cols) ? (htrack_w * vis_cols) / max_cols : htrack_w;
-        if (hthumb_w < 20) hthumb_w = 20;
-        int32_t hthumb_x = hx + 12 + ((max_sx > 0) ? ((htrack_w - hthumb_w) * g_scroll_x) / max_sx : 0);
-        g_api->gfx_fill_rect(hthumb_x, hy + 2, hthumb_w, sb - 4, (max_sx > 0) ? p->accent : p->border);
+    /* 5. Scrollbar Orizzontale sottile (pillola 5px dentro track 8px) */
+    int32_t hx = x + 42, hy = y + h - sb - 4, hw = w - 42 - sb - 8;
+    if (hw > 16) {
+        if (g_api->gfx_fill_rounded_alpha) {
+            g_api->gfx_fill_rounded_alpha(hx, hy, hw, sb, 4, p->text_muted & 0x00FFFFFFu, 32);
+        }
+        int32_t hthumb_w = (max_cols > vis_cols) ? (hw * vis_cols) / max_cols : hw;
+        if (hthumb_w < 26) hthumb_w = 26;
+        int32_t hthumb_x = hx + ((max_sx > 0) ? ((hw - hthumb_w) * g_scroll_x) / max_sx : 0);
+        uint32_t hcol = (max_sx > 0) ? p->accent : p->text_muted;
+        uint8_t halpha = (max_sx > 0) ? 200 : 75;
+        if (g_api->gfx_fill_rounded_alpha) {
+            g_api->gfx_fill_rounded_alpha(hthumb_x, hy + 1, hthumb_w, sb - 2, 3, hcol & 0x00FFFFFFu, halpha);
+        } else {
+            g_api->gfx_fill_rect(hthumb_x, hy + 1, hthumb_w, sb - 2, hcol);
+        }
     }
-    g_api->gfx_draw_string(hx + 3, hy, "<", p->text_muted, 0, true);
-    g_api->gfx_draw_string(hx + hw - 10, hy, ">", p->text_muted, 0, true);
 }
 
 typedef struct {
@@ -900,25 +908,17 @@ static void studio_mouse(window_t *win, int32_t lx, int32_t ly, bool clicked) {
   if ((g_doc_tab == 1 || g_doc_tab == 2) && rx >= mx && rx < rx_panel &&
       ry >= body_y + 26 && ry < body_y + mid_h) {
     int32_t doc_y = body_y + 26, doc_h = mid_h - 30;
-    int32_t sb = 14;
-    if (rx >= mx + mw - sb - 6) {
-      if (ry < doc_y + 16) g_scroll_y -= 3;
-      else if (ry > doc_y + doc_h - sb - 16) g_scroll_y += 3;
-      else {
-        int32_t rel = ry - (doc_y + 14);
-        int32_t track = doc_h - sb - 28;
-        if (track > 0 && g_code_total_rows > 0) g_scroll_y = (rel * g_code_total_rows) / track;
-      }
+    int32_t sb = 8;
+    if (rx >= mx + mw - sb - 8) {
+      int32_t rel = ry - (doc_y + 6);
+      int32_t track = doc_h - sb - 12;
+      if (track > 0 && g_code_total_rows > 0) g_scroll_y = (rel * g_code_total_rows) / track;
       return;
     }
-    if (ry >= doc_y + doc_h - sb - 4) {
-      if (rx < mx + 52) g_scroll_x -= 8;
-      else if (rx > mx + mw - sb - 20) g_scroll_x += 8;
-      else {
-        int32_t rel = rx - (mx + 50);
-        int32_t track = mw - 50 - sb - 20;
-        if (track > 0 && g_code_max_cols > 0) g_scroll_x = (rel * g_code_max_cols) / track;
-      }
+    if (ry >= doc_y + doc_h - sb - 8) {
+      int32_t rel = rx - (mx + 42);
+      int32_t track = mw - 42 - sb - 8;
+      if (track > 0 && g_code_max_cols > 0) g_scroll_x = (rel * g_code_max_cols) / track;
       return;
     }
   }
