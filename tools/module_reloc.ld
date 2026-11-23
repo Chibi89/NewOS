@@ -11,6 +11,7 @@ SECTIONS {
     }
 
     .text : {
+        KEEP(*(.entry))
         KEEP(*(.text.entry))
         *(.text*)
     }

@@ -721,14 +721,19 @@ if (fs.existsSync(uiSrcDir)) {
     console.log(`[OK] Risorse XUIML sincronizzate in NewOS/SystemLibrary/UI/`);
 }
 
-// Copia gli header pubblici SDK (nsrt.h, xuiml.h) in NewOS/SDK/include/
-const sdkIncDst = path.join(BIN_DIR, 'NewOS', 'SDK', 'include');
+// Sincronizza l'intero albero SDK (include/newos/*, examples/*, README.TXT) + nsrt.h / xuiml.h
+const sdkSrcDir = path.join(ROOT, 'SDK');
+const sdkDstDir = path.join(BIN_DIR, 'NewOS', 'SDK');
+const sdkIncDst = path.join(sdkDstDir, 'include');
+if (fs.existsSync(sdkSrcDir)) {
+    fs.cpSync(sdkSrcDir, sdkDstDir, { recursive: true, force: true });
+}
 if (!fs.existsSync(sdkIncDst)) fs.mkdirSync(sdkIncDst, { recursive: true });
 for (const hFile of ['nsrt.h', 'xuiml.h']) {
     const hSrc = path.join(ROOT, 'SystemLibrary', hFile);
     if (fs.existsSync(hSrc)) fs.copyFileSync(hSrc, path.join(sdkIncDst, hFile));
 }
-console.log(`[OK] Header SDK sincronizzati in NewOS/SDK/include/`);
+console.log(`[OK] NewSoft SDK v2.0 sincronizzato in NewOS/SDK/ (include, examples, README.TXT)`);
 
 // Bonifica radice build/bin: rimozione cartelle legacy (C:\SYSTEM\) e file sparsi fuori da C:\NewOS\ (Regola 6)
 const legacySys = path.join(BIN_DIR, 'SYSTEM');

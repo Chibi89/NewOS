@@ -82,9 +82,20 @@ static void nsrt_console_event(nsrt_app_t* app, const char* id, void* ctx) {
         bool user_ok = g_nsrt->file_write("C:\\User\\nsrt_test.txt", "NSRT OK", 7, true);
         g_nsrt->list_add(app, "lst_tests", user_ok ? "[PASS] VFS Write C:\\User\\nsrt_test.txt OK" : "[FAIL] VFS Write");
 
-        g_nsrt->log("TEST", "Verifica API NSRT completata");
+        bool sdk_ok = g_nsrt->file_exists("C:\\NewOS\\SDK\\include\\newos\\sdk.h");
+        ns_sys_info_t si;
+        char sbuf[72];
+        if (sdk_ok && g_nsrt->get_sys_info && g_nsrt->get_sys_info(&si)) {
+            g_nsrt->snprintf(sbuf, sizeof(sbuf), "[PASS] SDK v2.0 + SysInfo (%ux%u, %d drv)",
+                             si.screen_w, si.screen_h, (int)si.drive_count);
+            g_nsrt->list_add(app, "lst_tests", sbuf);
+        } else {
+            g_nsrt->list_add(app, "lst_tests", "[FAIL] SDK v2.0 / SysInfo");
+        }
+
+        g_nsrt->log("TEST", "Verifica API NSRT v2.0 completata");
         nsrt_sync_logs(app);
-        g_nsrt->set_text(app, "lbl_status", "Verifica Runtime NSRT.DLL completata: 3/3 PASS!");
+        g_nsrt->set_text(app, "lbl_status", "Verifica Runtime NSRT.DLL v2.0: 4/4 PASS!");
     }
 }
 

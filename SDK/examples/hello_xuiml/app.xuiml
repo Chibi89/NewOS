@@ -1,0 +1,11 @@
+<xuiml title="Hello NewSoft SDK" width="380" height="240">
+  <tab title="Benvenuto">
+    <groupbox x="16" y="42" w="348" h="130" title="Applicazione Pilota SDK v2.0">
+      <label id="lbl_status" x="28" y="68" text="Premi il pulsante per testare NSRT + XUIML" color="#1A2230" />
+      <label id="lbl_count" x="28" y="96" text="Click registrati: 0" color="#1D6FE8" />
+      <label id="lbl_saved" x="28" y="124" text="File utente: non ancora salvato" color="#5B687C" />
+    </groupbox>
+    <button id="btn_hello" x="16" y="188" w="140" h="30" text="Saluta e Salva" />
+    <button id="btn_close" x="264" y="188" w="100" h="30" text="Chiudi" />
+  </tab>
+</xuiml>
