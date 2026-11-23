@@ -915,7 +915,9 @@ static inline uint32_t blend_color(uint32_t dst, uint32_t src, uint8_t a) {
 static inline uint8_t rounded_coverage(int32_t px, int32_t py, int32_t x,
                                        int32_t y, int32_t w, int32_t h,
                                        int32_t r) {
-  if (r <= 0 || w <= 0 || h <= 0)
+  if (w <= 0 || h <= 0 || px < x || py < y || px >= x + w || py >= y + h)
+    return 0;
+  if (r <= 0)
     return 255;
   if (r * 2 > w)
     r = w / 2;
@@ -1063,9 +1065,10 @@ void gfx_draw_rounded_rect(int32_t x, int32_t y, int32_t w, int32_t h,
 }
 
 // ---- gfx_fill_rounded_alpha ---------------------------------
-// Campiona blurred_buf (o back-buffer se non disponibile) e blenda il tint con AA
-void gfx_fill_rounded_alpha(int32_t x, int32_t y, int32_t w, int32_t h,
-                            int32_t radius, uint32_t tint, uint8_t alpha) {
+// Blenda il tint con AA sul contenuto gia' presente nel back-buffer (evita aloni neri/wallpaper nei controlli)
+static void fill_rounded_alpha_impl(int32_t x, int32_t y, int32_t w, int32_t h,
+                                    int32_t radius, uint32_t tint,
+                                    uint8_t alpha, bool use_blurred_bg) {
   int32_t x1 = x < 0 ? 0 : x;
   int32_t y1 = y < 0 ? 0 : y;
   int32_t x2 = (x + w > (int32_t)scr_width) ? (int32_t)scr_width : x + w;
@@ -1079,11 +1082,22 @@ void gfx_fill_rounded_alpha(int32_t x, int32_t y, int32_t w, int32_t h,
       uint8_t eff_alpha = (cov == 255) ? alpha : (uint8_t)(((uint32_t)alpha * cov) / 255);
       if (eff_alpha == 0)
         continue;
-      uint32_t base =
-          blurred_buf ? blurred_buf[py * scr_pitch_pixels + px] : row[px];
+      uint32_t base = (use_blurred_bg && blurred_buf)
+                          ? blurred_buf[py * scr_pitch_pixels + px]
+                          : row[px];
       row[px] = blend_color(base, tint, eff_alpha);
     }
   }
+}
+
+void gfx_fill_rounded_alpha(int32_t x, int32_t y, int32_t w, int32_t h,
+                            int32_t radius, uint32_t tint, uint8_t alpha) {
+  fill_rounded_alpha_impl(x, y, w, h, radius, tint, alpha, false);
+}
+
+void gfx_fill_rounded_glass(int32_t x, int32_t y, int32_t w, int32_t h,
+                            int32_t radius, uint32_t tint, uint8_t alpha) {
+  fill_rounded_alpha_impl(x, y, w, h, radius, tint, alpha, true);
 }
 
 // ---- gfx_draw_specular_rim ----------------------------------

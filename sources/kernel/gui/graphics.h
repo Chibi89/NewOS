@@ -120,8 +120,11 @@ void gfx_fill_rounded_rect(int32_t x, int32_t y, int32_t w, int32_t h,
 void gfx_draw_rounded_rect(int32_t x, int32_t y, int32_t w, int32_t h,
                             int32_t radius, uint32_t color);
 
-// Pannello vetro: campiona blurred_buf + alpha-blend tint + rounded corners
+// Pannello traslucido: alpha-blend tint sul back-buffer + rounded corners AA
 void gfx_fill_rounded_alpha(int32_t x, int32_t y, int32_t w, int32_t h,
+                             int32_t radius, uint32_t tint, uint8_t alpha);
+// Pannello vetro finestra: campiona blurred_buf + alpha-blend tint + rounded corners AA
+void gfx_fill_rounded_glass(int32_t x, int32_t y, int32_t w, int32_t h,
                              int32_t radius, uint32_t tint, uint8_t alpha);
 
 // Rim speculare brillante nella fascia superiore del pannello glass

@@ -749,7 +749,7 @@ static void draw_window_frame(window_t *win) {
       }
     }
 
-    gfx_fill_rounded_alpha(x, y, w, h, r, surf_col, surf_alp);
+    gfx_fill_rounded_glass(x, y, w, h, r, surf_col, surf_alp);
 
     // 3. Bordo perimetrale finestra (gestito interamente dalle specifiche del tema: border_radius e border_follows_corner)
     if (g_active_theme_props.border_width > 0) {
