@@ -125,6 +125,9 @@ Elenco delle funzionalità ancora da implementare dalla [`ROADMAP_MIGLIORIE.md`]
    - **Touchpad PS/2 / I2C HID & Tasti Multimediali**: scroll a due dita e tasti multimediali (`KEYBCPL.DLL`, driver tastiera e Tray Bar già completi per i layout dinamici `US`/`IT`/`UK`/`DE`/`FR`).
    - *Tutte le voci della Categoria 8 (Rete & Web Browser) sono state completate.*
    - *Tutte le voci delle Categorie 8 e 9 (Rete, Web Browser, Applicazioni di Sistema & Multimedia) sono state completate.*
+9. **Dev & SDK Nativo (`XUIML.DLL`, `TCC`)**:
+   - **Migrazione Applet a `.xuiml`**: conversione progressiva delle applet `.CPL` (`NETCPL`, `USERACCT`, `PORTS`, `TIMEDATE`) in file dichiarativi in `C:\NewOS\SystemLibrary\UI\`.
+   - **Compilatore `TCC` (Tiny C Compiler) Out-of-Kernel & Form Designer `.xuiml`**: compilazione self-hosted su NewOS collegata a `XUIML.DLL` e `PKGSVC.DLL` (`C:\ProgramFile\`).
 
 </details>
 
@@ -479,6 +482,9 @@ Pending features to be implemented from [`ROADMAP_MIGLIORIE.md`](ROADMAP_MIGLIOR
    - **PS/2 Touchpad / I2C HID & Media Keys**: two-finger scrolling and media keys (dynamic `US`/`IT`/`UK`/`DE`/`FR` keyboard layouts in `KEYBCPL.DLL`, keyboard driver, and System Tray are already complete).
    - *All Category 8 (Networking & Web Browser) items have been completed.*
    - *All Category 8 & 9 items (Networking, Web Browser, System Apps & Multimedia) have been completed.*
+9. **Dev & Native SDK (`XUIML.DLL`, `TCC`)**:
+   - **Applet Migration to `.xuiml`**: progressive conversion of `.CPL` applets (`NETCPL`, `USERACCT`, `PORTS`, `TIMEDATE`) into declarative files under `C:\NewOS\SystemLibrary\UI\`.
+   - **Out-of-Kernel `TCC` (Tiny C Compiler) & Visual `.xuiml` Form Designer**: self-hosted compilation on NewOS integrated with `XUIML.DLL` and `PKGSVC.DLL` (`C:\ProgramFile\`).
 
 </details>
 

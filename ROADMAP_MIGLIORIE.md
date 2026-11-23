@@ -99,3 +99,12 @@ Elenco completo delle migliorie architetturali, grafiche, di sistema e hardware 
 ## 10. Build, Test & Qualità ([`tools/`](tools/))
 - [x] **Suite di Regressione Automatica Unificata**: script `node tools/test_all.js` per testare in sequenza boot BIOS, boot UEFI (`OVMF`), `SECCPL`, `EXPLORER`, `COMCTL`, `WEBBROWSER` e rete con report PASS/FAIL.
 - [x] **Controllo automatico Budget Kernel**: alert in `tools/build.js` con percentuale di occupazione `kernel.bin` rispetto a `491.520` byte (480 KB) e verifica `0 warning` sui moduli core.
+
+---
+
+## 11. Dev, SDK & Strumenti di Sviluppo Nativi ([`SystemLibrary/`](SystemLibrary/), `XUIML.DLL`)
+- [x] **Motore UI Dichiarativo `XUIML.DLL` & Formato `.xuiml`**:
+  - Libreria out-of-kernel [`xuiml.c`](SystemLibrary/xuiml.c) / [`xuiml.h`](SystemLibrary/xuiml.h) (`C:\NewOS\SystemLibrary\XUIML.DLL`) per separare la descrizione visiva dei form (`C:\NewOS\SystemLibrary\UI\*.xuiml`) dalla logica applicativa C dei `.CPL`/`.DLL`, con prima applet pilota [`keybcpl.xuiml`](SystemLibrary/UI/keybcpl.xuiml).
+- [ ] **Migrazione progressiva delle Applet `.CPL` e App a `.xuiml`**: convertire `NETCPL.DLL`, `USERACCT.DLL`, `PORTS.DLL`, `TIMEDATE.DLL` e le altre dialoghi di sistema in file `.xuiml` sotto `C:\NewOS\SystemLibrary\UI\`.
+- [ ] **Integrazione Compilatore `TCC` (Tiny C Compiler) Out-of-Kernel (`TCC.DLL` / SDK)**: compilazione nativa self-hosted di sorgenti `.c` x86_64 dentro NewOS collegata a `XUIML.DLL` e `PKGSVC.DLL` (`C:\ProgramFile\<App>\`).
+- [ ] **NewOS Studio / Form Designer Visuale `.xuiml`**: editor grafico drag-and-drop con anteprima live per progettare form `.xuiml`, scrivere la logica C/JS e pacchettizzare app installabili.
