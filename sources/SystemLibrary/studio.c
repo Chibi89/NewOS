@@ -152,6 +152,10 @@ static int g_scroll_x = 0;
 static int g_scroll_y = 0;
 static int g_code_total_rows = 0;
 static int g_code_max_cols = 0;
+static int g_code_errors = 0;
+static int g_code_handlers = 0;
+static int g_code_lines_cnt = 0;
+static int g_code_bytes_cnt = 0;
 static bool g_edit_prop_text = false;
 static bool g_edit_code = false;
 static uint64_t g_last_click_tick = 0;
@@ -226,6 +230,178 @@ static void st_regen_c_code(const char *focus_id) {
       "    if (g_rt) g_rt->create_xuiml_app(\"Studio App\", 420, 280,\n"
       "        \"C:\\\\User\\\\studio_form.xuiml\", on_ui_event, NULL);\n"
       "}\n");
+}
+
+static int st_build_xuiml(char *out, int max_len);
+static void st_exec_action(int act);
+
+static void st_run_code_analysis(void) {
+  const char *src = g_c_code;
+  char *tmp_xml = NULL;
+  if (g_doc_tab == 1 && g_rt && g_rt->alloc) {
+    tmp_xml = (char *)g_rt->alloc(4096);
+    if (tmp_xml) {
+      st_build_xuiml(tmp_xml, 4096);
+      src = tmp_xml;
+    }
+  }
+
+  int lines = 1, bytes = 0, handlers = 0, errs = 0;
+  int brace = 0, paren = 0, angle = 0;
+  bool in_str = false, in_line_cmt = false;
+
+  for (int i = 0; src[i]; i++) {
+    char c = src[i];
+    bytes++;
+    if (c == '\n') {
+      lines++;
+      in_line_cmt = false;
+      continue;
+    }
+    if (in_line_cmt)
+      continue;
+    if (c == '"' && (i == 0 || src[i - 1] != '\\')) {
+      in_str = !in_str;
+      continue;
+    }
+    if (in_str)
+      continue;
+    if (g_doc_tab == 2 && c == '/' && src[i + 1] == '/') {
+      in_line_cmt = true;
+      continue;
+    }
+    if (g_doc_tab == 1) {
+      if (c == '<')
+        angle++;
+      else if (c == '>') {
+        angle--;
+        if (angle < 0) {
+          errs++;
+          angle = 0;
+        }
+      }
+    } else {
+      if (c == '{')
+        brace++;
+      else if (c == '}') {
+        brace--;
+        if (brace < 0) {
+          errs++;
+          brace = 0;
+        }
+      } else if (c == '(')
+        paren++;
+      else if (c == ')') {
+        paren--;
+        if (paren < 0) {
+          errs++;
+          paren = 0;
+        }
+      }
+      /* Conta occorrenze di NS_ON_CLICK */
+      if (c == 'N' && src[i + 1] == 'S' && src[i + 2] == '_' &&
+          src[i + 3] == 'O' && src[i + 4] == 'N' && src[i + 5] == '_') {
+        handlers++;
+      }
+    }
+  }
+
+  if (in_str)
+    errs++;
+  if (g_doc_tab == 1) {
+    if (angle != 0)
+      errs += angle;
+  } else {
+    if (brace != 0)
+      errs += (brace > 0 ? brace : -brace);
+    if (paren != 0)
+      errs += (paren > 0 ? paren : -paren);
+  }
+
+  g_code_lines_cnt = lines;
+  g_code_bytes_cnt = bytes;
+  g_code_errors = errs;
+  g_code_handlers = (g_doc_tab == 1) ? g_ctrl_count : handlers;
+
+  if (tmp_xml && g_rt && g_rt->free)
+    g_rt->free(tmp_xml);
+
+  if (g_rt && g_rt->snprintf) {
+    char msg[76];
+    if (errs == 0) {
+      g_rt->snprintf(msg, sizeof(msg),
+                     "[ANALISI] Sintassi OK (%d righe, %d B, %d %s)", lines,
+                     bytes, g_code_handlers,
+                     g_doc_tab == 1 ? "tag" : "handler");
+    } else {
+      g_rt->snprintf(msg, sizeof(msg),
+                     "[ANALISI] Rilevati %d errori di bilanciamento/stringhe!",
+                     errs);
+    }
+    st_push_output(msg);
+    dll_strcpy(g_status, msg, sizeof(g_status));
+  }
+}
+
+static void st_insert_c_snippet(int idx) {
+  if (g_doc_tab == 1) {
+    if (idx >= 0 && idx < 5) {
+      st_exec_action(2 + idx);
+      g_doc_tab = 1;
+      g_edit_code = false;
+      st_run_code_analysis();
+    }
+    return;
+  }
+
+  static const char *const snippets[5] = {
+      "    NS_ON_CLICK(\"btn_1\") {\n"
+      "        rt->set_text(app, \"lbl_msg\", \"Click!\");\n"
+      "    }\n",
+      "    rt->set_text(app, \"lbl_msg\", \"Aggiornato da SDK\");\n",
+      "    rt->file_write(\"C:\\\\User\\\\out.txt\", \"OK\", 2, true);\n",
+      "    char regv[64]; rt->reg_read_sz(\"OS\\\\Version\", regv, 64);\n",
+      "    NS_LOG_INFO(\"Evento eseguito con successo\");\n"};
+  if (idx < 0 || idx >= 5 || !g_rt || !g_rt->strlen)
+    return;
+
+  const char *snip = snippets[idx];
+  size_t slen = g_rt->strlen(snip);
+  size_t clen = g_rt->strlen(g_c_code);
+  if (clen + slen + 2 >= sizeof(g_c_code)) {
+    st_push_output("[WARN] Buffer studio_app.c pieno, impossibile inserire.");
+    return;
+  }
+
+  /* Inserisce prima della chiusura di on_ui_event se presente */
+  const char *marker = "}\n\nvoid app_main";
+  int ins_pos = -1;
+  for (int i = 0; g_c_code[i]; i++) {
+    int m = 0;
+    while (marker[m] && g_c_code[i + m] == marker[m])
+      m++;
+    if (!marker[m]) {
+      ins_pos = i;
+      break;
+    }
+  }
+
+  if (ins_pos >= 0) {
+    for (int j = (int)clen; j >= ins_pos; j--) {
+      g_c_code[j + (int)slen] = g_c_code[j];
+    }
+    for (size_t k = 0; k < slen; k++) {
+      g_c_code[ins_pos + (int)k] = snip[k];
+    }
+  } else {
+    for (size_t k = 0; k < slen; k++) {
+      g_c_code[clen + k] = snip[k];
+    }
+    g_c_code[clen + slen] = '\0';
+  }
+
+  g_edit_code = true;
+  st_run_code_analysis();
 }
 
 static void st_init_template(void) {
@@ -601,15 +777,44 @@ static void studio_draw(window_t* win) {
     int32_t out_h = 96;
     int32_t mid_h = body_h - out_h;
 
-    /* 1. Sinistra: Toolbox */
+    /* 1. Sinistra: Toolbox (Design) o Strumenti Codice (Code Viewer) */
     int32_t tx = cx + 2, tw = 180;
     vs_draw_surface(p, tx, body_y, tw, body_h, p->bg_panel, 170);
-    g_api->gfx_draw_string(tx + 10, body_y + 6, "Toolbox", p->text, 0, true);
-    g_api->gfx_draw_string(tx + 10, body_y + 28, "v Controlli Comuni", p->text_muted, 0, true);
+    if (g_doc_tab == 0) {
+        g_api->gfx_draw_string(tx + 10, body_y + 6, "Toolbox", p->text, 0, true);
+        g_api->gfx_draw_string(tx + 10, body_y + 28, "v Controlli Comuni", p->text_muted, 0, true);
 
-    const char* tb_items[] = { "+ Label", "+ Button", "+ TextBox", "+ CheckBox", "+ GroupBox" };
-    for (int i = 0; i < 5; i++) {
-        vs_draw_btn(p, tx + 10, body_y + 50 + i * 30, tw - 20, 24, tb_items[i], false);
+        const char* tb_items[] = { "+ Label", "+ Button", "+ TextBox", "+ CheckBox", "+ GroupBox" };
+        for (int i = 0; i < 5; i++) {
+            vs_draw_btn(p, tx + 10, body_y + 50 + i * 30, tw - 20, 24, tb_items[i], false);
+        }
+    } else {
+        if (g_code_lines_cnt == 0)
+            st_run_code_analysis();
+        g_api->gfx_draw_string(tx + 10, body_y + 6, "Strumenti Codice", p->text, 0, true);
+        g_api->gfx_draw_string(tx + 10, body_y + 28, "v Analisi Rapida", p->text_muted, 0, true);
+        if (g_rt && g_rt->snprintf) {
+            char l1[36], l2[36], l3[36];
+            g_rt->snprintf(l1, sizeof(l1), "Righe: %d  (%d B)", g_code_lines_cnt, g_code_bytes_cnt);
+            if (g_code_errors == 0)
+                g_rt->snprintf(l2, sizeof(l2), "Sintassi: OK (0 err)");
+            else
+                g_rt->snprintf(l2, sizeof(l2), "Errori: %d", g_code_errors);
+            g_rt->snprintf(l3, sizeof(l3), g_doc_tab == 1 ? "Tag UI: %d" : "Handler UI: %d", g_code_handlers);
+            g_api->gfx_draw_string(tx + 12, body_y + 48, l1, p->text, 0, true);
+            g_api->gfx_draw_string(tx + 12, body_y + 66, l2, g_code_errors == 0 ? 0xFF4EC9B0u : 0xFFF48771u, 0, true);
+            g_api->gfx_draw_string(tx + 12, body_y + 84, l3, p->text_muted, 0, true);
+        }
+        vs_draw_btn(p, tx + 10, body_y + 106, tw - 20, 24, "Analizza Sintassi", true);
+
+        g_api->gfx_draw_string(tx + 10, body_y + 144, "v Autocompletamento", p->text_muted, 0, true);
+        const char* c_snips[] = { "+ NS_ON_CLICK", "+ set_text()", "+ file_write()", "+ reg_read_sz()", "+ NS_LOG_INFO()" };
+        const char* x_snips[] = { "+ <Label />", "+ <Button />", "+ <TextBox />", "+ <CheckBox />", "+ <GroupBox />" };
+        const char* const* snips = (g_doc_tab == 1) ? x_snips : c_snips;
+        for (int i = 0; i < 5; i++) {
+            vs_draw_btn(p, tx + 10, body_y + 166 + i * 28, tw - 20, 23, snips[i], false);
+        }
+        vs_draw_btn(p, tx + 10, body_y + 314, tw - 20, 24, "Rigenera Codice", false);
     }
 
     /* 2. Destra: Esplora Soluzione + Proprieta' */
@@ -732,7 +937,13 @@ static void studio_draw(window_t* win) {
     /* 4. Basso: Output & Error List */
     int32_t oy = body_y + mid_h;
     vs_draw_surface(p, mx, oy, mw, out_h - 2, p->bg_panel, 175);
-    g_api->gfx_draw_string(mx + 10, oy + 5, "Output   |   Elenco Errori (0)   |   NSRT Log", p->text, 0, true);
+    if (g_rt && g_rt->snprintf) {
+        char ohdr[64];
+        g_rt->snprintf(ohdr, sizeof(ohdr), "Output   |   Elenco Errori (%d)   |   NSRT Log", g_code_errors);
+        g_api->gfx_draw_string(mx + 10, oy + 5, ohdr, p->text, 0, true);
+    } else {
+        g_api->gfx_draw_string(mx + 10, oy + 5, "Output   |   Elenco Errori (0)   |   NSRT Log", p->text, 0, true);
+    }
     for (int i = 0; i < 4; i++) {
         g_api->gfx_draw_string(mx + 10, oy + 26 + i * 16, g_output_lines[i], p->text_muted, 0, true);
     }
@@ -846,14 +1057,35 @@ static void studio_mouse(window_t *win, int32_t lx, int32_t ly, bool clicked) {
   int32_t rw = 244;
   int32_t rx_panel = cw - rw;
 
-  /* Toolbox clicks */
-  if (rx >= 10 && rx < tw - 12 && ry >= body_y + 50 && ry < body_y + 200) {
-    int ti = (ry - (body_y + 50)) / 30;
-    if (ti >= 0 && ti < 5) {
-      g_edit_prop_text = false;
-      g_edit_code = false;
-      st_exec_action(2 + ti);
-      return;
+  /* Pannello sinistro: Toolbox (Design) o Strumenti Codice (Code Viewer) */
+  if (rx >= 10 && rx < tw - 12) {
+    if (g_doc_tab == 0 && ry >= body_y + 50 && ry < body_y + 200) {
+      int ti = (ry - (body_y + 50)) / 30;
+      if (ti >= 0 && ti < 5) {
+        g_edit_prop_text = false;
+        g_edit_code = false;
+        st_exec_action(2 + ti);
+        return;
+      }
+    } else if (g_doc_tab == 1 || g_doc_tab == 2) {
+      if (ry >= body_y + 106 && ry < body_y + 132) {
+        st_run_code_analysis();
+        return;
+      }
+      if (ry >= body_y + 166 && ry < body_y + 306) {
+        int si = (ry - (body_y + 166)) / 28;
+        if (si >= 0 && si < 5) {
+          g_edit_prop_text = false;
+          st_insert_c_snippet(si);
+          return;
+        }
+      }
+      if (ry >= body_y + 314 && ry < body_y + 340) {
+        if (g_doc_tab == 2)
+          st_regen_c_code(g_sel_idx >= 0 ? g_ctrls[g_sel_idx].id : NULL);
+        st_run_code_analysis();
+        return;
+      }
     }
   }
 
