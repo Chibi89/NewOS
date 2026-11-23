@@ -108,6 +108,7 @@
 #define ac97_is_available()      g_ext_api->ac97_is_available()
 #define ac97_set_volume(v)       g_ext_api->ac97_set_volume(v)
 #define ac97_stop()              g_ext_api->ac97_stop()
+#define ac97_play_pcm(d,b,r)     g_ext_api->ac97_play_pcm((d),(b),(r))
 #define sound_stop()             g_ext_api->sound_stop()
 #define sound_set_volume(v)      g_ext_api->sound_set_volume(v)
 #define smp_get_info()           ((const smp_info_t *)g_ext_api->smp_get_info())

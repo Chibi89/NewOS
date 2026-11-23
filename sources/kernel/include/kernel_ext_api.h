@@ -225,6 +225,7 @@ typedef struct {
     void (*tcp_close)(void *conn);
     void (*keyboard_set_layout)(int layout_id);
     int  (*keyboard_get_layout)(void);
+    void (*ac97_play_pcm)(const void *data, uint32_t bytes, uint32_t sample_rate);
 } kernel_ext_api_t;
 
 const kernel_ext_api_t *screen_mgr_get_ext_api(void);

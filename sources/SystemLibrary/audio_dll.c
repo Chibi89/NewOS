@@ -43,6 +43,7 @@ static void audio_apply_relocs(void) {
 typedef struct {
     uint32_t cmd;
     uint32_t uarg1;
+    uint32_t uarg2;
     const char *sarg;
     const void *buf;
     void *out_ptr;
@@ -71,6 +72,7 @@ int module_main(const kernel_api_t *api, audio_dll_params_t *p) {
         case 12: ac97_stop(); break;
         case 13: p->ret_str = ac97_get_device_name(); break;
         case 14: p->ret_bool = wav_parse((const uint8_t *)p->buf, p->uarg1, (wav_info_t *)p->out_ptr); break;
+        case 15: ac97_play_pcm(p->buf, p->uarg1, p->uarg2); break;
         default: return -1;
     }
     return 0;
@@ -89,6 +91,7 @@ int module_main(const kernel_api_t *api, audio_dll_params_t *p) {
 #undef ac97_is_available
 #undef ac97_set_volume
 #undef ac97_stop
+#undef ac97_play_pcm
 #undef ac97_get_device_name
 
 #include "../kernel/drivers/speaker.c"

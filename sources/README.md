@@ -124,8 +124,7 @@ Elenco delle funzionalità ancora da implementare dalla [`ROADMAP_MIGLIORIE.md`]
    - **Gestione Risparmio Energetico ACPI completa**: lettura batteria (laptop) e stati `S3` (Sospensione RAM) / `S5` (Spegnimento) su silicio fisico.
    - **Touchpad PS/2 / I2C HID & Tasti Multimediali**: scroll a due dita e tasti multimediali (`KEYBCPL.DLL`, driver tastiera e Tray Bar già completi per i layout dinamici `US`/`IT`/`UK`/`DE`/`FR`).
    - *Tutte le voci della Categoria 8 (Rete & Web Browser) sono state completate.*
-8. **Multimedia**:
-   - **NewOS Media Player (`player/`)**: completamento decodifica/riproduzione reale `.MP3` / `.FLAC` (codec `.CDC`) e seek bar interattiva.
+   - *Tutte le voci delle Categorie 8 e 9 (Rete, Web Browser, Applicazioni di Sistema & Multimedia) sono state completate.*
 
 </details>
 
@@ -479,8 +478,7 @@ Pending features to be implemented from [`ROADMAP_MIGLIORIE.md`](ROADMAP_MIGLIOR
    - **Full ACPI Power Management**: laptop battery reporting and reliable `S3` (Suspend to RAM) / `S5` (Power Off) on physical silicon.
    - **PS/2 Touchpad / I2C HID & Media Keys**: two-finger scrolling and media keys (dynamic `US`/`IT`/`UK`/`DE`/`FR` keyboard layouts in `KEYBCPL.DLL`, keyboard driver, and System Tray are already complete).
    - *All Category 8 (Networking & Web Browser) items have been completed.*
-8. **Multimedia**:
-   - **NewOS Media Player (`player/`)**: complete real `.MP3` / `.FLAC` decoding/playback (`.CDC` codecs) and interactive seek bar.
+   - *All Category 8 & 9 items (Networking, Web Browser, System Apps & Multimedia) have been completed.*
 
 </details>
 

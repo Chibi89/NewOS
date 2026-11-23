@@ -10,6 +10,7 @@
 typedef struct {
     uint32_t cmd;
     uint32_t uarg1;
+    uint32_t uarg2;
     const char *sarg;
     const void *buf;
     void *out_ptr;
@@ -165,6 +166,17 @@ void ac97_stop(void) {
     audio_dll_params_t p;
     memset(&p, 0, sizeof(p));
     p.cmd = 12;
+    g_audio_entry(screen_mgr_get_api(), &p);
+}
+
+void ac97_play_pcm(const void *data, uint32_t bytes, uint32_t sample_rate) {
+    if (!data || bytes == 0 || !ensure_audio_loaded()) return;
+    audio_dll_params_t p;
+    memset(&p, 0, sizeof(p));
+    p.cmd = 15;
+    p.buf = data;
+    p.uarg1 = bytes;
+    p.uarg2 = sample_rate;
     g_audio_entry(screen_mgr_get_api(), &p);
 }
 

@@ -90,7 +90,7 @@ Elenco completo delle migliorie architetturali, grafiche, di sistema e hardware 
 ## 9. Applicazioni di Sistema & Multimedia
 - [x] **Blocco Note (`notepad/`)**: supporto file grandi (>64 KB), `Trova / Sostituisci` (`Ctrl+F`), `Annulla` (`Ctrl+Z`), numeri di riga opzionali e apertura multipla.
 - [x] **Visualizzatore Immagini dedicato (`IMGVIEW`)**: zoom, rotazione e presentazione per `.BMP`, `.PNG`, `.JPG`, `.WEBP` tramite `IMGCODEC.DLL`.
-- [ ] **NewOS Media Player (`player/`)**: completare la decodifica e riproduzione reale di `.MP3` / `.FLAC` (codec `.CDC`) e seek bar interattiva.
+- [x] **NewOS Media Player (`player/`)**: decodifica e riproduzione audio tramite codec modulari `.CDC` (`MP3DEC.CDC`, `FLACDEC.CDC`, `WAVDEC.CDC` in `C:\NewOS\MultimediaCodec\`), invio PCM via `ac97_play_pcm` e seek bar interattiva con `seek_ms`.
 - [x] **Task Manager (`taskmgr/`)**: tab **Prestazioni** (grafici storici CPU/RAM/Disk I/O/Network I/O) e tab **Moduli DLL** caricati con consumo memoria e CRC32.
 - [x] **Terminale `CMD` potenziato**: cronologia comandi con frecce `Su/Giù`, completamento percorsi con `Tab`, redirect output (`>` e `>>`) e scrollback con rotella del mouse.
 
