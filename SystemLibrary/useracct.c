@@ -7,6 +7,7 @@
  */
 
 #include "cpl_dll_ui.h"
+#include <fs/vfs.h>
 
 #ifndef BUILDING_KERNEL_LOADER
 __attribute__((section(".header"), used))
@@ -26,13 +27,25 @@ module_header_t g_useracct_header = {
 
 static const kernel_api_t* g_api = NULL;
 
+#define MAX_LOCAL_ACCOUNTS 6
+
 typedef struct {
-    int  active_tab;           // 0: Profilo Utente, 1: Sicurezza & Accesso
-    int  focused_field;        // Tab 0: 0=Username, 1=Hostname | Tab 1: 0=NewPass, 1=ConfirmPass
+    char username[32];
+    bool is_admin;
+} local_account_t;
+
+typedef struct {
+    int  active_tab;           // 0: Profilo Utente, 1: Sicurezza & Accesso, 2: Gestione Account
+    int  focused_field;        // Tab 0: 0=Username, 1=Hostname | Tab 1: 0=NewPass, 1=ConfirmPass | Tab 2: 0=NewAcct
     char edit_username[32];
     char edit_hostname[32];
     char edit_newpass[32];
     char edit_confpass[32];
+    local_account_t accounts[MAX_LOCAL_ACCOUNTS];
+    int  num_accounts;
+    int  selected_account;
+    char new_acct_name[28];
+    bool new_acct_is_admin;
     char status_msg[72];
     bool status_ok;
 } useracct_state_t;
@@ -137,6 +150,98 @@ static void apply_password_changes(useracct_state_t* st, bool clear_pass) {
     st->status_ok = true;
 }
 
+static void refresh_accounts(useracct_state_t* st) {
+    if (!g_api || !st) return;
+    st->num_accounts = 0;
+
+    vfs_dirent_t entries[16];
+    int32_t cnt = g_api->vfs_readdir ? g_api->vfs_readdir("C:\\User", entries, 16) : 0;
+    for (int32_t i = 0; i < cnt && st->num_accounts < MAX_LOCAL_ACCOUNTS; i++) {
+        if (!entries[i].is_directory) continue;
+        if (entries[i].name[0] == '.') continue;
+        local_account_t* acc = &st->accounts[st->num_accounts];
+        dll_strcpy(acc->username, entries[i].name, sizeof(acc->username));
+
+        acc->is_admin = true; // Default admin se non specificato nel Registro
+        if (g_api->registry_get_value_dword) {
+            char reg_path[96];
+            dll_strcpy(reg_path, "HKEY_LOCAL_MACHINE\\SOFTWARE\\NewOS\\Users\\", sizeof(reg_path));
+            size_t rl = dll_strlen(reg_path);
+            dll_strcpy(reg_path + rl, acc->username, sizeof(reg_path) - rl);
+            uint32_t role_val = 1;
+            if (g_api->registry_get_value_dword(reg_path, "Role", &role_val)) {
+                acc->is_admin = (role_val != 0);
+            }
+        }
+        st->num_accounts++;
+    }
+
+    if (st->num_accounts == 0) {
+        dll_strcpy(st->accounts[0].username, st->edit_username[0] ? st->edit_username : "Admin", 32);
+        st->accounts[0].is_admin = true;
+        st->num_accounts = 1;
+    }
+    if (st->selected_account >= st->num_accounts) st->selected_account = 0;
+}
+
+static void create_new_account(useracct_state_t* st) {
+    if (!g_api || !st) return;
+    if (st->new_acct_name[0] == '\0') {
+        dll_strcpy(st->status_msg, "Inserire il nome del nuovo account!", sizeof(st->status_msg));
+        st->status_ok = false;
+        return;
+    }
+
+    char home[64];
+    dll_strcpy(home, "C:\\User\\", sizeof(home));
+    size_t hl = dll_strlen(home);
+    dll_strcpy(home + hl, st->new_acct_name, sizeof(home) - hl);
+
+    if (g_api->vfs_mkdir) {
+        g_api->vfs_mkdir("C:\\User");
+        g_api->vfs_mkdir(home);
+        char sub[80];
+        const char* subs[3] = {"\\Desktop", "\\Documents", "\\Downloads"};
+        for (int s = 0; s < 3; s++) {
+            dll_strcpy(sub, home, sizeof(sub));
+            size_t sl = dll_strlen(sub);
+            dll_strcpy(sub + sl, subs[s], sizeof(sub) - sl);
+            g_api->vfs_mkdir(sub);
+        }
+    }
+
+    if (g_api->registry_set_value_dword && g_api->registry_set_value_sz) {
+        char reg_path[96];
+        dll_strcpy(reg_path, "HKEY_LOCAL_MACHINE\\SOFTWARE\\NewOS\\Users\\", sizeof(reg_path));
+        size_t rl = dll_strlen(reg_path);
+        dll_strcpy(reg_path + rl, st->new_acct_name, sizeof(reg_path) - rl);
+        g_api->registry_set_value_dword(reg_path, "Role", st->new_acct_is_admin ? 1U : 0U);
+        g_api->registry_set_value_sz(reg_path, "HomePath", home);
+        if (g_api->registry_save_to_disk) g_api->registry_save_to_disk();
+    }
+
+    st->new_acct_name[0] = '\0';
+    refresh_accounts(st);
+    dll_strcpy(st->status_msg, "Nuovo account creato in C:\\User\\ e salvato nel Registro!", sizeof(st->status_msg));
+    st->status_ok = true;
+}
+
+static void toggle_selected_role(useracct_state_t* st) {
+    if (!g_api || !st || st->selected_account < 0 || st->selected_account >= st->num_accounts) return;
+    local_account_t* acc = &st->accounts[st->selected_account];
+    acc->is_admin = !acc->is_admin;
+    if (g_api->registry_set_value_dword) {
+        char reg_path[96];
+        dll_strcpy(reg_path, "HKEY_LOCAL_MACHINE\\SOFTWARE\\NewOS\\Users\\", sizeof(reg_path));
+        size_t rl = dll_strlen(reg_path);
+        dll_strcpy(reg_path + rl, acc->username, sizeof(reg_path) - rl);
+        g_api->registry_set_value_dword(reg_path, "Role", acc->is_admin ? 1U : 0U);
+        if (g_api->registry_save_to_disk) g_api->registry_save_to_disk();
+    }
+    dll_strcpy(st->status_msg, acc->is_admin ? "Ruolo aggiornato: Amministratore" : "Ruolo aggiornato: Utente Standard", sizeof(st->status_msg));
+    st->status_ok = true;
+}
+
 static void useracct_draw(window_t* win) {
     useracct_state_t* st = (useracct_state_t*)win->app_data;
     if (!st || !g_api) return;
@@ -154,8 +259,9 @@ static void useracct_draw(window_t* win) {
     // Schede (Tabs)
     int32_t tab_y = cy + 4;
     int32_t tab_h = 22;
-    g_api->wm_draw_themed_tab(cx + 8,   tab_y, 130, tab_h, "Profilo Utente", st->active_tab == 0);
-    g_api->wm_draw_themed_tab(cx + 140, tab_y, 160, tab_h, "Sicurezza & Accesso", st->active_tab == 1);
+    g_api->wm_draw_themed_tab(cx + 8,   tab_y, 126, tab_h, "Profilo Utente", st->active_tab == 0);
+    g_api->wm_draw_themed_tab(cx + 136, tab_y, 152, tab_h, "Sicurezza & Accesso", st->active_tab == 1);
+    g_api->wm_draw_themed_tab(cx + 290, tab_y, 156, tab_h, "Gestione Account", st->active_tab == 2);
     dll_draw_tabs_divider(g_api, cx, tab_y, tab_h, cw, &t);
 
     user_profile_t* prof = g_api->user_get_current ? g_api->user_get_current() : NULL;
@@ -195,7 +301,7 @@ static void useracct_draw(window_t* win) {
 
         g_api->wm_draw_themed_button(b2_x + 14,  b2_y + 124, 165, 24, "Applica Profilo", false);
         g_api->wm_draw_themed_button(b2_x + 190, b2_y + 124, 185, 24, "Apri Cartella Utente", false);
-    } else {
+    } else if (st->active_tab == 1) {
         // Scheda 1: Sicurezza & Accesso
         int32_t b1_x = cx + 10;
         int32_t b1_y = cy + 36;
@@ -226,6 +332,28 @@ static void useracct_draw(window_t* win) {
 
         g_api->wm_draw_themed_button(b2_x + 14,  b2_y + 132, 165, 24, "Salva Password", false);
         g_api->wm_draw_themed_button(b2_x + 190, b2_y + 132, 165, 24, "Rimuovi Password", false);
+    } else if (st->active_tab == 2) {
+        int32_t b1_x = cx + 10, b1_y = cy + 36, b1_w = cw - 20, b1_h = 152;
+        dll_draw_groupbox(g_api, b1_x, b1_y, b1_w, b1_h, " Account Locali in C:\\User\\ ", &t);
+        for (int i = 0; i < st->num_accounts && i < 5; i++) {
+            int32_t ry = b1_y + 20 + i * 24;
+            bool sel = (i == st->selected_account);
+            g_api->gfx_fill_rounded_rect(b1_x + 12, ry, b1_w - 24, 21, 3, sel ? t.sel_bg : t.input_bg);
+            g_api->gfx_draw_rounded_rect(b1_x + 12, ry, b1_w - 24, 21, 3, sel ? t.accent : t.card_border);
+            g_api->gfx_draw_string(b1_x + 20, ry + 4, st->accounts[i].username, sel ? t.sel_text : t.text_primary, 0, true);
+            const char* role_lbl = st->accounts[i].is_admin ? "[Amministratore]" : "[Standard]";
+            g_api->gfx_draw_string(b1_x + b1_w - 150, ry + 4, role_lbl, sel ? t.sel_text : (st->accounts[i].is_admin ? t.accent : t.text_secondary), 0, true);
+        }
+
+        int32_t b2_x = cx + 10, b2_y = b1_y + b1_h + 10, b2_w = cw - 20, b2_h = 104;
+        dll_draw_groupbox(g_api, b2_x, b2_y, b2_w, b2_h, " Crea Nuovo Account Locale ", &t);
+        g_api->gfx_draw_string(b2_x + 14, b2_y + 20, "Nome Utente:", t.text_primary, 0, true);
+        dll_draw_input_box(g_api, b2_x + 110, b2_y + 16, b2_w - 126, 24, st->new_acct_name, true, false, &t);
+
+        const char* new_role = st->new_acct_is_admin ? "Ruolo: Amministratore" : "Ruolo: Standard";
+        g_api->wm_draw_themed_button(b2_x + 14,  b2_y + 58, 175, 24, new_role, false);
+        g_api->wm_draw_themed_button(b2_x + 196, b2_y + 58, 120, 24, "+ Crea", false);
+        g_api->wm_draw_themed_button(b2_x + 322, b2_y + 58, 110, 24, "Cambia Ruolo", false);
     }
 
     // Messaggio di stato e pulsanti footer OK / Chiudi
@@ -251,16 +379,23 @@ static void useracct_mouse(window_t* win, int32_t lx, int32_t ly, bool clicked) 
 
     // Clic sulle schede
     if (ly >= cy + 4 && ly <= cy + 26) {
-        if (lx >= cx + 8 && lx < cx + 138) {
+        if (lx >= cx + 8 && lx < cx + 134) {
             st->active_tab = 0;
             st->focused_field = 0;
             st->status_msg[0] = '\0';
             return;
         }
-        if (lx >= cx + 140 && lx < cx + 300) {
+        if (lx >= cx + 136 && lx < cx + 288) {
             st->active_tab = 1;
             st->focused_field = 0;
             st->status_msg[0] = '\0';
+            return;
+        }
+        if (lx >= cx + 290 && lx < cx + 446) {
+            st->active_tab = 2;
+            st->focused_field = 0;
+            st->status_msg[0] = '\0';
+            refresh_accounts(st);
             return;
         }
     }
@@ -296,7 +431,7 @@ static void useracct_mouse(window_t* win, int32_t lx, int32_t ly, bool clicked) 
             }
             return;
         }
-    } else {
+    } else if (st->active_tab == 1) {
         int32_t b2_x = cx + 10;
         int32_t b2_y = cy + 36 + 74 + 12;
         int32_t b2_w = cw - 20;
@@ -318,6 +453,30 @@ static void useracct_mouse(window_t* win, int32_t lx, int32_t ly, bool clicked) 
         if (lx >= b2_x + 190 && lx <= b2_x + 355 && ly >= b2_y + 132 && ly <= b2_y + 156) {
             apply_password_changes(st, true);
             return;
+        }
+    } else if (st->active_tab == 2) {
+        int32_t b1_x = cx + 10, b1_y = cy + 36, b1_w = cw - 20;
+        for (int i = 0; i < st->num_accounts && i < 5; i++) {
+            int32_t ry = b1_y + 20 + i * 24;
+            if (lx >= b1_x + 12 && lx <= b1_x + b1_w - 12 && ly >= ry && ly <= ry + 21) {
+                st->selected_account = i;
+                return;
+            }
+        }
+        int32_t b2_x = cx + 10, b2_y = b1_y + 152 + 10;
+        if (ly >= b2_y + 58 && ly <= b2_y + 82) {
+            if (lx >= b2_x + 14 && lx <= b2_x + 189) {
+                st->new_acct_is_admin = !st->new_acct_is_admin;
+                return;
+            }
+            if (lx >= b2_x + 196 && lx <= b2_x + 316) {
+                create_new_account(st);
+                return;
+            }
+            if (lx >= b2_x + 322 && lx <= b2_x + 432) {
+                toggle_selected_role(st);
+                return;
+            }
         }
     }
 
@@ -351,15 +510,18 @@ static void useracct_key(window_t* win, char c) {
     }
     if (c == '\n' || c == '\r') {
         if (st->active_tab == 0) apply_profile_changes(st);
-        else apply_password_changes(st, false);
+        else if (st->active_tab == 1) apply_password_changes(st, false);
+        else create_new_account(st);
         return;
     }
 
     char* target = NULL;
     if (st->active_tab == 0) {
         target = (st->focused_field == 0) ? st->edit_username : st->edit_hostname;
-    } else {
+    } else if (st->active_tab == 1) {
         target = (st->focused_field == 0) ? st->edit_newpass : st->edit_confpass;
+    } else {
+        target = st->new_acct_name;
     }
 
     if (!target) return;
@@ -397,6 +559,7 @@ int useracct_dll_entry(const kernel_api_t* api, window_t* win) {
         dll_strcpy(st->edit_username, "User", sizeof(st->edit_username));
         dll_strcpy(st->edit_hostname, "NEWOS-PC", sizeof(st->edit_hostname));
     }
+    refresh_accounts(st);
 
     win->app_data = st;
     win->on_draw  = useracct_draw;

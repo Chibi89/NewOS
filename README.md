@@ -112,8 +112,7 @@ Elenco delle funzionalità ancora da implementare dalla [`ROADMAP_MIGLIORIE.md`]
 3. **File System & Storage (`FS_EXT.DLL`)**:
    - **Scrittura completa su `EXT4` e `FAT32`**: consolidamento R/W sicuro su `FAT32` (USB e partizione ESP) ed `EXT4`.
 4. **Sicurezza & Multi-Utente**:
-   - **Gestione multi-account reale (`USERACCT.CPL`)**: creazione di più utenti locali in `C:\User\<Nome>\` con password hashata, ruoli Standard/Amministratore e selezione utente in `LOGIN.MOD`.
-   - **Dialogo UAC / Elevazione inline**: prompt password amministratore per operazioni protette da utenti Standard (`C:\NewOS\`, `HKLM` in `Regedit`, policy).
+   - **Selezione multi-utente in `LOGIN.MOD` & Dialogo UAC / Elevazione inline**: scelta utente al logon e prompt password amministratore per operazioni protette (`C:\NewOS\`, `HKLM` in `Regedit`, policy; gestione multi-account e ruoli in `USERACCT.DLL` già completa).
 5. **Kernel, Processi & Memoria**:
    - **Eseguibili User-Mode Ring 3 reali (`.EXE` / ELF64)**: isolamento nello spazio `PML4` con dialogo terminazione processo al posto del BSOD.
    - **Preemptive Multitasking & SMP Bilanciato**: distribuzione thread sui core AP via `smp.c` con spinlock/mutex granulari su VFS, Heap e WM.
@@ -469,8 +468,7 @@ Pending features to be implemented from [`ROADMAP_MIGLIORIE.md`](ROADMAP_MIGLIOR
 3. **File System & Storage (`FS_EXT.DLL`)**:
    - **Full R/W on `EXT4` & `FAT32`**: harden safe read/write support for `FAT32` (USB drives and ESP) and `EXT4`.
 4. **Security & Multi-User**:
-   - **Real Multi-Account Management (`USERACCT.CPL`)**: create multiple local users in `C:\User\<Name>\` with hashed passwords, Standard/Administrator roles, and user selection in `LOGIN.MOD`.
-   - **Inline UAC / Elevation Dialog**: administrator password prompt when a Standard user attempts protected actions (`C:\NewOS\`, `HKLM` in `Regedit`, policies).
+   - **Multi-User Selection in `LOGIN.MOD` & Inline UAC / Elevation Dialog**: user picker at logon and administrator password prompt for protected actions (`C:\NewOS\`, `HKLM` in `Regedit`, policies; local multi-account & role management in `USERACCT.DLL` is already complete).
 5. **Kernel, Processes & Memory**:
    - **Real Ring 3 User-Mode Executables (`.EXE` / ELF64)**: isolated `PML4` address spaces with app crash termination dialogs instead of system BSOD.
    - **Preemptive Multitasking & Balanced SMP**: distribute threads across AP cores via `smp.c` with granular VFS, Heap, and WM locks.

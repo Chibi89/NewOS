@@ -54,8 +54,8 @@ Elenco completo delle migliorie architetturali, grafiche, di sistema e hardware 
 - [x] **Servizio Standardizzato Obbligatorio di Installazione Software Terzi (`PKGSVC.DLL`)**:
   - Implementato in [`SystemLibrary/pkgsvc.c`](SystemLibrary/pkgsvc.c) con isolamento forzato in `C:\ProgramFile\<App>\` (blocco ACL di percorsi in `C:\NewOS\`), creazione manifest `APP.INI`, registrazione in `HKLM\SOFTWARE\NewOS\InstalledApps` e disinstallazione pulita.
 - [x] **Persistenza preferenze utente**: salvare nel Registro (a sessione autenticata) vista Explorer preferita, `show_extensions`, `show_hidden`, posizione delle icone sul desktop, tema e risoluzione scelta.
-- [ ] **Gestione multi-account reale (`USERACCT.CPL`)**: creazione di più utenti locali in `C:\User\<Nome>\` con password hashata, distinzione Standard/Amministratore e schermata di selezione utente in `LOGIN.MOD`.
-- [ ] **Dialogo UAC / Elevazione inline**: prompt di elevazione password amministratore quando un utente Standard tenta un'operazione protetta (`C:\NewOS\`, `Regedit` su `HKLM`, cambio policy).
+- [x] **Gestione multi-account reale (`USERACCT.CPL`)**: scheda **Gestione Account** in [`useracct.c`](SystemLibrary/useracct.c) (`USERACCT.DLL`) con scansione utenti in `C:\User\<Nome>\`, creazione nuovi account locali (`Desktop`/`Documents`/`Downloads`) e assegnazione ruoli `Amministratore`/`Standard` salvati nel Registro (`HKLM\SOFTWARE\NewOS\Users\`).
+- [ ] **Selezione multi-utente in `LOGIN.MOD` & Dialogo UAC / Elevazione inline**: schermata di scelta utente al logon e prompt password amministratore per operazioni protette (`C:\NewOS\`, `Regedit` su `HKLM`, cambio policy).
 - [x] **Audit Log di Sicurezza**: registro eventi critici (login riusciti/falliti, modifiche policy LSA, tentativi ACL negati) consultabile in `SECCPL.CPL`.
 
 ---
