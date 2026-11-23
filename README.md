@@ -111,7 +111,6 @@ Elenco delle funzionalità ancora da implementare dalla [`ROADMAP_MIGLIORIE.md`]
    - **Animazioni leggere opzionali**: transizioni apertura/chiusura menu e minimizzazione finestre (disattivabili in modalità Classic 2000).
 3. **File System & Storage (`FS_EXT.DLL`)**:
    - **Scrittura completa su `EXT4` e `FAT32`**: consolidamento R/W sicuro su `FAT32` (USB e partizione ESP) ed `EXT4`.
-   - **Write-back cache & Flush periodico sicuro**: flush automatico in background dei settori dirty e **"Rimozione sicura dell'hardware"** USB nella tray bar.
 4. **Sicurezza & Multi-Utente**:
    - **Gestione multi-account reale (`USERACCT.CPL`)**: creazione di più utenti locali in `C:\User\<Nome>\` con password hashata, ruoli Standard/Amministratore e selezione utente in `LOGIN.MOD`.
    - **Dialogo UAC / Elevazione inline**: prompt password amministratore per operazioni protette da utenti Standard (`C:\NewOS\`, `HKLM` in `Regedit`, policy).
@@ -124,7 +123,7 @@ Elenco delle funzionalità ancora da implementare dalla [`ROADMAP_MIGLIORIE.md`]
    - **EDID & Impostazione Risoluzione Reale**: lettura blocchi EDID da VBE/GOP in `DESK.CPL` per proporre le risoluzioni supportate dal monitor fisico.
    - **MSI / MSI-X Interrupts**: supporto su PCIe per **NVMe**, **xHCI**, **Intel HDA** ed **E1000/RTL8169**.
    - **Gestione Risparmio Energetico ACPI completa**: lettura batteria (laptop) e stati `S3` (Sospensione RAM) / `S5` (Spegnimento) su silicio fisico.
-   - **Touchpad PS/2 / I2C HID & Layout Tastiera Multipli**: scroll a due dita, layout dinamici `IT/US/UK/DE/FR` in `KEYBCPL.CPL` e tasti multimediali.
+   - **Touchpad PS/2 / I2C HID & Tasti Multimediali**: scroll a due dita e tasti multimediali (`KEYBCPL.DLL`, driver tastiera e Tray Bar già completi per i layout dinamici `US`/`IT`/`UK`/`DE`/`FR`).
 7. **Rete & Web Browser (`WEBBROWSER.DLL`)**:
    - **Cache HTTP su disco & Cookie/Cronologia**: salvataggio persistente in `C:\User\<Utente>\AppData\`.
    - **Browser Multi-Tab & Download Manager**: schede multiple in `WEBBROWSER.DLL` e download in `C:\User\<Utente>\Downloads\` con progress bar `COMCTL`.
@@ -471,7 +470,6 @@ Pending features to be implemented from [`ROADMAP_MIGLIORIE.md`](ROADMAP_MIGLIOR
    - **Optional Lightweight Animations**: menu open/close and window minimize transitions (toggleable off in Classic 2000 mode).
 3. **File System & Storage (`FS_EXT.DLL`)**:
    - **Full R/W on `EXT4` & `FAT32`**: harden safe read/write support for `FAT32` (USB drives and ESP) and `EXT4`.
-   - **Write-back Cache & Safe Periodic Flush**: background dirty-sector flushing and USB **"Safely Remove Hardware"** tray indicator.
 4. **Security & Multi-User**:
    - **Real Multi-Account Management (`USERACCT.CPL`)**: create multiple local users in `C:\User\<Name>\` with hashed passwords, Standard/Administrator roles, and user selection in `LOGIN.MOD`.
    - **Inline UAC / Elevation Dialog**: administrator password prompt when a Standard user attempts protected actions (`C:\NewOS\`, `HKLM` in `Regedit`, policies).
@@ -484,7 +482,7 @@ Pending features to be implemented from [`ROADMAP_MIGLIORIE.md`](ROADMAP_MIGLIOR
    - **EDID & Real Resolution Switching**: parse EDID blocks from VBE/GOP in `DESK.CPL` to offer physical monitor resolutions.
    - **MSI / MSI-X Interrupts**: PCIe MSI/MSI-X support for **NVMe**, **xHCI**, **Intel HDA**, and **E1000/RTL8169**.
    - **Full ACPI Power Management**: laptop battery reporting and reliable `S3` (Suspend to RAM) / `S5` (Power Off) on physical silicon.
-   - **PS/2 Touchpad / I2C HID & Multi-Layout Keyboards**: two-finger scrolling, dynamic `IT/US/UK/DE/FR` layouts in `KEYBCPL.CPL`, and media keys.
+   - **PS/2 Touchpad / I2C HID & Media Keys**: two-finger scrolling and media keys (dynamic `US`/`IT`/`UK`/`DE`/`FR` keyboard layouts in `KEYBCPL.DLL`, keyboard driver, and System Tray are already complete).
 7. **Networking & Web Browser (`WEBBROWSER.DLL`)**:
    - **Disk HTTP Cache, Cookies & History**: persistent storage in `C:\User\<User>\AppData\`.
    - **Multi-Tab Browser & Download Manager**: multiple tabs in `WEBBROWSER.DLL` and downloads to `C:\User\<User>\Downloads\` with `COMCTL` progress bar.

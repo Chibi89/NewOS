@@ -16,6 +16,90 @@ static bool win_pressed = false;
 static bool win_combo_used = false;
 static bool e0_prefix = false;
 static bool caps_lock = false;
+static int g_kbd_layout = KBD_LAYOUT_US;
+
+static char kbd_translate_layout(uint8_t sc, bool upper, char us_c) {
+  if (g_kbd_layout == KBD_LAYOUT_US || sc >= 128)
+    return us_c;
+  if (g_kbd_layout == KBD_LAYOUT_IT) {
+    if (upper) {
+      switch (sc) {
+        case 0x03: return '"';
+        case 0x04: return '#';
+        case 0x07: return '&';
+        case 0x08: return '/';
+        case 0x09: return '(';
+        case 0x0A: return ')';
+        case 0x0B: return '=';
+        case 0x0C: return '?';
+        case 0x0D: return '^';
+        case 0x1B: return '*';
+        case 0x33: return ';';
+        case 0x34: return ':';
+        case 0x35: return '_';
+        default: break;
+      }
+    } else {
+      switch (sc) {
+        case 0x0C: return '\'';
+        case 0x0D: return 'i';
+        case 0x1A: return 'e';
+        case 0x1B: return '+';
+        case 0x27: return 'o';
+        case 0x28: return 'a';
+        case 0x29: return '\\';
+        case 0x2B: return 'u';
+        case 0x35: return '-';
+        default: break;
+      }
+    }
+  } else if (g_kbd_layout == KBD_LAYOUT_UK) {
+    if (upper) {
+      if (sc == 0x03) return '"';
+      if (sc == 0x04) return '#';
+      if (sc == 0x28) return '@';
+      if (sc == 0x2B) return '~';
+    } else {
+      if (sc == 0x2B) return '#';
+    }
+  } else if (g_kbd_layout == KBD_LAYOUT_DE) {
+    if (sc == 0x15) return upper ? 'Z' : 'z';
+    if (sc == 0x2C) return upper ? 'Y' : 'y';
+    if (upper) {
+      if (sc == 0x07) return '&';
+      if (sc == 0x08) return '/';
+      if (sc == 0x09) return '(';
+      if (sc == 0x0A) return ')';
+      if (sc == 0x0B) return '=';
+      if (sc == 0x35) return '_';
+    } else {
+      if (sc == 0x1B) return '+';
+      if (sc == 0x35) return '-';
+    }
+  } else if (g_kbd_layout == KBD_LAYOUT_FR) {
+    if (sc == 0x10) return upper ? 'A' : 'a';
+    if (sc == 0x1E) return upper ? 'Q' : 'q';
+    if (sc == 0x11) return upper ? 'Z' : 'z';
+    if (sc == 0x2C) return upper ? 'W' : 'w';
+    if (sc == 0x27) return upper ? 'M' : 'm';
+    if (sc == 0x32) return upper ? '?' : ',';
+    if (sc == 0x33) return upper ? '.' : ';';
+    if (sc == 0x34) return upper ? '/' : ':';
+  }
+  return us_c;
+}
+
+void keyboard_set_layout(int layout_id) {
+  if (layout_id >= 0 && layout_id < KBD_LAYOUT_COUNT)
+    g_kbd_layout = layout_id;
+}
+
+int keyboard_get_layout(void) { return g_kbd_layout; }
+
+const char* keyboard_get_layout_code(void) {
+  static const char* codes[KBD_LAYOUT_COUNT] = {"US", "IT", "UK", "DE", "FR"};
+  return codes[g_kbd_layout];
+}
 
 // Mappa tasti scancode set 1 standard
 static const char kbd_us_lower[128] = {
@@ -208,6 +292,7 @@ static void keyboard_callback(interrupt_frame_t *frame) {
   bool upper = shift_pressed ^ caps_lock;
   if (scancode < 128) {
     c = upper ? kbd_us_upper[scancode] : kbd_us_lower[scancode];
+    c = kbd_translate_layout(scancode, upper, c);
   }
 
   if (c != 0) {

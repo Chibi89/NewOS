@@ -7,6 +7,7 @@
  */
 
 #include "cpl_dll_ui.h"
+#include <kernel_ext_api.h>
 
 #ifndef BUILDING_KERNEL_LOADER
 __attribute__((section(".header"), used))
@@ -27,13 +28,14 @@ module_header_t g_keybcpl_header = {
 static const kernel_api_t* g_api = NULL;
 
 typedef struct {
-    int  active_tab;       // 0: Velocita', 1: Hardware
+    int  active_tab;       // 0: Velocita', 1: Hardware, 2: Layout
     int  repeat_delay;     // 1..4 (1=Lungo .. 4=Breve)
     int  repeat_speed;     // 1..10 (1=Lenta .. 10=Veloce)
     int  blink_rate;       // 1..10
     char test_buffer[48];
     bool test_focused;
     int  selected_hw_row;  // 0: PS/2 8042, 1: USB HID
+    int  layout_id;        // 0: US, 1: IT, 2: UK, 3: DE, 4: FR
     char status_msg[64];
 } keybcpl_state_t;
 
@@ -48,13 +50,18 @@ static void draw_slider(int32_t x, int32_t y, int32_t w, int val, int max_val, c
 
 static void save_keyboard_settings(keybcpl_state_t* st) {
     if (!g_api || !st) return;
+    const kernel_ext_api_t* ext = (const kernel_ext_api_t*)g_api->ext_api;
+    if (ext && ext->keyboard_set_layout) {
+        ext->keyboard_set_layout(st->layout_id);
+    }
     if (g_api->registry_set_value_dword) {
         g_api->registry_set_value_dword("HKEY_CURRENT_USER\\Control Panel\\Keyboard", "KeyboardDelay", (uint32_t)st->repeat_delay);
         g_api->registry_set_value_dword("HKEY_CURRENT_USER\\Control Panel\\Keyboard", "KeyboardSpeed", (uint32_t)st->repeat_speed);
         g_api->registry_set_value_dword("HKEY_CURRENT_USER\\Control Panel\\Keyboard", "CursorBlinkRate", (uint32_t)st->blink_rate);
+        g_api->registry_set_value_dword("HKEY_CURRENT_USER\\Control Panel\\Keyboard", "Layout", (uint32_t)st->layout_id);
         if (g_api->registry_save_to_disk) g_api->registry_save_to_disk();
     }
-    dll_strcpy(st->status_msg, "Parametri tastiera salvati nel Registro!", sizeof(st->status_msg));
+    dll_strcpy(st->status_msg, "Parametri e layout tastiera salvati!", sizeof(st->status_msg));
 }
 
 static void keybcpl_draw(window_t* win) {
@@ -75,6 +82,7 @@ static void keybcpl_draw(window_t* win) {
     int32_t tab_h = 22;
     g_api->wm_draw_themed_tab(cx + 8,   tab_y, 110, tab_h, "Velocita'", st->active_tab == 0);
     g_api->wm_draw_themed_tab(cx + 120, tab_y, 110, tab_h, "Hardware",  st->active_tab == 1);
+    g_api->wm_draw_themed_tab(cx + 232, tab_y, 100, tab_h, "Layout",    st->active_tab == 2);
     dll_draw_tabs_divider(g_api, cx, tab_y, tab_h, cw, &t);
 
     if (st->active_tab == 0) {
@@ -121,7 +129,7 @@ static void keybcpl_draw(window_t* win) {
         g_api->gfx_draw_string(b2_x + 62, b2_y + 34, "Lenta", t.text_secondary, 0, true);
         draw_slider(b2_x + 112, b2_y + 32, 190, st->blink_rate, 10, &t);
         g_api->gfx_draw_string(b2_x + 312, b2_y + 34, "Veloce", t.text_secondary, 0, true);
-    } else {
+    } else if (st->active_tab == 1) {
         // Scheda 1: Hardware
         int32_t b1_x = cx + 10;
         int32_t b1_y = cy + 36;
@@ -162,6 +170,26 @@ static void keybcpl_draw(window_t* win) {
         }
         g_api->gfx_draw_string(b2_x + 14, b2_y + 68, "Stato periferica: Il dispositivo funziona correttamente.", 0x107C41, 0, true);
         g_api->gfx_draw_string(b2_x + 14, b2_y + 92, "Driver attivo:    C:\\NewOS\\Driver\\KEYBOARD.SYS", t.text_secondary, 0, true);
+    } else if (st->active_tab == 2) {
+        int32_t box_x = cx + 10, box_y = cy + 36, box_w = cw - 20, box_h = ch - 82;
+        dll_draw_groupbox(g_api, box_x, box_y, box_w, box_h, "Layout Tastiera e Mappatura Tasti", &t);
+        static const char* k_layout_names[5] = {
+            "US  - Inglese (Stati Uniti / QWERTY Standard)",
+            "IT  - Italiano (QWERTY, tasti accentati e simboli)",
+            "UK  - Inglese (Regno Unito / GBP e simboli UK)",
+            "DE  - Tedesco (QWERTZ / Y-Z invertiti)",
+            "FR  - Francese (AZERTY / A-Q e W-Z invertiti)"
+        };
+        for (int i = 0; i < 5; i++) {
+            int32_t ry = box_y + 24 + i * 32;
+            bool sel = (st->layout_id == i);
+            g_api->gfx_fill_rounded_rect(box_x + 12, ry, box_w - 24, 26, 4, sel ? t.sel_bg : t.input_bg);
+            g_api->gfx_draw_rounded_rect(box_x + 12, ry, box_w - 24, 26, 4, sel ? t.accent : t.card_border);
+            g_api->gfx_draw_string(box_x + 22, ry + 7, k_layout_names[i], sel ? t.sel_text : t.text_primary, 0, true);
+        }
+        g_api->gfx_draw_string(box_x + 14, box_y + box_h - 24,
+                               "Suggerimento: puoi cambiare layout anche dalla barra in basso a destra.",
+                               t.text_secondary, 0, true);
     }
 
     int32_t foot_y = cy + ch - 32;
@@ -184,8 +212,9 @@ static void keybcpl_mouse(window_t* win, int32_t lx, int32_t ly, bool clicked) {
     int32_t ch = win->height - 34;
 
     if (ly >= cy + 4 && ly <= cy + 26) {
-        if (lx >= cx + 8 && lx < cx + 118) { st->active_tab = 0; return; }
+        if (lx >= cx + 8 && lx < cx + 118)   { st->active_tab = 0; return; }
         if (lx >= cx + 120 && lx < cx + 230) { st->active_tab = 1; return; }
+        if (lx >= cx + 232 && lx < cx + 332) { st->active_tab = 2; return; }
     }
 
     if (st->active_tab == 0) {
@@ -219,11 +248,25 @@ static void keybcpl_mouse(window_t* win, int32_t lx, int32_t ly, bool clicked) {
             if (st->blink_rate > 10) st->blink_rate = 10;
             return;
         }
-    } else {
+    } else if (st->active_tab == 1) {
         int32_t ly_list = cy + 36 + 20;
         if (lx >= cx + 22 && lx <= cx + cw - 22 && ly >= ly_list && ly <= ly_list + 68) {
             st->selected_hw_row = (ly - ly_list >= 34) ? 1 : 0;
             return;
+        }
+    } else if (st->active_tab == 2) {
+        int32_t box_x = cx + 10, box_y = cy + 36, box_w = cw - 20;
+        for (int i = 0; i < 5; i++) {
+            int32_t ry = box_y + 24 + i * 32;
+            if (lx >= box_x + 12 && lx <= box_x + box_w - 12 && ly >= ry && ly <= ry + 26) {
+                st->layout_id = i;
+                const kernel_ext_api_t* ext = (const kernel_ext_api_t*)g_api->ext_api;
+                if (ext && ext->keyboard_set_layout) {
+                    ext->keyboard_set_layout(i);
+                }
+                dll_strcpy(st->status_msg, "Layout tastiera applicato (premi OK/Applica per salvare)", sizeof(st->status_msg));
+                return;
+            }
         }
     }
 
@@ -279,6 +322,12 @@ int keybcpl_dll_entry(const kernel_api_t* api, window_t* win) {
     st->repeat_speed = 8;
     st->blink_rate   = 6;
     st->test_focused = true;
+    {
+        const kernel_ext_api_t* ext = (const kernel_ext_api_t*)g_api->ext_api;
+        if (ext && ext->keyboard_get_layout) {
+            st->layout_id = ext->keyboard_get_layout();
+        }
+    }
 
     win->app_data = st;
     win->on_draw  = keybcpl_draw;

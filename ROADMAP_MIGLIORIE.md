@@ -44,7 +44,7 @@ Elenco completo delle migliorie architetturali, grafiche, di sistema e hardware 
 ## 4. File System, Storage & Cestino ([`kernel/fs/vfs.c`](kernel/fs/vfs.c), `RECYCLE.DLL`)
 - [x] **Cestino reale integrato**: tasto `Canc` / **Elimina** in Explorer sposta in `C:\Recycle.Bin\` con file metadati (percorso originale, data, dimensione) per il **Ripristino** da `RECYCLE.DLL`; `Shift+Canc` per eliminazione definitiva.
 - [ ] **Scrittura completa su `EXT4` e `FAT32`**: consolidare il supporto R/W sicuro su `FAT32` (chiavette USB e partizione ESP) ed `EXT4` in `FS_EXT.DLL`.
-- [ ] **Write-back cache & Flush periodico sicuro**: timer di flush automatico in background dei settori dirty e indicatore di **"Rimozione sicura dell'hardware"** USB nella tray bar.
+- [x] **Write-back cache & Flush periodico sicuro**: timer di flush automatico in background (`wm_update` ogni 3000 tick) dei settori dirty tramite `vfs_cache_flush()` e indicatore interattivo di **"Rimozione sicura dell'hardware"** USB nella tray bar con notifica toast.
 - [x] **Compressione / Archivi `.ZIP` / `.TAR`**: supporto in `FS_EXT.DLL` ed Explorer per aprire/estrarre archivi `.ZIP` come cartelle virtuali. (Apertura `.TAR` USTAR e `.ZIP` come cartelle virtuali in `EXPLORER.DLL` + `LAUNCHER.DLL`, più comando `tar -cf/-tf/-xf` in `CMD`).
 - [x] **Collegamenti (`.LNK`)**: file shortcut su Desktop ed Explorer gestiti da `LAUNCHER.DLL` per puntare a programmi o cartelle. (`Target=`/`Args=` in `LAUNCHER.DLL`, riconoscimento Explorer e comando `mklnk` in `CMD`).
 
@@ -72,7 +72,7 @@ Elenco completo delle migliorie architetturali, grafiche, di sistema e hardware 
 - [ ] **EDID & Impostazione Risoluzione Reale**: lettura blocchi EDID da VBE/GOP per proporre in `DESK.CPL` le risoluzioni effettivamente supportate dal monitor fisico.
 - [ ] **MSI / MSI-X Interrupts**: supporto Message Signaled Interrupts su PCIe per **NVMe**, **xHCI**, **Intel HDA** ed **E1000/RTL8169**.
 - [ ] **Gestione Risparmio Energetico ACPI completa**: lettura stato batteria (su laptop), stati `S3` (Sospensione RAM) e `S5` (Spegnimento) affidabili su silicio fisico.
-- [ ] **Touchpad PS/2 / I2C HID & Layout Tastiera Multipli**: scorrimento a due dita, layout dinamici in `KEYBCPL.CPL` (IT/US/UK/DE/FR) e tasti multimediali.
+- [ ] **Touchpad PS/2 / I2C HID & tasti multimediali**: scorrimento a due dita e tasti multimediali (`KEYBCPL.DLL` + `keyboard.c` + Tray Bar già completi per i **Layout Tastiera Multipli** dinamici `US`/`IT`/`UK`/`DE`/`FR`).
 - [x] **Sottosistema Porte Parallele (`LPT`), Seriali (`COM`) & Porte Virtuali (Out-of-Kernel [`PORTS.DLL`](SystemLibrary/ports_dll.c))**:
   - Rilevamento I/O bare-metal di **Porte Seriali `COM1`–`COM4`** (UART 16550A/16450 con FIFO 16B e test Loopback HW), **Porte Parallele Legacy `LPT1`–`LPT2`** (IEEE 1284 SPP/EPP/ECP) e **Porte Virtuali `VCOM1`/`VCOM2`/`VLPT1`**, con configurazione Baud Rate.
 - [x] **Diagnostica / Benchmark Bare-Metal**: tool in `SYSDM.CPL` o `DEVMGMT.CPL` per testare velocità reale lettura/scrittura dischi (NVMe/AHCI), test RAM, stato core SMP e IRQ/PCI.

@@ -680,6 +680,8 @@ void screen_mgr_init(void) {
   g_kernel_ext_api.tcp_send = (int (*)(void *, const void *, uint16_t))tcp_send;
   g_kernel_ext_api.tcp_recv = (int (*)(void *, void *, uint16_t))tcp_recv;
   g_kernel_ext_api.tcp_close = (void (*)(void *))tcp_close;
+  g_kernel_ext_api.keyboard_set_layout = keyboard_set_layout;
+  g_kernel_ext_api.keyboard_get_layout = keyboard_get_layout;
   g_kernel_api.ext_api = &g_kernel_ext_api;
 
   g_api_initialized = true;

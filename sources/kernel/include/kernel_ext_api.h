@@ -223,6 +223,8 @@ typedef struct {
     int  (*tcp_send)(void *conn, const void *data, uint16_t len);
     int  (*tcp_recv)(void *conn, void *buf, uint16_t max_len);
     void (*tcp_close)(void *conn);
+    void (*keyboard_set_layout)(int layout_id);
+    int  (*keyboard_get_layout)(void);
 } kernel_ext_api_t;
 
 const kernel_ext_api_t *screen_mgr_get_ext_api(void);

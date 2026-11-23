@@ -9,6 +9,7 @@
 #include <drivers/rtc.h>
 #include <fs/registry.h>
 #include <fs/vfs.h>
+#include <fs/vfs_cache.h>
 #include <gui/graphics.h>
 #include <gui/icons.h>
 #include <gui/image.h>
@@ -1559,14 +1560,29 @@ void wm_render(void) {
 
   // Pulsante Centro Notifiche (a sinistra della pillola tray)
   int32_t bell_x = tray_x - 28;
+  // Indicatore Layout Tastiera (US / IT / UK / DE / FR)
+  int32_t kbd_x = bell_x - 32;
+  // Pulsante Rimozione Sicura Hardware / Flush Cache USB & Dischi
+  int32_t usb_x = kbd_x - 28;
+
   if (current_theme == THEME_CLASSIC && !g_active_theme_props.modern_controls) {
+    gfx_fill_rect(usb_x, tray_y, 24, 22, COLOR_BTNFACE);
+    gfx_draw_bevel_rect(usb_x, tray_y, 24, 22, false);
+    gfx_fill_rect(kbd_x, tray_y, 28, 22, COLOR_BTNFACE);
+    gfx_draw_bevel_rect(kbd_x, tray_y, 28, 22, false);
     gfx_fill_rect(bell_x, tray_y, 24, 22, COLOR_BTNFACE);
     gfx_draw_bevel_rect(bell_x, tray_y, 24, 22, g_notif_center_open);
   } else {
+    gfx_fill_rounded_alpha(usb_x, tray_y, 24, 22, 4, 0xFFFFFF, 95);
+    gfx_draw_rounded_rect(usb_x, tray_y, 24, 22, 4, 0x94A3B8);
+    gfx_fill_rounded_alpha(kbd_x, tray_y, 28, 22, 4, 0xFFFFFF, 95);
+    gfx_draw_rounded_rect(kbd_x, tray_y, 28, 22, 4, 0x94A3B8);
     gfx_fill_rounded_alpha(bell_x, tray_y, 24, 22, 4, g_notif_center_open ? 0x3B82F6 : 0xFFFFFF,
                            g_notif_center_open ? 180 : 95);
     gfx_draw_rounded_rect(bell_x, tray_y, 24, 22, 4, 0x94A3B8);
   }
+  gfx_draw_icon_16(usb_x + 4, tray_y + 3, ICON_HD);
+  gfx_draw_string(kbd_x + 6, tray_y + 7, keyboard_get_layout_code(), clk_col, 0, true);
   gfx_draw_icon_16(bell_x + 4, tray_y + 3, ICON_INFO);
   if (g_toast_count > 0) {
     gfx_fill_rounded_rect(bell_x + 15, tray_y + 1, 8, 8, 4, 0xEF4444);
@@ -1743,6 +1759,11 @@ void wm_render(void) {
 
 void wm_update(mouse_state_t *mouse, char key) {
   app_player_update_tick();
+  static uint32_t s_cache_flush_ticks = 0;
+  if (++s_cache_flush_ticks >= 3000) {
+    s_cache_flush_ticks = 0;
+    vfs_cache_flush();
+  }
   last_mouse_x = mouse->x;
   last_mouse_y = mouse->y;
 
@@ -2294,10 +2315,29 @@ void wm_update(mouse_state_t *mouse, char key) {
       return;
     }
 
-    // Clic sulla System Tray (campanella Centro Notifiche o alimentazione/orologio)
+    // Clic sulla System Tray (USB Rimozione Sicura, Layout Tastiera, Centro Notifiche, Orologio)
     int32_t tray_w = 110;
     int32_t tray_x = sw - tray_w - 14;
     int32_t bell_x = tray_x - 28;
+    int32_t kbd_x = bell_x - 32;
+    int32_t usb_x = kbd_x - 28;
+    if (mouse->x >= usb_x && mouse->x < usb_x + 24 && mouse->y >= ty) {
+      vfs_cache_flush();
+      wm_push_toast("Rimozione Sicura USB", "Cache dischi e periferiche USB svuotata", ICON_HD);
+      prev_mouse_left = mouse->left_button;
+      prev_mouse_right = mouse->right_button;
+      return;
+    }
+    if (mouse->x >= kbd_x && mouse->x < kbd_x + 28 && mouse->y >= ty) {
+      int next_layout = (keyboard_get_layout() + 1) % KBD_LAYOUT_COUNT;
+      keyboard_set_layout(next_layout);
+      char msg[48];
+      mini_snprintf(msg, sizeof(msg), "Layout attivo: %s", keyboard_get_layout_code());
+      wm_push_toast("Layout Tastiera", msg, ICON_INFO);
+      prev_mouse_left = mouse->left_button;
+      prev_mouse_right = mouse->right_button;
+      return;
+    }
     if (mouse->x >= bell_x && mouse->x < tray_x && mouse->y >= ty) {
       g_notif_center_open = !g_notif_center_open;
       g_toast_banner_ticks = 0;

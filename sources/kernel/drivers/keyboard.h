@@ -28,10 +28,22 @@
 #define KEY_ARROW_UP   ((char)0xF8)
 #define KEY_ARROW_DOWN ((char)0xF9)
 
+typedef enum {
+    KBD_LAYOUT_US = 0,
+    KBD_LAYOUT_IT = 1,
+    KBD_LAYOUT_UK = 2,
+    KBD_LAYOUT_DE = 3,
+    KBD_LAYOUT_FR = 4,
+    KBD_LAYOUT_COUNT = 5
+} kbd_layout_t;
+
 void keyboard_init(void);
 bool keyboard_has_char(void);
 char keyboard_get_char(void);
 void keyboard_inject_char(char c);
+void keyboard_set_layout(int layout_id);
+int keyboard_get_layout(void);
+const char* keyboard_get_layout_code(void);
 #ifndef keyboard_is_ctrl_pressed
 bool keyboard_is_ctrl_pressed(void);
 #endif
