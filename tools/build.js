@@ -583,7 +583,8 @@ const systemLibraries = [
     { src: 'SystemLibrary/launcher_dll.c', ini: 'SystemLibrary/LAUNCHER.INI', out: 'LAUNCHER.DLL', iniOut: 'LAUNCHER.INI', extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
     { src: 'SystemLibrary/seccpl.c', ini: 'SystemLibrary/SECCPL.INI', out: 'SECCPL.DLL', iniOut: 'SECCPL.INI', extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
     { src: 'SystemLibrary/comctl_dll.c', ini: 'SystemLibrary/COMCTL.INI', out: 'COMCTL.DLL', iniOut: 'COMCTL.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
-    { src: 'SystemLibrary/startmenu_dll.c', ini: 'SystemLibrary/STARTMENU.INI', out: 'STARTMENU.DLL', iniOut: 'STARTMENU.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` }
+    { src: 'SystemLibrary/startmenu_dll.c', ini: 'SystemLibrary/STARTMENU.INI', out: 'STARTMENU.DLL', iniOut: 'STARTMENU.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
+    { src: 'SystemLibrary/icons_dll.c', ini: 'SystemLibrary/ICONS.INI', out: 'ICONS.DLL', iniOut: 'ICONS.INI', extraFlags: `-Wno-unused-function -Wno-unused-parameter` }
 ];
 
 const targetLibDir = path.join(BIN_DIR, 'NewOS', 'SystemLibrary');

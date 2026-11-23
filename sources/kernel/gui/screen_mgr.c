@@ -246,7 +246,7 @@ static bool disk_install_chunk(uint32_t chunk_idx, uint32_t total_chunks,
       strncpy(out_status, "C:\\NewOS\\Boot\\kernel.bin (Kernel 64-bit Core)...",
               max_status - 1);
     } else if (pct <= 9) {
-      strncpy(out_status, "C:\\NewOS\\Resources\\Icons\\ICONS.BIN...",
+      strncpy(out_status, "C:\\NewOS\\SystemLibrary\\ICONS.DLL...",
               max_status - 1);
     } else if (pct <= 13) {
       strncpy(out_status, "C:\\NewOS (Inizializzazione VBR e exFAT FAT)...",

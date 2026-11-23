@@ -194,3 +194,23 @@ void gfx_draw_sprite_16_alpha(int32_t x, int32_t y, const uint32_t* pixels);
 const outHPath = path.join(ROOT, 'kernel', 'gui', 'icons.h');
 fs.writeFileSync(outHPath, hContent);
 console.log(`[OK] Generato ${outHPath}`);
+
+// Generazione dati binari C per ICONS.DLL (SystemLibrary/icons_data.h)
+const outDataHPath = path.join(ROOT, 'SystemLibrary', 'icons_data.h');
+const lines = [
+    '// Autogenerato da tools/process_icons.js - NON MODIFICARE A MANO',
+    '#ifndef SYSTEM_LIBRARY_ICONS_DATA_H',
+    '#define SYSTEM_LIBRARY_ICONS_DATA_H',
+    '#include <types.h>',
+    `static const uint32_t g_icons_mico_size = ${iconsBin.length}u;`,
+    'static const uint8_t g_icons_mico_data[] = {'
+];
+for (let off = 0; off < iconsBin.length; off += 16) {
+    const slice = iconsBin.subarray(off, Math.min(off + 16, iconsBin.length));
+    const hex = Array.from(slice, b => '0x' + b.toString(16).padStart(2, '0')).join(',');
+    lines.push('    ' + hex + (off + 16 < iconsBin.length ? ',' : ''));
+}
+lines.push('};');
+lines.push('#endif');
+fs.writeFileSync(outDataHPath, lines.join('\n') + '\n');
+console.log(`[OK] Generato ${outDataHPath} (${iconsBin.length} byte)`);
