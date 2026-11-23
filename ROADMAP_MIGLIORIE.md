@@ -108,6 +108,12 @@ Elenco completo delle migliorie architetturali, grafiche, di sistema e hardware 
 - [ ] **Migrazione progressiva delle Applet `.CPL` e App a `.xuiml`**: convertire `NETCPL.DLL`, `USERACCT.DLL`, `PORTS.DLL`, `TIMEDATE.DLL` e le altre dialoghi di sistema in file `.xuiml` sotto `C:\NewOS\SystemLibrary\UI\`.
 - [ ] **Integrazione Compilatore `TCC` (Tiny C Compiler) Out-of-Kernel (`TCC.DLL` / SDK)**: compilazione nativa self-hosted di sorgenti `.c` x86_64 dentro NewOS collegata a `XUIML.DLL` e `PKGSVC.DLL` (`C:\ProgramFile\<App>\`).
 - [ ] **NewOS Studio / Form Designer Visuale `.xuiml`**: editor grafico drag-and-drop con anteprima live per progettare form `.xuiml`, scrivere la logica C/JS e pacchettizzare app installabili.
+- [ ] **Runtime Completo per Sviluppatori (Architettura a 5 Strati Out-of-Kernel)**:
+  1. **Isolamento & ABI Stabile (Ring 3 + Syscall)**: processi utente isolati in spazio `PML4` dedicato con gateway `syscall` (terminazione sicura dell'app su fault invece del BSOD).
+  2. **Core Runtime Condiviso (`NEWOSRT.DLL`)**: allocator heap per-processo (`malloc`/`free`), thread/mutex, I/O POSIX-like con enforcement ACL (`C:\ProgramFile\`), event loop asincrono (`WM_PAINT`/`WM_MOUSE`/`WM_KEY`/`WM_TIMER`) e wrapper rete (`NETSTACK`/`NETTLS`).
+  3. **Layer Grafico Event-Driven (`XUIML.DLL` + `COMCTL.DLL` + `ICONS.DLL`)**: data-binding bidirezionale e dispatch callback (`on_click`) dal `.xuiml` alla logica dell'app.
+  4. **Doppio Motore di Esecuzione**: nativo compilato (`TCC.DLL` + `C:\NewOS\SDK\include\`) + managed/scripted (`JSENGINE.DLL` QuickJS collegato a `XUIML.DLL` con hot-reload).
+  5. **Toolchain, Debug & Packaging (`PKGSVC.DLL`)**: console `stdout`/crash inspector con backtrace simbolico e packager automatico verso `C:\ProgramFile\<App>\`.
 
 > **Nota Tecnica — Architettura SDK Minimo & `TCC.DLL`:**
 > - **Header freestanding (`C:\NewOS\SDK\include\`)**: quando `TCC` verrà portato out-of-kernel in `SystemLibrary\` (`TCC.DLL`), fornirgli un set ridotto di header standard freestanding che mappino direttamente le funzioni esportate da `kernel_ext_api.h`, `COMCTL.DLL` e `XUIML.DLL`. In questo modo i programmi compilati on-device non avranno bisogno di `libc` pesanti, gireranno senza dipendenze esterne e rispetteranno al 100% i vincoli di sicurezza e ACL.
