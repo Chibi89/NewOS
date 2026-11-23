@@ -194,7 +194,15 @@ static st_proj_file_t g_pfiles[ST_MAX_PFILES];
 static int g_pfile_cnt = 0;
 static int g_open_combo_idx = -1;
 static int g_proj_ver_minor = 0;
+static int g_proj_build_num = 100;
 static int g_proj_target_efi = 0; /* 0=x86_64, 1=x86_64+EFI */
+static int g_proj_app_type = 0;   /* 0=Desktop GUI, 1=Console (Prompt) */
+static int g_proj_icon_idx = 0;
+
+static const int g_proj_icons[8] = {10, 43, 8, 44, 24, 37, 14, 20};
+static const char *const g_proj_icon_names[8] = {
+    "Desktop", "Console", "Esegui", "Impostaz.",
+    "Play",    "Setup",   "Rete",   "Dati"};
 
 static char g_c_code[2048];
 static char g_output_lines[4][76];
@@ -228,6 +236,20 @@ static void st_push_output(const char *line) {
 static void st_regen_c_code(const char *focus_id) {
   if (!g_rt || !g_rt->snprintf)
     return;
+  if (g_proj_app_type == 1) {
+    g_rt->snprintf(
+        g_c_code, sizeof(g_c_code),
+        "// studio_app.c - App Console (Prompt dei Comandi)\n"
+        "#include <newos/sdk.h>\n\n"
+        "void app_main(const kernel_api_t* kapi) {\n"
+        "    const nsrt_api_t* rt = nsrt_load_library(kapi);\n"
+        "    if (!rt) return;\n"
+        "    rt->serial_print(\"[CONSOLE] %s v1.%d.%d avviato...\\n\");\n"
+        "    NS_LOG_INFO(\"App Console eseguita (Subsystem: CONSOLE)\");\n"
+        "}\n",
+        g_proj_name, g_proj_ver_minor, g_proj_build_num);
+    return;
+  }
   int pos = 0;
   pos += g_rt->snprintf(g_c_code + pos, sizeof(g_c_code) - (size_t)pos,
                         "// studio_app.c - Generato da NewOS Studio IDE\n"
@@ -688,12 +710,16 @@ static bool st_save_project(void) {
   int pos = 0;
   pos += g_rt->snprintf(
       pbuf + pos, 2048 - (size_t)pos,
-      "[NewOSProject]\nname=%s\nversion=1.%d\nauthor=NewOS Developer\n"
-      "target=%s\ntemplate=%d\nver_minor=%d\ntarget_efi=%d\nseq=%d\nctrl_count="
-      "%d\n",
-      g_proj_name, g_proj_ver_minor,
-      g_proj_target_efi ? "x86_64+EFI" : "x86_64", g_proj_tpl, g_proj_ver_minor,
-      g_proj_target_efi, g_seq, g_ctrl_count);
+      "[NewOSProject]\nname=%s\nversion=1.%d.%d\nauthor=NewOS Developer\n"
+      "target=%s\nsubsystem=%s\nicon_id=%d\ntemplate=%d\nver_minor=%d\n"
+      "build_num=%d\ntarget_efi=%d\napp_type=%d\nicon_idx=%d\nseq=%d\n"
+      "ctrl_count=%d\n",
+      g_proj_name, g_proj_ver_minor, g_proj_build_num,
+      g_proj_target_efi ? "x86_64+EFI" : "x86_64",
+      g_proj_app_type ? "CONSOLE" : "WINDOWS_GUI",
+      g_proj_icons[g_proj_icon_idx & 7], g_proj_tpl, g_proj_ver_minor,
+      g_proj_build_num, g_proj_target_efi, g_proj_app_type, g_proj_icon_idx,
+      g_seq, g_ctrl_count);
   for (int i = 0; i < g_pfile_cnt && pos < 1750; i++) {
     pos += g_rt->snprintf(pbuf + pos, 2048 - (size_t)pos, "copy_%s=%d\n",
                           g_pfiles[i].name, (int)g_pfiles[i].copy_mode);
@@ -763,9 +789,18 @@ static bool st_load_project_file(const char *nsproj_path) {
     } else if (g_rt->strncmp && g_rt->strncmp(p, "ver_minor=", 10) == 0) {
       p += 10;
       g_proj_ver_minor = st_parse_int_tok(&p, '\n');
+    } else if (g_rt->strncmp && g_rt->strncmp(p, "build_num=", 10) == 0) {
+      p += 10;
+      g_proj_build_num = st_parse_int_tok(&p, '\n');
     } else if (g_rt->strncmp && g_rt->strncmp(p, "target_efi=", 11) == 0) {
       p += 11;
       g_proj_target_efi = st_parse_int_tok(&p, '\n');
+    } else if (g_rt->strncmp && g_rt->strncmp(p, "app_type=", 9) == 0) {
+      p += 9;
+      g_proj_app_type = st_parse_int_tok(&p, '\n') ? 1 : 0;
+    } else if (g_rt->strncmp && g_rt->strncmp(p, "icon_idx=", 9) == 0) {
+      p += 9;
+      g_proj_icon_idx = st_parse_int_tok(&p, '\n') & 7;
     } else if (g_rt->strncmp && g_rt->strncmp(p, "seq=", 4) == 0) {
       p += 4;
       g_seq = st_parse_int_tok(&p, '\n');
@@ -1119,11 +1154,14 @@ static void st_deploy_project(void) {
     }
     if (g_rt->strcmp && g_rt->strcmp(pf->name, "app.ini") == 0) {
       char ini[256];
-      int ilen = g_rt->snprintf(ini, sizeof(ini),
-                                "[AppManifest]\nName=%s\nVersion=1.%d\n"
-                                "Runtime=NSRT.DLL+XUIML.DLL\nTarget=%s\n",
-                                g_proj_name, g_proj_ver_minor,
-                                g_proj_target_efi ? "x86_64+EFI" : "x86_64");
+      int ilen = g_rt->snprintf(
+          ini, sizeof(ini),
+          "[AppManifest]\nName=%s\nVersion=1.%d.%d\nSubsystem=%s\nIconId=%d\n"
+          "Runtime=NSRT.DLL+XUIML.DLL\nTarget=%s\n",
+          g_proj_name, g_proj_ver_minor, g_proj_build_num,
+          g_proj_app_type ? "CONSOLE" : "WINDOWS_GUI",
+          g_proj_icons[g_proj_icon_idx & 7],
+          g_proj_target_efi ? "x86_64+EFI" : "x86_64");
       if (g_rt->file_write(dp, ini, (uint32_t)ilen, true))
         copied++;
     } else {
@@ -1178,14 +1216,18 @@ static void st_create_installer(void) {
       buf + pos, 4096 - (size_t)pos,
       "[NewOSInstaller]\n"
       "PackageName=%s\n"
-      "Version=1.%d\n"
+      "Version=1.%d.%d\n"
+      "Subsystem=%s\n"
+      "IconId=%d\n"
       "Target=%s\n"
       "RequiredService=C:\\NewOS\\SystemLibrary\\PKGSVC.DLL\n"
       "ServiceModule=PKGSVC\n"
       "ServiceEntry=pkgsvc_dll_entry\n"
       "InstallDir=C:\\ProgramFile\\%s\\\n"
       "SandboxACL=PROGRAMFILE_ONLY\n",
-      g_proj_name, g_proj_ver_minor,
+      g_proj_name, g_proj_ver_minor, g_proj_build_num,
+      g_proj_app_type ? "CONSOLE" : "WINDOWS_GUI",
+      g_proj_icons[g_proj_icon_idx & 7],
       g_proj_target_efi ? "x86_64+EFI" : "x86_64", g_proj_name);
   for (int i = 0; i < g_pfile_cnt && pos < 3600; i++) {
     if (g_pfiles[i].copy_mode == 0)
@@ -1591,32 +1633,44 @@ static void studio_draw(window_t *win) {
   } else if (g_doc_tab == 3) {
     g_api->gfx_draw_string(tx + 10, body_y + 6, "Strumenti Progetto", p->text,
                            0, true);
-    g_api->gfx_draw_string(tx + 10, body_y + 28, "v Personalizza",
+    g_api->gfx_draw_string(tx + 10, body_y + 26, "v Personalizza",
                            p->text_muted, 0, true);
     if (g_rt && g_rt->snprintf) {
-      char tb1[32], tb2[32];
+      char tb1[32], tb2[32], tb3[20], tb4[20], tb5[32];
       g_rt->snprintf(tb1, sizeof(tb1), "Target: %s",
                      g_proj_target_efi ? "x86+EFI" : "x86_64");
-      g_rt->snprintf(tb2, sizeof(tb2), "Versione: 1.%d (+)", g_proj_ver_minor);
-      vs_draw_btn(p, tx + 10, body_y + 48, tw - 20, 23, tb1, false);
-      vs_draw_btn(p, tx + 10, body_y + 76, tw - 20, 23, tb2, false);
+      g_rt->snprintf(tb2, sizeof(tb2), "Tipo: %s",
+                     g_proj_app_type ? "Console (CMD)" : "Desktop GUI");
+      g_rt->snprintf(tb3, sizeof(tb3), "Ver:1.%d+", g_proj_ver_minor);
+      g_rt->snprintf(tb4, sizeof(tb4), "Bld:#%d+", g_proj_build_num);
+      g_rt->snprintf(tb5, sizeof(tb5), "   Icona: %s",
+                     g_proj_icon_names[g_proj_icon_idx & 7]);
+      vs_draw_btn(p, tx + 10, body_y + 44, tw - 20, 22, tb1, false);
+      vs_draw_btn(p, tx + 10, body_y + 70, tw - 20, 22, tb2,
+                  g_proj_app_type == 1);
+      vs_draw_btn(p, tx + 10, body_y + 96, 78, 22, tb3, false);
+      vs_draw_btn(p, tx + 92, body_y + 96, 78, 22, tb4, false);
+      vs_draw_btn(p, tx + 10, body_y + 122, tw - 20, 24, tb5, false);
+      if (g_rt->gfx_draw_icon16)
+        g_rt->gfx_draw_icon16(tx + 15, body_y + 126,
+                              g_proj_icons[g_proj_icon_idx & 7]);
     }
 
-    g_api->gfx_draw_string(tx + 10, body_y + 108, "v Preset Copia Output",
+    g_api->gfx_draw_string(tx + 10, body_y + 154, "v Preset Copia Output",
                            p->text_muted, 0, true);
-    vs_draw_btn(p, tx + 10, body_y + 128, tw - 20, 23, "Solo Runtime", false);
-    vs_draw_btn(p, tx + 10, body_y + 156, tw - 20, 23, "Sorgenti + SDK", false);
-    vs_draw_btn(p, tx + 10, body_y + 184, tw - 20, 23, "Copia Tutto", false);
-    vs_draw_btn(p, tx + 10, body_y + 212, tw - 20, 23, "Aggiorna Lista", false);
+    vs_draw_btn(p, tx + 10, body_y + 172, tw - 20, 22, "Solo Runtime", false);
+    vs_draw_btn(p, tx + 10, body_y + 198, tw - 20, 22, "Sorgenti + SDK", false);
+    vs_draw_btn(p, tx + 10, body_y + 224, tw - 20, 22, "Copia Tutto", false);
+    vs_draw_btn(p, tx + 10, body_y + 250, tw - 20, 22, "Aggiorna Lista", false);
 
-    g_api->gfx_draw_string(tx + 10, body_y + 244, "v Compila & Deploy",
+    g_api->gfx_draw_string(tx + 10, body_y + 280, "v Compila & Deploy",
                            p->text_muted, 0, true);
-    vs_draw_btn(p, tx + 10, body_y + 264, tw - 20, 24, "Verifica & Compila",
+    vs_draw_btn(p, tx + 10, body_y + 298, tw - 20, 24, "Verifica & Compila",
                 true);
-    vs_draw_btn(p, tx + 10, body_y + 294, tw - 20, 24, "Pubblica Eseguibile",
+    vs_draw_btn(p, tx + 10, body_y + 326, tw - 20, 24, "Pubblica Eseguibile",
                 true);
-    vs_draw_btn(p, tx + 10, body_y + 324, tw - 20, 24, "Crea Installer", true);
-    g_api->gfx_draw_string(tx + 10, body_y + 354, "Linker: PKGSVC.DLL",
+    vs_draw_btn(p, tx + 10, body_y + 354, tw - 20, 24, "Crea Installer", true);
+    g_api->gfx_draw_string(tx + 10, body_y + 384, "Linker: PKGSVC.DLL",
                            p->status_ok, 0, true);
   } else {
     if (g_code_lines_cnt == 0)
@@ -1812,16 +1866,19 @@ static void studio_draw(window_t *win) {
       st_refresh_project_files();
     vs_draw_surface(p, mx, doc_y, mw, doc_h, p->bg_editor, 165);
     if (g_rt && g_rt->snprintf) {
+      if (g_rt->gfx_draw_icon32)
+        g_rt->gfx_draw_icon32(mx + 14, doc_y + 7,
+                              g_proj_icons[g_proj_icon_idx & 7]);
       char hdr[96], sub[96];
-      g_rt->snprintf(hdr, sizeof(hdr),
-                     "Configurazione Progetto: %s  (v1.%d  |  %s)", g_proj_name,
-                     g_proj_ver_minor,
+      g_rt->snprintf(hdr, sizeof(hdr), "%s  v1.%d.%d  (%s | %s)", g_proj_name,
+                     g_proj_ver_minor, g_proj_build_num,
+                     g_proj_app_type ? "Console Prompt" : "Desktop GUI",
                      g_proj_target_efi ? "x86_64+EFI" : "x86_64");
       g_rt->snprintf(sub, sizeof(sub),
-                     "Cartella Output Eseguibile: C:\\ProgramFile\\%s",
-                     g_proj_name);
-      g_api->gfx_draw_string(mx + 14, doc_y + 10, hdr, p->accent, 0, true);
-      g_api->gfx_draw_string(mx + 14, doc_y + 28, sub, p->text_muted, 0, true);
+                     "Icona: %s  |  Output: C:\\ProgramFile\\%s",
+                     g_proj_icon_names[g_proj_icon_idx & 7], g_proj_name);
+      g_api->gfx_draw_string(mx + 54, doc_y + 9, hdr, p->accent, 0, true);
+      g_api->gfx_draw_string(mx + 54, doc_y + 27, sub, p->text_muted, 0, true);
     }
     g_api->gfx_fill_rect(mx + 12, doc_y + 48, mw - 24, 20, p->bg_header);
     g_api->gfx_draw_string(mx + 20, doc_y + 52, "File del Progetto", p->text, 0,
@@ -2176,41 +2233,63 @@ static void studio_mouse(window_t *win, int32_t lx, int32_t ly, bool clicked) {
         return;
       }
     } else if (g_doc_tab == 3) {
-      if (ry >= body_y + 48 && ry < body_y + 71) {
+      if (ry >= body_y + 44 && ry < body_y + 66) {
         g_proj_target_efi = !g_proj_target_efi;
         g_proj_dirty = true;
         return;
       }
-      if (ry >= body_y + 76 && ry < body_y + 99) {
-        g_proj_ver_minor = (g_proj_ver_minor + 1) % 10;
+      if (ry >= body_y + 70 && ry < body_y + 92) {
+        g_proj_app_type = !g_proj_app_type;
+        if (g_proj_app_type == 1 && g_proj_icon_idx == 0)
+          g_proj_icon_idx = 1;
+        else if (g_proj_app_type == 0 && g_proj_icon_idx == 1)
+          g_proj_icon_idx = 0;
+        st_regen_c_code(NULL);
+        g_proj_dirty = true;
+        st_push_output(g_proj_app_type
+                           ? "[PROJ] Tipo app: Console (Prompt dei Comandi)"
+                           : "[PROJ] Tipo app: Desktop GUI (XUIML)");
+        return;
+      }
+      if (ry >= body_y + 96 && ry < body_y + 118) {
+        if (rx < 90)
+          g_proj_ver_minor = (g_proj_ver_minor + 1) % 10;
+        else
+          g_proj_build_num++;
         g_proj_dirty = true;
         return;
       }
-      if (ry >= body_y + 128 && ry < body_y + 151) {
+      if (ry >= body_y + 122 && ry < body_y + 146) {
+        g_proj_icon_idx = (g_proj_icon_idx + 1) & 7;
+        g_proj_dirty = true;
+        return;
+      }
+      if (ry >= body_y + 172 && ry < body_y + 194) {
         st_apply_copy_preset(0);
         return;
       }
-      if (ry >= body_y + 156 && ry < body_y + 179) {
+      if (ry >= body_y + 198 && ry < body_y + 220) {
         st_apply_copy_preset(1);
         return;
       }
-      if (ry >= body_y + 184 && ry < body_y + 207) {
+      if (ry >= body_y + 224 && ry < body_y + 246) {
         st_apply_copy_preset(2);
         return;
       }
-      if (ry >= body_y + 212 && ry < body_y + 235) {
+      if (ry >= body_y + 250 && ry < body_y + 272) {
         st_refresh_project_files();
         return;
       }
-      if (ry >= body_y + 264 && ry < body_y + 288) {
+      if (ry >= body_y + 298 && ry < body_y + 322) {
+        g_proj_build_num++;
         st_build_verify_project();
         return;
       }
-      if (ry >= body_y + 294 && ry < body_y + 318) {
+      if (ry >= body_y + 326 && ry < body_y + 350) {
         st_deploy_project();
         return;
       }
-      if (ry >= body_y + 324 && ry < body_y + 348) {
+      if (ry >= body_y + 354 && ry < body_y + 378) {
         st_create_installer();
         return;
       }
