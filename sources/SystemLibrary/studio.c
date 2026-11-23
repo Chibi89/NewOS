@@ -59,54 +59,42 @@ typedef struct {
     uint32_t code_fn;
     uint32_t status_ok;
     bool     is_dark;
+    bool     is_glass;
     bool     modern;
     uint8_t  radius;
 } vs_palette_t;
 
 static bool g_force_dark_theme = false;
 
-static uint32_t vs_luma(uint32_t c) {
-    uint32_t r = (c >> 16) & 0xFFu;
-    uint32_t g = (c >> 8) & 0xFFu;
-    uint32_t b = c & 0xFFu;
-    return (r * 299u + g * 587u + b * 114u) / 1000u;
-}
-
-static uint32_t vs_opaque(uint32_t c) {
-    return 0xFF000000u | (c & 0x00FFFFFFu);
-}
-
 static vs_palette_t st_get_palette(void) {
     vs_palette_t p;
-    const theme_info_t* th = (!g_force_dark_theme && g_api && g_api->wm_get_current_theme_props)
-        ? (const theme_info_t*)g_api->wm_get_current_theme_props()
-        : NULL;
-
-    if (th) {
-        uint32_t wbg = vs_opaque(th->window_bg);
-        bool dark = (vs_luma(wbg) < 128u);
-        p.is_dark     = dark;
-        p.modern      = th->modern_controls;
-        p.radius      = th->panel_radius ? th->panel_radius : 4;
-        p.bg_editor   = wbg;
-        p.bg_panel    = dark ? 0xFF252526u : vs_opaque(th->btn_face);
-        p.bg_header   = dark ? 0xFF2D2D30u : vs_opaque(th->btn_hover);
-        p.bg_gutter   = dark ? 0xFF1A1A1Au : vs_opaque(th->btn_face);
-        p.border      = vs_opaque(th->control_border_color ? th->control_border_color : th->border_color);
-        p.accent      = vs_opaque(th->accent_color ? th->accent_color : 0xFF007ACCu);
-        p.accent_text = vs_opaque(th->accent_text ? th->accent_text : 0xFFFFFFFFu);
-        p.text        = vs_opaque(th->window_text);
-        p.text_muted  = vs_opaque(th->inactive_title_text ? th->inactive_title_text : 0xFF64748Bu);
-        p.code_kw     = dark ? 0xFF569CD6u : 0xFF0000FFu;
-        p.code_prep   = dark ? 0xFFC586C0u : 0xFFAF00DBu;
-        p.code_cmt    = dark ? 0xFF6A9955u : 0xFF008000u;
-        p.code_fn     = dark ? 0xFFDCDCAAu : 0xFF795E26u;
-        p.status_ok   = dark ? 0xFF4EC9B0u : 0xFF107C41u;
+    if (!g_force_dark_theme && g_api) {
+        dll_theme_t dt;
+        dll_theme_init(g_api, &dt);
+        p.is_dark     = dt.is_dark;
+        p.is_glass    = dt.is_glass;
+        p.modern      = !dt.is_classic;
+        p.radius      = (uint8_t)(dt.panel_radius > 0 ? dt.panel_radius : 6);
+        p.bg_editor   = 0xFF000000u | (dt.input_bg & 0x00FFFFFFu);
+        p.bg_panel    = 0xFF000000u | (dt.card_bg & 0x00FFFFFFu);
+        p.bg_header   = 0xFF000000u | ((dt.th && dt.th->btn_hover) ? (dt.th->btn_hover & 0x00FFFFFFu) : (dt.is_dark ? 0x2D2D36u : 0xE6ECF5u));
+        p.bg_gutter   = 0xFF000000u | (dt.is_dark ? 0x1A1A22u : (dt.card_bg & 0x00FFFFFFu));
+        p.border      = 0xFF000000u | (dt.card_border & 0x00FFFFFFu);
+        p.accent      = 0xFF000000u | (dt.accent & 0x00FFFFFFu);
+        p.accent_text = 0xFF000000u | (dt.accent_text & 0x00FFFFFFu);
+        p.text        = 0xFF000000u | (dt.text_primary & 0x00FFFFFFu);
+        p.text_muted  = 0xFF000000u | (dt.text_secondary & 0x00FFFFFFu);
+        p.code_kw     = dt.is_dark ? 0xFF569CD6u : 0xFF0000FFu;
+        p.code_prep   = dt.is_dark ? 0xFFC586C0u : 0xFFAF00DBu;
+        p.code_cmt    = dt.is_dark ? 0xFF6A9955u : 0xFF008000u;
+        p.code_fn     = dt.is_dark ? 0xFFDCDCAAu : 0xFF795E26u;
+        p.status_ok   = dt.is_dark ? 0xFF4EC9B0u : 0xFF107C41u;
         return p;
     }
 
     /* Fallback / Override Visual Studio Dark */
     p.is_dark     = true;
+    p.is_glass    = false;
     p.modern      = true;
     p.radius      = 4;
     p.bg_editor   = 0xFF1E1E1Eu;
@@ -124,6 +112,17 @@ static vs_palette_t st_get_palette(void) {
     p.code_fn     = 0xFFDCDCAAu;
     p.status_ok   = 0xFF4EC9B0u;
     return p;
+}
+
+static void vs_draw_surface(const vs_palette_t* p, int32_t x, int32_t y, int32_t w, int32_t h, uint32_t color, uint8_t glass_alpha) {
+    if (p->is_glass && g_api->gfx_fill_rounded_alpha) {
+        g_api->gfx_fill_rounded_alpha(x, y, w, h, p->radius, color & 0x00FFFFFFu, glass_alpha);
+        if (g_api->gfx_draw_rounded_rect) g_api->gfx_draw_rounded_rect(x, y, w, h, p->radius, p->border);
+        if (g_api->gfx_draw_specular_rim) g_api->gfx_draw_specular_rim(x, y, w, h, p->radius);
+    } else {
+        g_api->gfx_fill_rect(x, y, w, h, color);
+        g_api->gfx_draw_rect(x, y, w, h, p->border);
+    }
 }
 
 typedef enum {
@@ -493,47 +492,50 @@ static void studio_draw(window_t* win) {
     int32_t cw = win->width - 8;
     int32_t ch = win->height - 32;
 
-    /* Sfondo IDE agganciato al tema */
-    g_api->gfx_fill_rect(cx, cy, cw, ch, p->bg_editor);
+    /* Sfondo IDE: in Liquid Glass lasciamo trasparire il vetro del WM; altrimenti riempimento opaco */
+    if (!p->is_glass) {
+        g_api->gfx_fill_rect(cx, cy, cw, ch, p->bg_editor);
+    }
 
     /* Menu Bar + Toolbar */
-    g_api->gfx_fill_rect(cx, cy, cw, 24, p->bg_header);
+    if (p->is_glass && g_api->gfx_fill_rounded_alpha) {
+        g_api->gfx_fill_rounded_alpha(cx + 2, cy + 2, cw - 4, 52, p->radius, p->bg_panel & 0x00FFFFFFu, 175);
+        if (g_api->gfx_draw_specular_rim) g_api->gfx_draw_specular_rim(cx + 2, cy + 2, cw - 4, 52, p->radius);
+    } else {
+        g_api->gfx_fill_rect(cx, cy, cw, 24, p->bg_header);
+        g_api->gfx_fill_rect(cx, cy + 24, cw, 30, p->bg_panel);
+        g_api->gfx_fill_rect(cx, cy + 54, cw, 1, p->border);
+    }
     g_api->gfx_draw_string(cx + 10, cy + 5, "File   Modifica   Visualizza   Progetto   Compila   Debug   Aiuto", p->text, 0, true);
-    g_api->gfx_draw_string(cx + cw - 156, cy + 5, g_force_dark_theme ? "[Tema: VS Dark]" : "[Tema: Sistema]", p->accent, 0, true);
+    g_api->gfx_draw_string(cx + cw - 156, cy + 5, g_force_dark_theme ? "[Tema: VS Dark]" : (p->is_glass ? "[Liquid Glass]" : "[Tema: Sistema]"), p->accent, 0, true);
 
-    g_api->gfx_fill_rect(cx, cy + 24, cw, 30, p->bg_panel);
-    g_api->gfx_fill_rect(cx, cy + 54, cw, 1, p->border);
     for (int i = 0; i < 5; i++) {
         vs_draw_btn(p, cx + g_tb_btns[i].x, cy + g_tb_btns[i].y, g_tb_btns[i].w, g_tb_btns[i].h, g_tb_btns[i].lbl, g_tb_btns[i].act == 7);
     }
 
-  int32_t body_y = cy + 55;
-  int32_t body_h = ch - 55 - 24; /* -24 status bar */
-  int32_t out_h = 96;
-  int32_t mid_h = body_h - out_h;
+    int32_t body_y = cy + 58;
+    int32_t body_h = ch - 58 - 26; /* -26 status bar */
+    int32_t out_h = 96;
+    int32_t mid_h = body_h - out_h;
 
-    /* 1. Sinistra: Toolbox (184 px) */
-    int32_t tx = cx, tw = 184;
-    g_api->gfx_fill_rect(tx, body_y, tw, body_h, p->bg_panel);
-    g_api->gfx_fill_rect(tx + tw - 1, body_y, 1, body_h, p->border);
-    g_api->gfx_fill_rect(tx, body_y, tw - 1, 22, p->bg_header);
-    g_api->gfx_draw_string(tx + 8, body_y + 4, "Toolbox", p->text, 0, true);
-    g_api->gfx_draw_string(tx + 8, body_y + 28, "v Controlli Comuni", p->text_muted, 0, true);
+    /* 1. Sinistra: Toolbox */
+    int32_t tx = cx + 2, tw = 180;
+    vs_draw_surface(p, tx, body_y, tw, body_h, p->bg_panel, 170);
+    g_api->gfx_draw_string(tx + 10, body_y + 6, "Toolbox", p->text, 0, true);
+    g_api->gfx_draw_string(tx + 10, body_y + 28, "v Controlli Comuni", p->text_muted, 0, true);
 
     const char* tb_items[] = { "+ Label", "+ Button", "+ TextBox", "+ CheckBox", "+ GroupBox" };
     for (int i = 0; i < 5; i++) {
-        vs_draw_btn(p, tx + 10, body_y + 50 + i * 30, tw - 22, 24, tb_items[i], false);
+        vs_draw_btn(p, tx + 10, body_y + 50 + i * 30, tw - 20, 24, tb_items[i], false);
     }
 
-    /* 2. Destra: Esplora Soluzione + Proprieta' (244 px) */
-    int32_t rw = 244;
-    int32_t rx = cx + cw - rw;
-    g_api->gfx_fill_rect(rx, body_y, rw, body_h, p->bg_panel);
-    g_api->gfx_fill_rect(rx, body_y, 1, body_h, p->border);
+    /* 2. Destra: Esplora Soluzione + Proprieta' */
+    int32_t rw = 240;
+    int32_t rx = cx + cw - rw - 2;
+    vs_draw_surface(p, rx, body_y, rw, body_h, p->bg_panel, 170);
 
     /* Esplora Soluzione (sopra) */
-    g_api->gfx_fill_rect(rx + 1, body_y, rw - 1, 22, p->bg_header);
-    g_api->gfx_draw_string(rx + 10, body_y + 4, "Esplora Soluzione", p->text, 0, true);
+    g_api->gfx_draw_string(rx + 10, body_y + 6, "Esplora Soluzione", p->text, 0, true);
     g_api->gfx_draw_string(rx + 10, body_y + 28, "Soluzione 'NewOSApp'", p->text, 0, true);
     g_api->gfx_draw_string(rx + 22, body_y + 48, "studio_form.xuiml [Design]", g_doc_tab == 0 ? p->accent : p->text_muted, 0, true);
     g_api->gfx_draw_string(rx + 22, body_y + 68, "studio_form.xuiml [XML]",    g_doc_tab == 1 ? p->accent : p->text_muted, 0, true);
@@ -542,7 +544,7 @@ static void studio_draw(window_t* win) {
 
     /* Proprieta' (sotto) */
     int32_t py = body_y + 134;
-    g_api->gfx_fill_rect(rx + 1, py, rw - 1, 22, p->bg_header);
+    g_api->gfx_fill_rect(rx + 8, py - 4, rw - 16, 1, p->border);
     g_api->gfx_draw_string(rx + 10, py + 4, "Proprieta'", p->text, 0, true);
     if (g_sel_idx >= 0 && g_sel_idx < g_ctrl_count && g_rt && g_rt->snprintf) {
         const st_ctrl_t* s = &g_ctrls[g_sel_idx];
@@ -565,27 +567,32 @@ static void studio_draw(window_t* win) {
                     g_prop_btns[i].w, g_prop_btns[i].h, g_prop_btns[i].lbl, false);
     }
 
-  /* 3. Centro: Document Well (tra Toolbox e Right Panel) */
-  int32_t mx = tx + tw;
-  int32_t mw = rx - mx;
+    /* 3. Centro: Document Well (tra Toolbox e Right Panel) */
+    int32_t mx = tx + tw + 4;
+    int32_t mw = rx - mx - 4;
 
     /* Document Tabs */
-    g_api->gfx_fill_rect(mx, body_y, mw, 26, p->bg_header);
+    if (!p->is_glass) g_api->gfx_fill_rect(mx, body_y, mw, 26, p->bg_header);
     const char* doc_tabs[] = { "Form1.xuiml [Design]", "Form1.xuiml", "studio_app.c" };
     int32_t tab_w = 180;
     for (int t = 0; t < 3; t++) {
         int32_t ttx = mx + t * tab_w;
-        g_api->gfx_fill_rect(ttx, body_y, tab_w - 1, 26, (g_doc_tab == t) ? p->bg_editor : p->bg_header);
-        if (g_doc_tab == t) g_api->gfx_fill_rect(ttx, body_y, tab_w - 1, 2, p->accent);
-        g_api->gfx_draw_string(ttx + 10, body_y + 6, doc_tabs[t], (g_doc_tab == t) ? p->text : p->text_muted, 0, true);
+        if (p->is_glass && g_api->gfx_fill_rounded_alpha) {
+            g_api->gfx_fill_rounded_alpha(ttx, body_y, tab_w - 4, 24, 5,
+                (g_doc_tab == t ? p->bg_editor : p->bg_panel) & 0x00FFFFFFu, (g_doc_tab == t) ? 215 : 130);
+        } else {
+            g_api->gfx_fill_rect(ttx, body_y, tab_w - 1, 26, (g_doc_tab == t) ? p->bg_editor : p->bg_header);
+        }
+        if (g_doc_tab == t) g_api->gfx_fill_rect(ttx + 4, body_y, tab_w - 12, 2, p->accent);
+        g_api->gfx_draw_string(ttx + 10, body_y + 5, doc_tabs[t], (g_doc_tab == t) ? p->text : p->text_muted, 0, true);
     }
 
-  int32_t doc_y = body_y + 26;
-  int32_t doc_h = mid_h - 26;
+    int32_t doc_y = body_y + 26;
+    int32_t doc_h = mid_h - 30;
 
     if (g_doc_tab == 0) {
-        /* Form Designer Visuale */
-        g_api->gfx_fill_rect(mx, doc_y, mw, doc_h, p->bg_editor);
+        /* Form Designer Visuale su superficie Liquid Glass */
+        vs_draw_surface(p, mx, doc_y, mw, doc_h, p->bg_editor, 155);
         int32_t fw = 420, fh = 280;
         int32_t fx = mx + (mw - fw) / 2;
         int32_t fy = doc_y + (doc_h - fh) / 2;
@@ -641,9 +648,7 @@ static void studio_draw(window_t* win) {
 
     /* 4. Basso: Output & Error List */
     int32_t oy = body_y + mid_h;
-    g_api->gfx_fill_rect(mx, oy, mw, out_h, p->bg_panel);
-    g_api->gfx_fill_rect(mx, oy, mw, 1, p->border);
-    g_api->gfx_fill_rect(mx, oy + 1, mw, 22, p->bg_header);
+    vs_draw_surface(p, mx, oy, mw, out_h - 2, p->bg_panel, 175);
     g_api->gfx_draw_string(mx + 10, oy + 5, "Output   |   Elenco Errori (0)   |   NSRT Log", p->text, 0, true);
     for (int i = 0; i < 4; i++) {
         g_api->gfx_draw_string(mx + 10, oy + 26 + i * 16, g_output_lines[i], p->text_muted, 0, true);
