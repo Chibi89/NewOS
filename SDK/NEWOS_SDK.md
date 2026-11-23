@@ -97,7 +97,9 @@ L'entry point della libreria (`nsrt_dll_entry(const kernel_api_t* api)`) restitu
 | :--- | :--- | :--- |
 | `reg_read_sz` | `bool (*reg_read_sz)(const char* path, const char* val_name, char* out_buf, size_t max_len)` | Legge valore stringa dal Registro |
 | `reg_read_dword` | `bool (*reg_read_dword)(const char* path, const char* val_name, uint32_t* out_val)` | Legge valore `DWORD` dal Registro |
-| `reg_write_sz` | `bool (*reg_write_sz)(const char* path, const char* val_name, const char* val, bool sandboxed)` | Scrive stringa; in sandbox permette solo `HKLM\Software\NewSoft\` e `HKCU\Software\` |
+| `reg_write_sz` | `bool (*reg_write_sz)(const char* path, const char* val_name, const char* val, bool sandboxed)` | Scrive stringa nei settori non critici (`HKLM\Software\NewSoft\`, `HKCU\Software\`, `HKCU\ControlPanel\`, `HKCU\Environment\`) solo a sessione autenticata |
+| `reg_write_dword` | `bool (*reg_write_dword)(const char* path, const char* val_name, uint32_t val, bool sandboxed)` | Scrive `DWORD` nei settori non critici solo a sessione autenticata |
+| `reg_is_non_critical` | `bool (*reg_is_non_critical)(const char* path)` | Verifica se la chiave appartiene a un settore non critico scrivibile |
 
 ### 2.7 Dialoghi di Sistema (`COMDLG.DLL`) & Clipboard
 | Campo `nsrt_api_t` | Firma | Funzione |
@@ -146,7 +148,7 @@ L'entry point della libreria (`nsrt_dll_entry(const kernel_api_t* api)`) restitu
 | `<newos/input.h>` | `NS_KEY_*`, `ns_mouse_btn_t`, `ns_mouse_buttons_mask()` |
 | `<newos/audio.h>` | `ns_audio_format_t`, `ns_sound_event_t`, `ns_audio_beep()` |
 | `<newos/net.h>` | `NS_IP4(a,b,c,d)`, `ns_ip4_octet()` |
-| `<newos/reg.h>` | Hive sandbox (`NS_REG_HKLM_SOFTWARE`, `NS_REG_HKCU_SOFTWARE`) e `ns_reg_type_t` |
+| `<newos/reg.h>` | Lettura globale (`ns_reg_read_sz/dword`) e scrittura sandboxed su settori non critici (`ns_reg_write_sz/dword`, `ns_reg_is_non_critical`) |
 | `<newos/ipc.h>` | `ns_event_type_t` (`NS_EV_*`), `ns_ipc_msg_t` |
 | `<newos/crypto.h>` | `ns_fnv1a_32()`, `ns_fnv1a_64()`, `ns_hex_encode()` |
 | `<newos/math.h>` | Fixed-point 16.16 (`ns_fixed16_t` senza FPU/SSE), `ns_vec2i_t`, `ns_vec3i_t`, `ns_vec4i_t`, `ns_vec2f_t`, `ns_vec3f_t`, `ns_mat4f_t`, `ns_lerp_i32()`, `ns_isqrt()` |

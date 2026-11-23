@@ -80,7 +80,9 @@ static bool nsrt_is_protected_path(const char* path) {
 static bool nsrt_is_reg_writable_sandbox(const char* path) {
     if (!path) return false;
     return n_istarts_with(path, "HKLM\\Software\\NewSoft\\") ||
-           n_istarts_with(path, "HKCU\\Software\\");
+           n_istarts_with(path, "HKCU\\Software\\") ||
+           n_istarts_with(path, "HKCU\\ControlPanel\\") ||
+           n_istarts_with(path, "HKCU\\Environment\\");
 }
 
 /* --- Memoria & Stringhe Freestanding --- */
@@ -461,11 +463,28 @@ static bool nsrt_reg_read_dword(const char* path, const char* val_name, uint32_t
 
 static bool nsrt_reg_write_sz(const char* path, const char* val_name, const char* val, bool sandboxed) {
     if (!g_api || !g_api->registry_set_value_sz || !path || !val_name || !val) return false;
+    if (g_api->registry_is_read_only && g_api->registry_is_read_only()) {
+        nsrt_log("ACL", "RegWrite bloccato: registro in sola lettura");
+        return false;
+    }
     if (sandboxed && !nsrt_is_reg_writable_sandbox(path)) {
-        nsrt_log("ACL", "RegWrite negato fuori da Software");
+        nsrt_log("ACL", "RegWrite negato su settore critico");
         return false;
     }
     return g_api->registry_set_value_sz(path, val_name, val);
+}
+
+static bool nsrt_reg_write_dword(const char* path, const char* val_name, uint32_t val, bool sandboxed) {
+    if (!g_api || !g_api->registry_set_value_dword || !path || !val_name) return false;
+    if (g_api->registry_is_read_only && g_api->registry_is_read_only()) {
+        nsrt_log("ACL", "RegWriteDword bloccato: registro in sola lettura");
+        return false;
+    }
+    if (sandboxed && !nsrt_is_reg_writable_sandbox(path)) {
+        nsrt_log("ACL", "RegWriteDword negato su settore critico");
+        return false;
+    }
+    return g_api->registry_set_value_dword(path, val_name, val);
 }
 
 /* --- Dialoghi COMDLG & Clipboard --- */
@@ -689,6 +708,8 @@ static const nsrt_api_t g_nsrt_api = {
     .reg_read_sz      = nsrt_reg_read_sz,
     .reg_read_dword   = nsrt_reg_read_dword,
     .reg_write_sz     = nsrt_reg_write_sz,
+    .reg_write_dword  = nsrt_reg_write_dword,
+    .reg_is_non_critical = nsrt_is_reg_writable_sandbox,
     .open_file_dialog = nsrt_open_file_dialog,
     .save_file_dialog = nsrt_save_file_dialog,
     .clipboard_set_text = nsrt_clipboard_set_text,

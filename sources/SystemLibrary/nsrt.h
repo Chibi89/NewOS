@@ -126,10 +126,12 @@ typedef struct {
     void     (*open_url)(const char* url);
     void     (*notify)(const char* title, const char* msg);
 
-    /* Registro (Sola Lettura + Sandbox HKLM\Software\NewSoft\ / HKCU\Software\) */
+    /* Registro (Lettura globale + Scrittura solo nei settori non critici a sessione autenticata) */
     bool (*reg_read_sz)(const char* path, const char* val_name, char* out_buf, size_t max_len);
     bool (*reg_read_dword)(const char* path, const char* val_name, uint32_t* out_val);
     bool (*reg_write_sz)(const char* path, const char* val_name, const char* val, bool sandboxed);
+    bool (*reg_write_dword)(const char* path, const char* val_name, uint32_t val, bool sandboxed);
+    bool (*reg_is_non_critical)(const char* path);
 
     /* Dialoghi di Sistema (COMDLG.DLL) & Clipboard */
     bool        (*open_file_dialog)(const char* init_dir, void* cb, void* userdata);
