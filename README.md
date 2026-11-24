@@ -406,6 +406,17 @@ tools\qemu-system-x86_64.exe -cdrom NewOS_V1.iso -m 256M -vga std -device AC97 -
 <details>
 <summary><strong>Expand to view recent updates and fixes</strong></summary>
 
+### November 24, 2026
+- **`COMCTL_RIBBON_STYLE` Control in `COMCTL.DLL`**:
+  - Added the new [`COMCTL_RIBBON_STYLE`](SystemLibrary/comctl.h) control in [comctl_dll.c](SystemLibrary/comctl_dll.c) featuring a `File` (Backstage) accent button, compact tab strip, grouped command ribbon with vertical separators, click handling, and `.text.entry` entry-point section fix.
+- **Graphics, Compositor, Blit & Motion Subsystem (`DXBLIT.DLL`, `NSMOTION.DLL`, `NSCOMP.DLL`)**:
+  - Added out-of-kernel modules in [SystemLibrary/blit/](SystemLibrary/blit/), [SystemLibrary/motion/](SystemLibrary/motion/), and [SystemLibrary/compositor/](SystemLibrary/compositor/) with dedicated loader [nscomp_loader.c](kernel/gui/nscomp_loader.c) and SDK headers [motion.h](SDK/include/newos/motion.h), [doc.h](SDK/include/newos/doc.h), and [calc.h](SDK/include/newos/calc.h).
+- **Logout & Session Management Subsystem (`LOGOUT.MOD`, `LOGIN.MOD`, `BOOTSCR.MOD`)**:
+  - Enhanced the logout subsystem [logoutscreen.c](logoutscreen/logoutscreen.c) (`LOGOUT.MOD`, documented in [LOGOUT_OVERVIEW.md](LOGOUT_OVERVIEW.md)) with support for all 5 `logout_mode_t` modes (`LOGOUT_MODE_SHUTDOWN`, `LOGOUT_MODE_CHANGE_USER` for Fast User Switching, `LOGOUT_MODE_CLOSE_SESSION`, `LOGOUT_MODE_REBOOT` with `boot.ini` persistence, and `LOGOUT_MODE_SUSPEND`), `SafeCheck` verification, and automatic critical file repair from `SYSTEM.PAK`.
+- **New Wallpapers, Recovery Modules & Core Improvements**:
+  - Added new **Bloom** (`BLOOM_CORAL.JPG`, `BLOOM_MINT.JPG`, `BLOOM_NIGHT.JPG`, `BLOOM_SUNSET.JPG`) and **Geometric** (`GEO_HEX.JPG`, `GEO_MONO.JPG`, `GEO_PRISM.JPG`, `GEO_RINGS.JPG`) wallpapers in `4K`, `FHD`, and `HD` resolutions.
+  - Integrated **Recovery** modules and plans ([recovery/](recovery/), [RECOVERY_MODULES_PLAN.md](RECOVERY_MODULES_PLAN.md)), updates to `gdt.c`/`idt.c`/`sched.c`/`wm.c`/`graphics.c`, and `bootsect.asm`/`boot_menu.c` enhancements.
+
 ### November 23, 2026
 - **NewOS Studio IDE (`STUDIO.DLL`), NewSoft SDK v3.0 (`NSRT.DLL`) & Project / Installer Management**:
   - Created the out-of-kernel IDE [studio.c](SystemLibrary/studio.c) (`STUDIO.DLL`, launched via `start studio`) with a fullscreen Visual Studio-style layout, dynamic system theme integration (**Liquid Glass**, **Mica**, **Classic** + **VS Dark** override), **`.xuiml` Form Designer**, **Code Viewer** with slim **ScrollViewer** and **Code Tools** (syntax analyzer and SDK autocomplete).
