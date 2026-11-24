@@ -171,6 +171,7 @@ const cFiles = [
     'kernel/lib/string.c',
     'kernel/lib/clipboard.c',
     'kernel/lib/aes256.c',
+    'kernel/arch/x86_64/gdt.c',
     'kernel/arch/x86_64/idt.c',
     'kernel/arch/x86_64/bsod_loader.c',
     'kernel/arch/x86_64/pic.c',
@@ -200,6 +201,7 @@ const cFiles = [
     'kernel/gui/settings_loader.c',
     'kernel/gui/comdlg_loader.c',
     'kernel/gui/comctl_loader.c',
+    'kernel/gui/nscomp_loader.c',
     'kernel/gui/startmenu_loader.c',
     'kernel/gui/uistyle_loader.c',
     'kernel/gui/hwaccel_loader.c',
@@ -399,7 +401,9 @@ const screenModules = [
     { src: 'logoutscreen/logoutscreen.c', ini: 'logoutscreen/logoutscreen.ini', out: 'LOGOUT.MOD', iniOut: 'LOGOUT.INI' },
     { src: 'BootSetup/bootsetup.c', extraSrcs: ['BootSetup/aes256.c'], ini: 'BootSetup/bootsetup.ini', out: 'BOOTSETUP.MOD', iniOut: 'BOOTSETUP.INI' },
     { src: 'Update/update.c', extraSrcs: ['BootSetup/aes256.c'], ini: 'Update/update.ini', out: 'UPDATE.MOD', iniOut: 'UPDATE.INI' },
-    { src: 'oobe/oobe.c', extraSrcs: ['kernel/lib/string.c'], ini: 'oobe/oobe.ini', out: 'OOBE.MOD', iniOut: 'OOBE.INI' }
+    { src: 'oobe/oobe.c', extraSrcs: ['kernel/lib/string.c'], ini: 'oobe/oobe.ini', out: 'OOBE.MOD', iniOut: 'OOBE.INI' },
+    { src: 'recovery/rec_basic.c', ini: 'recovery/rec_basic.ini', out: 'RECBASIC.MOD', iniOut: 'RECBASIC.INI', destSubDir: 'Restore' },
+    { src: 'recovery/rec_adv.c', ini: 'recovery/rec_adv.ini', out: 'RECADV.MOD', iniOut: 'RECADV.INI', destSubDir: 'Restore' }
 ];
 
 const modLdScript = path.join(ROOT, 'tools', 'module.ld');
@@ -422,9 +426,11 @@ for (const sm of screenModules) {
         execSync(compileCmd, { stdio: 'inherit' });
     }
 
-    const binPath = path.join(bootModDir, sm.out);
+    const targetModDir = sm.destSubDir ? path.join(BIN_DIR, 'NewOS', sm.destSubDir) : bootModDir;
+    if (!fs.existsSync(targetModDir)) fs.mkdirSync(targetModDir, { recursive: true });
+    const binPath = path.join(targetModDir, sm.out);
 
-    // Linka modulo in binario protetto piatto con module.ld direttamente in C:\NewOS\Boot\
+    // Linka modulo in binario protetto piatto con module.ld
     const linkModCmd = `${llvm.lld} -m elf_x86_64 -T "${modLdScript}" --oformat binary ${allObjs.join(' ')} -o "${binPath}"`;
     execSync(linkModCmd, { stdio: 'inherit' });
 
@@ -439,19 +445,23 @@ for (const sm of screenModules) {
         console.log(`  [OK] Modulo protetto generato e firmato: ${sm.out} (${modBuf.length} byte, CRC32: 0x${checksum.toString(16).toUpperCase()})`);
     }
 
-    // Distribuzione ordinata in SystemProgram e BootSetup senza sporcare la radice
-    try { fs.copyFileSync(binPath, path.join(sysProgModDir, sm.out)); } catch (e) { }
-    if (sm.out.startsWith('BOOTSETUP')) {
-        try { fs.copyFileSync(binPath, path.join(bootSetupModDir, sm.out)); } catch (e) { }
+    // Distribuzione ordinata in SystemProgram e BootSetup solo per i moduli non confinati in destSubDir
+    if (!sm.destSubDir) {
+        try { fs.copyFileSync(binPath, path.join(sysProgModDir, sm.out)); } catch (e) { }
+        if (sm.out.startsWith('BOOTSETUP')) {
+            try { fs.copyFileSync(binPath, path.join(bootSetupModDir, sm.out)); } catch (e) { }
+        }
     }
 
     // Copia file .INI associato
     const iniSrc = path.join(ROOT, sm.ini);
     if (fs.existsSync(iniSrc)) {
-        fs.copyFileSync(iniSrc, path.join(bootModDir, sm.iniOut));
-        try { fs.copyFileSync(iniSrc, path.join(sysProgModDir, sm.iniOut)); } catch (e) { }
-        if (sm.out.startsWith('BOOTSETUP')) {
-            try { fs.copyFileSync(iniSrc, path.join(bootSetupModDir, sm.iniOut)); } catch (e) { }
+        fs.copyFileSync(iniSrc, path.join(targetModDir, sm.iniOut));
+        if (!sm.destSubDir) {
+            try { fs.copyFileSync(iniSrc, path.join(sysProgModDir, sm.iniOut)); } catch (e) { }
+            if (sm.out.startsWith('BOOTSETUP')) {
+                try { fs.copyFileSync(iniSrc, path.join(bootSetupModDir, sm.iniOut)); } catch (e) { }
+            }
         }
     }
 }
@@ -587,7 +597,12 @@ const systemLibraries = [
     { src: 'SystemLibrary/icons_dll.c', ini: 'SystemLibrary/ICONS.INI', out: 'ICONS.DLL', iniOut: 'ICONS.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
     { src: 'SystemLibrary/xuiml.c', ini: 'SystemLibrary/XUIML.INI', out: 'XUIML.DLL', iniOut: 'XUIML.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
     { src: 'SystemLibrary/nsrt.c', ini: 'SystemLibrary/NSRT.INI', out: 'NSRT.DLL', iniOut: 'NSRT.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
-    { src: 'SystemLibrary/studio.c', ini: 'SystemLibrary/STUDIO.INI', out: 'STUDIO.DLL', iniOut: 'STUDIO.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` }
+    { src: 'SystemLibrary/studio.c', ini: 'SystemLibrary/STUDIO.INI', out: 'STUDIO.DLL', iniOut: 'STUDIO.INI', needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
+    { src: 'SystemLibrary/blit/dxblit_entry.c', ini: 'SystemLibrary/blit/DXBLIT.INI', out: 'DXBLIT.DLL', iniOut: 'DXBLIT.INI', allowSse2: true, needsReloc: true, extraSrcs: [path.join(ROOT, 'SystemLibrary', 'blit', 'dxblit_simd.c'), path.join(ROOT, 'SystemLibrary', 'blit', 'dxblit_dirty.c'), path.join(ROOT, 'SystemLibrary', 'blit', 'dxblit_fx.c')], extraFlags: `-DNEWOS_KERNEL_TYPES -mstackrealign -I"${path.join(ROOT, 'SystemLibrary', 'blit')}" -Wno-unused-function -Wno-unused-parameter` },
+    { src: 'SystemLibrary/motion/nsmotion_entry.c', ini: 'SystemLibrary/motion/NSMOTION.INI', out: 'NSMOTION.DLL', iniOut: 'NSMOTION.INI', needsReloc: true, extraSrcs: [path.join(ROOT, 'SystemLibrary', 'motion', 'nsmotion_easing.c'), path.join(ROOT, 'SystemLibrary', 'motion', 'nsmotion_timeline.c'), path.join(ROOT, 'SystemLibrary', 'motion', 'nsmotion_types.c')], extraFlags: `-DNEWOS_KERNEL_TYPES -I"${path.join(ROOT, 'SystemLibrary', 'motion')}" -Wno-unused-function -Wno-unused-parameter` },
+    { src: 'SystemLibrary/compositor/nscomp_entry.c', ini: 'SystemLibrary/compositor/NSCOMP.INI', out: 'NSCOMP.DLL', iniOut: 'NSCOMP.INI', needsReloc: true, extraSrcs: [path.join(ROOT, 'SystemLibrary', 'compositor', 'nscomp_surface.c'), path.join(ROOT, 'SystemLibrary', 'compositor', 'nscomp_effects.c'), path.join(ROOT, 'SystemLibrary', 'compositor', 'nscomp_refraction.c')], extraFlags: `-DNEWOS_KERNEL_TYPES -I"${path.join(ROOT, 'SystemLibrary', 'compositor')}" -Wno-unused-function -Wno-unused-parameter` },
+    { src: 'wordcraft/wordcraft.c', ini: 'wordcraft/WORDCRAFT.INI', out: 'WORDCRAFT.DLL', iniOut: 'WORDCRAFT.INI', destSubDir: ['ProgramFile', 'WordCraft'], needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` },
+    { src: 'dotnet/gridcraft_bridge.c', ini: 'dotnet/GRIDCRAFT.INI', out: 'GRIDCRAFT.DLL', iniOut: 'GRIDCRAFT.INI', destSubDir: ['ProgramFile', 'GridCraft'], needsReloc: true, extraFlags: `-Wno-unused-function -Wno-unused-parameter` }
 ];
 
 const targetLibDir = path.join(BIN_DIR, 'NewOS', 'SystemLibrary');
@@ -746,20 +761,138 @@ for (const f of fs.readdirSync(BIN_DIR)) {
     }
 }
 
+// 6c-bis-0. Rimozione eventuale cartella .NET legacy da build/bin/NewOS
+{
+    const dnLegacy = path.join(BIN_DIR, 'NewOS', '.NET');
+    if (fs.existsSync(dnLegacy)) fs.rmSync(dnLegacy, { recursive: true, force: true });
+}
+
+// 6c-bis. Generazione automatica store.catalog (directory base e file di sistema per diagnosi/ripristino)
+(function generateStoreCatalog() {
+    const newosRoot = path.join(BIN_DIR, 'NewOS');
+    if (!fs.existsSync(newosRoot)) return;
+    const dirs = ['NewOS'];
+    const files = [];
+    const criticalNames = new Set([
+        'NewOS/Boot/KERNEL.BIN',
+        'NewOS/Boot/BOOTSCR.MOD',
+        'NewOS/Boot/LOGIN.MOD',
+        'NewOS/Boot/LOGOUT.MOD',
+        'NewOS/Restore/RECBASIC.MOD',
+        'NewOS/Restore/RECADV.MOD',
+        'NewOS/SystemLibrary/EXPLORER.DLL',
+        'NewOS/SystemLibrary/NSCOMP.DLL',
+        'NewOS/SystemLibrary/NSMOTION.DLL',
+        'NewOS/SystemLibrary/THEMEMGR.DLL',
+        'NewOS/SystemLibrary/ICONS.DLL',
+        'NewOS/SystemLibrary/STARTMENU.DLL'
+    ]);
+
+    function walkCatalog(absDir, relDir) {
+        const entries = fs.readdirSync(absDir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name));
+        for (const ent of entries) {
+            const absPath = path.join(absDir, ent.name);
+            const relPath = `${relDir}/${ent.name}`;
+            if (ent.isDirectory()) {
+                dirs.push(relPath);
+                walkCatalog(absPath, relPath);
+            } else if (ent.isFile()) {
+                if (ent.name.toLowerCase() === 'store.catalog') continue;
+                const data = fs.readFileSync(absPath);
+                const crc = crc32Buffer(data).toString(16).toUpperCase().padStart(8, '0');
+                const tier = criticalNames.has(relPath) ? 'C' : 'S';
+                files.push(`F|${tier}|${relPath}|${data.length}|0x${crc}`);
+            }
+        }
+    }
+
+    walkCatalog(newosRoot, 'NewOS');
+
+    // Copie fantasma di emergenza incorporate in store.catalog (fallback zero-PAK per boot e recovery)
+    const ghostRelPaths = [
+        'NewOS/Boot/BOOTSCR.MOD',
+        'NewOS/Boot/BOOTSCR.INI',
+        'NewOS/Boot/LOGIN.MOD',
+        'NewOS/Boot/LOGOUT.MOD',
+        'NewOS/Restore/RECBASIC.MOD',
+        'NewOS/Restore/RECBASIC.INI',
+        'NewOS/Restore/RECADV.MOD',
+        'NewOS/Restore/RECADV.INI'
+    ];
+    const ghosts = [];
+    for (const rel of ghostRelPaths) {
+        const absP = path.join(BIN_DIR, rel);
+        if (fs.existsSync(absP)) {
+            const gbuf = fs.readFileSync(absP);
+            const gcrc = crc32Buffer(gbuf).toString(16).toUpperCase().padStart(8, '0');
+            ghosts.push(`G|${rel}|${gbuf.length}|0x${gcrc}|${gbuf.toString('hex')}`);
+        }
+    }
+
+    const lines = [
+        '# NewOS V1 Auto-Generated System Store Catalog',
+        '[META]',
+        'Version=1',
+        'BaseDir=NewOS',
+        `TotalDirs=${dirs.length}`,
+        `TotalFiles=${files.length}`,
+        `TotalGhosts=${ghosts.length}`,
+        '[DIRS]',
+        ...dirs.map(d => `D|${d}`),
+        '[FILES]',
+        ...files,
+        '[GHOSTS]',
+        ...ghosts
+    ];
+    const catalogText = lines.join('\r\n') + '\r\n';
+    const bootCat = path.join(BIN_DIR, 'NewOS', 'Boot', 'store.catalog');
+    const libCat = path.join(BIN_DIR, 'NewOS', 'SystemLibrary', 'store.catalog');
+    const rstCat = path.join(BIN_DIR, 'NewOS', 'Restore', 'store.catalog');
+    fs.writeFileSync(bootCat, catalogText, 'utf8');
+    fs.writeFileSync(libCat, catalogText, 'utf8');
+    if (fs.existsSync(path.dirname(rstCat))) fs.writeFileSync(rstCat, catalogText, 'utf8');
+    console.log(`[CATALOG] Generato store.catalog: ${dirs.length} directory base, ${files.length} file di sistema, ${ghosts.length} copie fantasma.`);
+})();
+
 // 6d. Generazione archivio cifrato AES-256 SYSTEM.PAK per BootSetup (Regola 1)
 const { packSystem } = require('./pack_system');
 const pakPath = path.join(BIN_DIR, 'BootSetup', 'SYSTEM.PAK');
 packSystem(BIN_DIR, pakPath);
 
-// 7. Assembla immagine disco myos.img
+// 7. Assembla immagine disco myos.img (dimensionamento dinamico fino a 4 GB max)
 console.log('\n--> Creazione disco di boot myos.img...');
-const TOTAL_IMG_SECTORS = 262144; // 128 MB
+function calcDirBytes(dir) {
+    let total = 0;
+    if (!fs.existsSync(dir)) return 0;
+    for (const name of fs.readdirSync(dir)) {
+        const full = path.join(dir, name);
+        const st = fs.statSync(full);
+        if (st.isDirectory()) total += calcDirBytes(full);
+        else if (st.isFile()) total += Math.ceil(st.size / 4096) * 4096;
+    }
+    return total;
+}
+const MAX_DISK_SECTORS = 8388608; // 4 GB max (4096 MB * 2048 settori/MB)
+const MIN_EXFAT_SECTORS = 524288; // 256 MB minimo per garantire ampio spazio libero su C:\
+const usedBytesEst = calcDirBytes(BIN_DIR);
+const marginBytes = 96 * 1024 * 1024; // +96 MB liberi su C:\
+let exfatVolumeSectors = Math.ceil((usedBytesEst + marginBytes) / 4096) * 8;
+if (exfatVolumeSectors < MIN_EXFAT_SECTORS) exfatVolumeSectors = MIN_EXFAT_SECTORS;
+const maxExfatSectors = MAX_DISK_SECTORS - 8192; // Lascia spazio per LBA 0..2047 + ESP
+if (exfatVolumeSectors > maxExfatSectors) {
+    throw new Error(`Dimensione volume C:\\ (${Math.round(exfatVolumeSectors / 2048)} MB) supera il limite massimo di 4 GB!`);
+}
+const espStartLba = 2048 + exfatVolumeSectors + 2048; // Allineato subito dopo exFAT
+const TOTAL_IMG_SECTORS = espStartLba + 4096; // Contiene ESP (2880 settori) + allineamento
 const imgBuf = Buffer.alloc(TOTAL_IMG_SECTORS * 512, 0);
 
-// Settore 0: MBR
+// Settore 0: MBR + aggiornamento dinamico tabella partizioni (Part.1 exFAT, Part.2 ESP)
 const mbrFile = getBootBin('bootsect.bin');
 const mbrBuf = fs.readFileSync(mbrFile);
 mbrBuf.copy(imgBuf, 0);
+imgBuf.writeUInt32LE(exfatVolumeSectors, 446 + 12); // Partizione 1: Total Sectors
+imgBuf.writeUInt32LE(espStartLba, 462 + 8);         // Partizione 2 (ESP): Start LBA
+imgBuf.writeUInt32LE(2880, 462 + 12);               // Partizione 2 (ESP): Total Sectors
 
 // Settori 1..64: Stage 2
 const s2File = getBootBin('stage2.bin');
@@ -782,12 +915,11 @@ if (fs.existsSync(iconsPath)) {
 // 8. Generazione e Iniezione Volume File System exFAT (LBA 2048 in poi)
 console.log('\n--> Formattazione e popolamento Volume File System exFAT (C:\\)...');
 const { buildMyOsFileSystem } = require('./mkexfat.js');
-const exfatVolumeSectors = 250000; // 250.000 settori (122 MB, compatibile con partizione 1 MBR)
 const exfatBuf = buildMyOsFileSystem(ROOT, exfatVolumeSectors, 2048);
 exfatBuf.copy(imgBuf, 2048 * 512);
-console.log(`[OK] Partizione exFAT iniettata a LBA 2048 (${exfatBuf.length} byte, C:\\ pronta)`);
+console.log(`[OK] Partizione exFAT iniettata a LBA 2048 (${exfatBuf.length} byte, ${(exfatVolumeSectors * 512 / 1024 / 1024).toFixed(0)} MB, C:\\ pronta)`);
 
-// 8b. Iniezione Partizione EFI System Partition (ESP) a LBA 256000 (Type 0xEF, 1.44 MB)
+// 8b. Iniezione Partizione EFI System Partition (ESP) a espStartLba (Type 0xEF, 1.44 MB)
 const { createEfiFatImage } = require('./mkefifat.js');
 const efiBootCandidates = [
     path.join(BIN_DIR, 'EFI', 'BOOT', 'BOOTX64.EFI'),
@@ -804,8 +936,8 @@ if (efiBootFile && fs.existsSync(kFile)) {
     const b64Data = fs.readFileSync(efiBootFile);
     const kData = fs.readFileSync(kFile);
     const efiFatBuf = createEfiFatImage(b64Data, kData);
-    efiFatBuf.copy(imgBuf, 256000 * 512);
-    console.log(`[OK] Partizione ESP FAT (UEFI) iniettata a LBA 256000 (${efiFatBuf.length} byte, Type 0xEF)`);
+    efiFatBuf.copy(imgBuf, espStartLba * 512);
+    console.log(`[OK] Partizione ESP FAT (UEFI) iniettata a LBA ${espStartLba} (${efiFatBuf.length} byte, Type 0xEF)`);
 }
 
 const buildImg = path.join(BUILD_DIR, 'NewOS_V1.img');
@@ -813,7 +945,7 @@ fs.writeFileSync(buildImg, imgBuf);
 fs.writeFileSync(path.join(BUILD_DIR, 'myos.img'), imgBuf);
 fs.writeFileSync(path.join(ROOT, 'NewOS_V1.img'), imgBuf);
 fs.writeFileSync(path.join(ROOT, 'myos.img'), imgBuf);
-console.log(`[OK] Immagine disco: ${buildImg} (${TOTAL_IMG_SECTORS * 512 / 1024 / 1024} MB, Dual-Boot: BIOS LBA 0 + UEFI ESP LBA 256000)`);
+console.log(`[OK] Immagine disco: ${buildImg} (${(TOTAL_IMG_SECTORS * 512 / 1024 / 1024).toFixed(1)} MB / max 4096 MB, Dual-Boot: BIOS LBA 0 + UEFI ESP LBA ${espStartLba})`);
 
 // 9. Aggiornamento opzionale immagini VirtualBox VDI
 const vboxManage = 'C:\\Program Files\\Oracle\\VirtualBox\\VBoxManage.exe';

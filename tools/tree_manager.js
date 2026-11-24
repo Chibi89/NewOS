@@ -208,6 +208,7 @@ function organizeBuildBin(rootDir, binDir) {
         'NewOS/Registry',
         'NewOS/Rules',
         'NewOS/Boot',
+        'NewOS/Restore',
         'NewOS/Update',
         'NewOS/Update/Backup',
         'NewOS/MultimediaCodec',
@@ -262,7 +263,20 @@ function organizeBuildBin(rootDir, binDir) {
     // 2. Popola Wallpapers e Risorse
     const wpDir = path.join(rootDir, 'resources', 'wallpaper');
     const dstWp1 = path.join(binDir, 'NewOS', 'Resources', 'Wallpapers');
-    const wpFiles = ['HERO.BMP', 'HERO.JPG', 'FLOW.BMP', 'FLOW.JPG', 'BLISS.BMP', 'BLISS.JPG', 'THEME_A.BMP', 'THEME_A.JPG'];
+    const wpFiles = [
+        'HERO.BMP', 'HERO.JPG',
+        'FLOW.BMP', 'FLOW.JPG',
+        'BLISS.BMP', 'BLISS.JPG',
+        'THEME_A.BMP', 'THEME_A.JPG',
+        'BLOOM_CORAL.BMP', 'BLOOM_CORAL.JPG',
+        'BLOOM_MINT.BMP', 'BLOOM_MINT.JPG',
+        'BLOOM_NIGHT.BMP', 'BLOOM_NIGHT.JPG',
+        'BLOOM_SUNSET.BMP', 'BLOOM_SUNSET.JPG',
+        'GEO_PRISM.BMP', 'GEO_PRISM.JPG',
+        'GEO_HEX.BMP', 'GEO_HEX.JPG',
+        'GEO_MONO.BMP', 'GEO_MONO.JPG',
+        'GEO_RINGS.BMP', 'GEO_RINGS.JPG'
+    ];
     for (const wf of wpFiles) {
         const src = path.join(wpDir, wf);
         if (fs.existsSync(src)) {

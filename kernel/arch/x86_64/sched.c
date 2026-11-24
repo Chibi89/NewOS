@@ -1,12 +1,30 @@
 #include <arch/x86_64/sched.h>
+#include <arch/x86_64/gdt.h>
 #include <drivers/timer.h>
 #include <mm/heap.h>
+#include <mm/paging.h>
 #include <string.h>
 
 static task_t   g_tasks[MAX_TASKS];
 static int      g_current_task_idx = 0;
 static bool     g_sched_active = false;
 static uint32_t g_next_pid = 1;
+
+static void task_cleanup_slot(task_t* t) {
+    if (!t) return;
+    if (t->stack_base) {
+        kfree(t->stack_base);
+        t->stack_base = NULL;
+    }
+    if (t->user_stack_base) {
+        kfree(t->user_stack_base);
+        t->user_stack_base = NULL;
+    }
+    if (t->cr3 && g_tasks[0].cr3 && t->cr3 != g_tasks[0].cr3) {
+        paging_destroy_address_space((uint64_t*)t->cr3);
+        t->cr3 = 0;
+    }
+}
 
 const char* sched_state_to_str(task_state_t state) {
     switch (state) {
@@ -88,14 +106,12 @@ uint32_t task_create(const char* name, void (*entry_point)(void*), void* arg, ui
     if (slot < 0) return 0; // Tabella processi piena
 
     task_t* t = &g_tasks[slot];
-    if (t->stack_base) {
-        kfree(t->stack_base);
-        t->stack_base = NULL;
-    }
+    task_cleanup_slot(t);
 
     t->stack_base = (uint8_t*)kmalloc(TASK_STACK_SIZE);
     if (!t->stack_base) return 0;
     t->stack_size = TASK_STACK_SIZE;
+    t->is_user = false;
 
     t->pid = g_next_pid++;
     strncpy(t->name, name ? name : "Task", sizeof(t->name) - 1);
@@ -109,6 +125,7 @@ uint32_t task_create(const char* name, void (*entry_point)(void*), void* arg, ui
     // Allineamento stack a 16-byte
     uint8_t* stack_top = t->stack_base + TASK_STACK_SIZE;
     stack_top = (uint8_t*)((uintptr_t)stack_top & ~0x0FULL);
+    t->kernel_stack_top = (uint64_t)stack_top;
 
     // Riserva 8 byte per simulare il return RIP di una CALL (System V ABI: RSP % 16 == 8 all'entry)
     stack_top -= 8;
@@ -136,6 +153,56 @@ uint32_t task_create(const char* name, void (*entry_point)(void*), void* arg, ui
     t->rsp = (uint64_t)stack_top;
     t->state = TASK_STATE_READY;
 
+    return t->pid;
+}
+
+uint32_t task_create_user(const char* name, uint64_t entry_rip, uint64_t user_rsp, uint64_t cr3, uint64_t arg) {
+    if (!entry_rip || !user_rsp) return 0;
+
+    int slot = -1;
+    for (int i = 1; i < MAX_TASKS; i++) {
+        if (g_tasks[i].state == TASK_STATE_UNUSED || g_tasks[i].state == TASK_STATE_TERMINATED) {
+            slot = i;
+            break;
+        }
+    }
+    if (slot < 0) return 0;
+
+    task_t* t = &g_tasks[slot];
+    task_cleanup_slot(t);
+
+    t->stack_base = (uint8_t*)kmalloc(TASK_STACK_SIZE);
+    if (!t->stack_base) return 0;
+    t->stack_size = TASK_STACK_SIZE;
+    t->is_user = true;
+
+    t->pid = g_next_pid++;
+    strncpy(t->name, name ? name : "UserApp", sizeof(t->name) - 1);
+    t->name[sizeof(t->name) - 1] = '\0';
+    t->priority = 3;
+    t->time_slice = DEFAULT_TIME_SLICE;
+    t->sleep_until_ticks = 0;
+    t->total_runtime = 0;
+    t->cr3 = cr3 ? cr3 : g_tasks[0].cr3;
+
+    uint8_t* kstack_top = (uint8_t*)(((uintptr_t)(t->stack_base + TASK_STACK_SIZE)) & ~0x0FULL);
+    t->kernel_stack_top = (uint64_t)kstack_top;
+
+    uint8_t* frame_ptr = kstack_top - sizeof(interrupt_frame_t);
+    interrupt_frame_t* f = (interrupt_frame_t*)frame_ptr;
+    memset(f, 0, sizeof(interrupt_frame_t));
+
+    /* Selettori Ring 3 (DPL=3): User Data 0x2B, User Code 0x33 */
+    f->ss     = GDT_USER_DATA;
+    f->rsp    = user_rsp;
+    f->rflags = 0x202; /* IF=1 */
+    f->cs     = GDT_USER_CODE;
+    f->rip    = entry_rip;
+    f->int_no = 32;
+    f->rdi    = arg;
+
+    t->rsp = (uint64_t)frame_ptr;
+    t->state = TASK_STATE_READY;
     return t->pid;
 }
 
@@ -218,6 +285,11 @@ interrupt_frame_t* sched_schedule(interrupt_frame_t* current_frame) {
     // Cambio opzionale dello spazio di indirizzamento PML4 (Paging CR3)
     if (next_task->cr3 && next_task->cr3 != cur->cr3) {
         __asm__ volatile ("mov %0, %%cr3" : : "r"(next_task->cr3));
+    }
+
+    // Aggiorna TSS.RSP0 per garantire uno stack Ring 0 valido su eccezioni/interrupt da Ring 3
+    if (next_task->kernel_stack_top) {
+        gdt_set_tss_rsp0(next_task->kernel_stack_top);
     }
 
     return (interrupt_frame_t*)next_task->rsp;

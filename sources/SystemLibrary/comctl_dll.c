@@ -553,6 +553,61 @@ static void comctl_draw_control(const comctl_theme_t* th, const comctl_control_t
             }
             break;
         }
+        case COMCTL_RIBBON_STYLE: {
+            /* Controllo RibbonStyle moderno (Pulsante File + Tab strip superiore + fascia comandi raggruppati) */
+            c_fill_box(x, y, w, h, th->card_bg, rad, th->surface_alpha, th->is_classic);
+            c_draw_border(x, y, w, h, th->card_border, rad, th->is_classic);
+
+            int32_t tab_h = 26;
+            c_fill_box(x + 1, y + 1, w - 2, tab_h, th->bg_color, 0, 235, th->is_classic);
+            g_comctl_kapi->gfx_fill_rect(x + 1, y + tab_h, w - 2, 1, th->card_border);
+
+            if (c->items && c->item_count > 0) {
+                int32_t tx = x + 6;
+                for (int32_t i = 0; i < c->item_count; i++) {
+                    if (c->items[i].level != 0) continue;
+                    int32_t tw = c_strlen(c->items[i].label) * 8 + 14;
+                    if (tx + tw > x + w - 4) break;
+                    bool is_file = ((int32_t)c->items[i].tag < 0);
+                    bool act = (!is_file && (int32_t)c->items[i].tag == (int32_t)c->value);
+                    if (is_file) {
+                        c_fill_box(tx, y + 3, tw, tab_h - 4, th->accent, 4, 250, th->is_classic);
+                        c_draw_text(tx + 7, y + 7, c->items[i].label, th->accent_text, th->accent);
+                    } else {
+                        if (act) {
+                            c_fill_box(tx, y + 3, tw, tab_h - 3, th->card_bg, 4, 248, th->is_classic);
+                            g_comctl_kapi->gfx_fill_rect(tx + 4, y + tab_h - 2, tw - 8, 2, th->accent);
+                        }
+                        c_draw_text(tx + 7, y + 7, c->items[i].label, act ? th->accent : fg, th->bg_color);
+                    }
+                    tx += tw + 2;
+                }
+
+                int32_t bx = x + 8;
+                int32_t by = y + tab_h + 6;
+                int32_t bh = h - tab_h - 12;
+                if (bh < 22) bh = 22;
+                for (int32_t i = 0; i < c->item_count; i++) {
+                    if (c->items[i].level != 1 || (int32_t)c->items[i].tag != (int32_t)c->value) continue;
+                    if (c->items[i].separator) {
+                        if (bx + 6 < x + w - 8) {
+                            g_comctl_kapi->gfx_fill_rect(bx + 2, by + 2, 1, bh - 4, th->card_border);
+                        }
+                        bx += 7;
+                        continue;
+                    }
+                    int32_t bw = c_strlen(c->items[i].label) * 8 + 14;
+                    if (bx + bw > x + w - 6) break;
+                    bool chk = c->items[i].checked;
+                    c_fill_box(bx, by, bw, bh, chk ? th->accent : th->hover_bg, 5, chk ? 240 : 215, th->is_classic);
+                    c_draw_border(bx, by, bw, bh, chk ? th->accent : th->card_border, 5, th->is_classic);
+                    c_draw_text(bx + 7, by + (bh - 14) / 2, c->items[i].label,
+                                chk ? th->accent_text : fg, th->card_bg);
+                    bx += bw + 4;
+                }
+            }
+            break;
+        }
         case COMCTL_DATE_TIME_PICKER: {
             c_fill_box(x, y, w, h, th->input_bg, rad, 255, th->is_classic);
             c_draw_border(x, y, w, h, th->card_border, rad, th->is_classic);
@@ -895,6 +950,44 @@ static bool comctl_form_mouse(comctl_form_t* form, int32_t ox, int32_t oy, int32
                         }
                     }
                     break;
+                case COMCTL_RIBBON_STYLE:
+                    if (c->items && c->item_count > 0) {
+                        if (my < ry + 26) {
+                            int32_t tx = rx + 6;
+                            for (int32_t k = 0; k < c->item_count; k++) {
+                                if (c->items[k].level != 0) continue;
+                                int32_t tw = c_strlen(c->items[k].label) * 8 + 14;
+                                if (tx + tw > rx + c->w - 4) break;
+                                if (mx >= tx && mx < tx + tw) {
+                                    if ((int32_t)c->items[k].tag < 0) {
+                                        c->selected_col = k;
+                                        if (c->on_click) c->on_click(c, c->user_data);
+                                    } else {
+                                        c->value = (int32_t)c->items[k].tag;
+                                        form->active_tab = (int32_t)c->items[k].tag;
+                                        if (c->on_change) c->on_change(c, c->user_data);
+                                    }
+                                    break;
+                                }
+                                tx += tw + 2;
+                            }
+                        } else {
+                            int32_t bx = rx + 8;
+                            for (int32_t k = 0; k < c->item_count; k++) {
+                                if (c->items[k].level != 1 || (int32_t)c->items[k].tag != (int32_t)c->value) continue;
+                                if (c->items[k].separator) { bx += 7; continue; }
+                                int32_t bw = c_strlen(c->items[k].label) * 8 + 14;
+                                if (bx + bw > rx + c->w - 6) break;
+                                if (mx >= bx && mx < bx + bw) {
+                                    c->selected_col = k;
+                                    if (c->on_click) c->on_click(c, c->user_data);
+                                    break;
+                                }
+                                bx += bw + 4;
+                            }
+                        }
+                    }
+                    break;
                 case COMCTL_LISTVIEW:
                 case COMCTL_TREEVIEW:
                     if (c->items && c->item_count > 0) {
@@ -1034,7 +1127,7 @@ typedef struct {
     const comctl_api_t* out_api;
 } comctl_init_params_t;
 
-__attribute__((force_align_arg_pointer))
+__attribute__((section(".text.entry"), used, force_align_arg_pointer))
 int module_main(const kernel_api_t* api, comctl_init_params_t* params) {
     comctl_apply_relocs();
     if (!api || !params) return -1;

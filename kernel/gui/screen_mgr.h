@@ -18,6 +18,9 @@ loginscreen_result_t screen_mgr_run_loginscreen(void);
 
 // Esegue il Logoutscreen (carica C:\SYSTEM\SCREENS\LOGOUT.MOD con fallback sicuro)
 logoutscreen_result_t screen_mgr_run_logoutscreen(void);
+logoutscreen_result_t screen_mgr_run_logoutscreen_mode(logout_mode_t mode);
+bool screen_mgr_update_boot_ini_reboot_trick(bool active);
+bool boot_is_reboot_trick_active(void);
 
 // Esegue il modulo BootSetup per l'installazione del sistema (BOOTSETUP.MOD)
 bootsetup_result_t screen_mgr_run_bootsetup(void);
@@ -30,6 +33,11 @@ update_result_t screen_mgr_run_update(void);
 
 // Esegue il modulo protetto di Configurazione Iniziale OOBE (OOBE.MOD)
 oobe_result_t screen_mgr_run_oobe(void);
+
+// Moduli di Ripristino pre-desktop (RECBASIC.MOD / RECADV.MOD)
+recovery_result_t screen_mgr_run_recovery_basic(void);
+recovery_result_t screen_mgr_run_recovery_advanced(void);
+int screen_mgr_consume_boot_recovery_mode(void);
 
 // Funzioni helper e di stato OOBE per compatibilita' di sistema
 bool oobe_is_completed(void);

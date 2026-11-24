@@ -22,8 +22,11 @@ typedef struct {
     char             name[32];
     task_state_t     state;
     uint64_t         rsp;             // Puntatore al frame salvato interrupt_frame_t
-    uint8_t*         stack_base;      // Base dello stack allocato
+    uint8_t*         stack_base;      // Base dello stack kernel allocato
     uint32_t         stack_size;
+    uint8_t*         user_stack_base; // Base dello stack user Ring 3 (opzionale)
+    uint64_t         kernel_stack_top;// Top dello stack kernel per TSS.RSP0
+    bool             is_user;         // true se il task gira in Ring 3
     uint64_t         sleep_until_ticks;
     uint32_t         priority;        // 1 (bassa) .. 5 (alta)
     uint32_t         time_slice;      // Tick rimanenti nel quanto attuale
@@ -37,6 +40,7 @@ bool sched_is_active(void);
 
 // Creazione e terminazione task
 uint32_t task_create(const char* name, void (*entry_point)(void*), void* arg, uint32_t priority);
+uint32_t task_create_user(const char* name, uint64_t entry_rip, uint64_t user_rsp, uint64_t cr3, uint64_t arg);
 void     task_exit(void);
 bool     task_kill(uint32_t pid);
 

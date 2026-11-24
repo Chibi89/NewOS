@@ -6,6 +6,7 @@
 #include <gui/graphics.h>
 #include <gui/icons.h>
 #include <gui/wm.h>
+#include <gui/screen_mgr.h>
 #include <string.h>
 
 static power_status_t p_status;
@@ -116,6 +117,13 @@ uint32_t power_update(void) {
 }
 
 void power_shutdown(void) {
+    if (boot_is_reboot_trick_active()) {
+        outb(0x3F8, 'R'); // RebootTrick attivo in boot.ini: devia da S5 a Reboot
+        outb(0x3F8, 'T');
+        power_reboot();
+        return;
+    }
+
     outb(0x3F8, 'P'); // Serial log: Poweroff
     outb(0x3F8, 'O');
     outb(0x3F8, 'F');

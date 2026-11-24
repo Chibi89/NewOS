@@ -96,20 +96,20 @@ msg_disk_err:  db "Boot Error: Cannot read Stage 2!", 13, 10, 0
 ; Tabella delle partizioni MBR (offset 446 / 0x1BE)
 times 446 - ($ - $$) db 0
 
-; Partizione 1: exFAT (Type 0x07, Start LBA 2048)
+; Partizione 1: exFAT (Type 0x07, Start LBA 2048; build.js aggiorna dinamicamente fino a 4 GB max)
 db 0x80                 ; Bootable flag
 db 0x00, 0x02, 0x00     ; Start CHS
 db 0x07                 ; Partition Type (0x07 = exFAT / NTFS)
 db 0xFE, 0xFF, 0xFF     ; End CHS
 dd 2048                 ; Start LBA (LBA 2048 = 1 MB)
-dd 250000               ; Total Sectors (122 MB)
+dd 524288               ; Total Sectors default (256 MB, scalabile fino a 4 GB da build.js)
 
-; Partizione 2: EFI System Partition ESP (Type 0xEF, Start LBA 256000, 1.44 MB FAT12)
+; Partizione 2: EFI System Partition ESP (Type 0xEF, 1.44 MB FAT12; LBA aggiornato da build.js)
 db 0x00                 ; Non attiva
 db 0xFE, 0xFF, 0xFF     ; Start CHS
 db 0xEF                 ; Partition Type 0xEF (EFI System Partition)
 db 0xFE, 0xFF, 0xFF     ; End CHS
-dd 256000               ; Start LBA (LBA 256000 = 125 MB)
+dd 528384               ; Start LBA default (258 MB)
 dd 2880                 ; Total Sectors (2880 settori = 1.44 MB)
 
 ; Partizioni 3, 4 (vuote, 2 * 16 = 32 bytes)

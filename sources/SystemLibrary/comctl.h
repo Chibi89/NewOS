@@ -42,7 +42,8 @@ typedef enum {
     COMCTL_HOTKEY_BOX,
     COMCTL_AVATAR,
     COMCTL_SPINNER,
-    COMCTL_TOAST
+    COMCTL_TOAST,
+    COMCTL_RIBBON_STYLE
 } comctl_type_t;
 
 // Varianti visive e funzionali per ogni tipo di controllo

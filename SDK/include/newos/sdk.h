@@ -26,6 +26,9 @@
 #include "driver.h"
 #include "pkg.h"
 #include "debug.h"
+#include "motion.h"
+#include "doc.h"
+#include "calc.h"
 #include "app.h"
 
 #define NS_APP_EXPORT __attribute__((section(".entry"), used))

@@ -226,6 +226,14 @@ typedef struct {
     void (*keyboard_set_layout)(int layout_id);
     int  (*keyboard_get_layout)(void);
     void (*ac97_play_pcm)(const void *data, uint32_t bytes, uint32_t sample_rate);
+    void (*gfx_fill_rounded_glass)(int32_t x, int32_t y, int32_t w, int32_t h, int32_t radius, uint32_t base_color, uint8_t alpha);
+    void (*nscomp_apply_window_refraction)(int32_t x, int32_t y, int32_t w, int32_t h, int32_t rim_px, int32_t strength_px);
+    const void *(*nsmotion_get_api)(void);
+    const void *(*get_system_service)(const char *service_name);
+    bool (*system_shutdown_integrity_check)(char *out_report, size_t max_len);
+    bool (*boot_set_reboot_trick)(void);
+    bool (*recovery_repair_system_pak)(bool full_system_repair, char *out_report, size_t max_len);
+    bool (*recovery_reset_boot_flags)(void);
 } kernel_ext_api_t;
 
 const kernel_ext_api_t *screen_mgr_get_ext_api(void);

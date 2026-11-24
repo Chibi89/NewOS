@@ -98,6 +98,7 @@ uint32_t gfx_get_width(void);
 uint32_t gfx_get_height(void);
 uint32_t gfx_get_pitch_bytes(void);
 uint64_t gfx_get_lfb_phys(void);
+uint32_t *gfx_get_backbuffer(void);
 bool     gfx_set_resolution(uint32_t width, uint32_t height);
 void     gfx_set_ui_scale(uint32_t scale_percent);
 uint32_t gfx_get_ui_scale(void);

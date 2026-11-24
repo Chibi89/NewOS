@@ -16,7 +16,9 @@
 #include <gui/icons.h>
 #include <gui/image.h>
 #include <gui/screen_mgr.h>
+#include <gui/nscomp_loader.h>
 #include <gui/wm.h>
+#include <lib/aes256.h>
 #include <clipboard.h>
 #include <mm/heap.h>
 #include <net/dhcp.h>
@@ -61,6 +63,668 @@
 static kernel_api_t g_kernel_api;
 static kernel_ext_api_t g_kernel_ext_api;
 static bool g_api_initialized = false;
+static void serial_log(const char *s);
+
+typedef struct __attribute__((packed)) {
+  char     magic[8];
+  uint32_t header_size;
+  uint32_t total_files;
+  uint32_t total_uncompressed;
+  uint32_t encrypted_size;
+  uint8_t  aes_iv[16];
+  uint32_t payload_crc32;
+  uint8_t  reserved[20];
+} shutdown_pak_hdr_t;
+
+static bool repair_from_system_pak_ex(const char *const *fail_rel_paths, int fail_count, bool full_newos, int *out_repaired) {
+  if (out_repaired) *out_repaired = 0;
+  if (!full_newos && (!fail_rel_paths || fail_count <= 0)) return true;
+
+  static const uint8_t pak_key[32] = "NewOS-V1SETUP-256BIT-AUTHENTIC26";
+  const char *pak_cands[] = {
+      "C:\\BootSetup\\SYSTEM.PAK",
+      "C:\\NewOS\\Boot\\SYSTEM.PAK",
+      "D:\\BootSetup\\SYSTEM.PAK",
+      "/BootSetup/SYSTEM.PAK"
+  };
+
+  uint8_t *pak_buf = NULL;
+  uint32_t pak_sz = 0;
+  for (int i = 0; i < 4; i++) {
+    pak_buf = (uint8_t *)vfs_read_entire_file(pak_cands[i], &pak_sz);
+    if (pak_buf && pak_sz > sizeof(shutdown_pak_hdr_t)) break;
+    if (pak_buf) { kfree(pak_buf); pak_buf = NULL; }
+  }
+  if (!pak_buf) return false;
+
+  const shutdown_pak_hdr_t *hdr = (const shutdown_pak_hdr_t *)pak_buf;
+  if (memcmp(hdr->magic, "NOSPAK10", 8) != 0 || hdr->encrypted_size == 0 ||
+      sizeof(shutdown_pak_hdr_t) + hdr->encrypted_size > pak_sz) {
+    kfree(pak_buf);
+    return false;
+  }
+
+  uint8_t *plain = (uint8_t *)kmalloc(hdr->encrypted_size);
+  if (!plain) {
+    kfree(pak_buf);
+    return false;
+  }
+
+  aes256_ctx_t ctx;
+  aes256_init_decrypt(&ctx, pak_key);
+  aes256_cbc_decrypt(&ctx, hdr->aes_iv, pak_buf + sizeof(shutdown_pak_hdr_t), plain, hdr->encrypted_size);
+  kfree(pak_buf);
+
+  uint32_t off = 0;
+  uint32_t limit = hdr->total_uncompressed;
+  if (limit > hdr->encrypted_size) limit = hdr->encrypted_size;
+  int repaired = 0;
+
+  for (uint32_t fi = 0; fi < hdr->total_files && off + 10 <= limit; fi++) {
+    uint16_t path_len = (uint16_t)(plain[off] | (plain[off + 1] << 8));
+    off += 2;
+    if (off + path_len + 8 > limit) break;
+    char rel[256];
+    uint16_t copy_len = path_len < 255 ? path_len : 255;
+    memcpy(rel, plain + off, copy_len);
+    rel[copy_len] = '\0';
+    off += path_len;
+
+    uint32_t fsize = *(uint32_t *)(plain + off);
+    off += 8; /* skip size + crc32 */
+    if (off + fsize > limit) break;
+
+    bool should_restore = false;
+    if (full_newos) {
+      should_restore = (strncmp(rel, "NewOS/", 6) == 0 || strncmp(rel, "NewOS\\", 6) == 0);
+    } else {
+      for (int k = 0; k < fail_count; k++) {
+        if (strcasecmp(rel, fail_rel_paths[k]) == 0) {
+          should_restore = true;
+          break;
+        }
+      }
+    }
+    if (should_restore) {
+        char dst_path[272];
+        mini_snprintf(dst_path, sizeof(dst_path), "C:\\%s", rel);
+        for (int p = 0; dst_path[p]; p++) {
+          if (dst_path[p] == '/') dst_path[p] = '\\';
+        }
+        if (!vfs_exists(dst_path)) {
+          vfs_create(dst_path);
+        } else if (full_newos) {
+          vfs_unlink(dst_path);
+          vfs_create(dst_path);
+        }
+        vfs_file_t *vf = vfs_open(dst_path);
+        if (vf) {
+          int32_t wr = vfs_write(vf, plain + off, fsize);
+          vfs_close(vf);
+          if (wr == (int32_t)fsize) {
+            repaired++;
+            serial_log("[SHUTDOWN_CHECK] Riparato file critico da SYSTEM.PAK: ");
+            serial_log(dst_path);
+            serial_log("\n");
+          }
+        }
+    }
+    off += fsize;
+  }
+
+  kfree(plain);
+  vfs_flush();
+  if (out_repaired) *out_repaired = repaired;
+  return (repaired > 0);
+}
+
+static bool repair_files_from_system_pak(const char *const *fail_rel_paths, int fail_count, int *out_repaired) {
+  return repair_from_system_pak_ex(fail_rel_paths, fail_count, false, out_repaired);
+}
+
+static bool g_reboot_trick_active = false;
+
+bool boot_is_reboot_trick_active(void) {
+  if (g_reboot_trick_active) return true;
+  uint32_t sz = 0;
+  char *buf = (char *)vfs_read_entire_file("C:\\NewOS\\Boot\\boot.ini", &sz);
+  if (!buf) return false;
+  bool found = (sz > 0 && strstr(buf, "RebootTrick=1") != NULL);
+  kfree(buf);
+  return found;
+}
+
+bool screen_mgr_update_boot_ini_reboot_trick(bool active) {
+  g_reboot_trick_active = active;
+  const char *path = "C:\\NewOS\\Boot\\boot.ini";
+  uint32_t old_sz = 0;
+  char *old_buf = (char *)vfs_read_entire_file(path, &old_sz);
+
+  if (!old_buf || old_sz == 0) {
+    if (old_buf) kfree(old_buf);
+    if (!active) return false;
+    const char *init_data = "[BOOT]\r\nRebootTrick=1\r\nLastTrigger=REBOOT\r\n";
+    if (!vfs_exists(path)) vfs_create(path);
+    vfs_file_t *vf = vfs_open(path);
+    bool ok = false;
+    if (vf) {
+      uint32_t len = (uint32_t)strlen(init_data);
+      ok = (vfs_write(vf, init_data, len) == (int32_t)len);
+      vfs_close(vf);
+    }
+    vfs_flush();
+    serial_log("[BOOT.INI] Creato boot.ini con RebootTrick=1.\n");
+    return ok;
+  }
+
+  /* Se si resetta al boot e RebootTrick=1 non e' presente, non toccare il file */
+  if (!active && !strstr(old_buf, "RebootTrick=1")) {
+    kfree(old_buf);
+    return false;
+  }
+
+  size_t cap = old_sz + 128;
+  char *out = (char *)kmalloc(cap);
+  if (!out) {
+    kfree(old_buf);
+    return false;
+  }
+
+  size_t out_len = 0;
+  bool saw_reboot_trick = false;
+  bool saw_last_trigger = false;
+  uint32_t pos = 0;
+
+  while (pos < old_sz) {
+    uint32_t line_start = pos;
+    while (pos < old_sz && old_buf[pos] != '\n') pos++;
+    uint32_t line_end = pos;
+    if (pos < old_sz && old_buf[pos] == '\n') pos++;
+
+    uint32_t trim_end = line_end;
+    while (trim_end > line_start && (old_buf[trim_end - 1] == '\r' || old_buf[trim_end - 1] == ' ')) {
+      trim_end--;
+    }
+    uint32_t line_len = trim_end - line_start;
+    const char *line = old_buf + line_start;
+
+    const char *repl = NULL;
+    if (line_len >= 12 && strncmp(line, "RebootTrick=", 12) == 0) {
+      repl = active ? "RebootTrick=1\r\n" : "RebootTrick=0\r\n";
+      saw_reboot_trick = true;
+    } else if (line_len >= 12 && strncmp(line, "LastTrigger=", 12) == 0) {
+      repl = active ? "LastTrigger=REBOOT\r\n" : "LastTrigger=NONE\r\n";
+      saw_last_trigger = true;
+    }
+
+    if (repl) {
+      size_t rlen = strlen(repl);
+      if (out_len + rlen < cap) {
+        memcpy(out + out_len, repl, rlen);
+        out_len += rlen;
+      }
+    } else if (line_len > 0) {
+      if (out_len + line_len + 2 < cap) {
+        memcpy(out + out_len, line, line_len);
+        out_len += line_len;
+        out[out_len++] = '\r';
+        out[out_len++] = '\n';
+      }
+    }
+  }
+
+  if (!saw_reboot_trick) {
+    const char *add_rt = active ? "RebootTrick=1\r\n" : "RebootTrick=0\r\n";
+    size_t alen = strlen(add_rt);
+    if (out_len + alen < cap) { memcpy(out + out_len, add_rt, alen); out_len += alen; }
+  }
+  if (!saw_last_trigger) {
+    const char *add_lt = active ? "LastTrigger=REBOOT\r\n" : "LastTrigger=NONE\r\n";
+    size_t alen = strlen(add_lt);
+    if (out_len + alen < cap) { memcpy(out + out_len, add_lt, alen); out_len += alen; }
+  }
+
+  kfree(old_buf);
+  vfs_unlink(path);
+  vfs_create(path);
+  vfs_file_t *vf = vfs_open(path);
+  bool ok = false;
+  if (vf) {
+    ok = (vfs_write(vf, out, (uint32_t)out_len) == (int32_t)out_len);
+    vfs_close(vf);
+  }
+  kfree(out);
+  vfs_flush();
+  serial_log(active
+    ? "[BOOT.INI] Aggiornato RebootTrick=1 preservando le chiavi esistenti -> delega a Shutdown.\n"
+    : "[BOOT.INI] Reset RebootTrick=0 preservando le chiavi esistenti.\n");
+  return ok;
+}
+
+static bool screen_mgr_set_reboot_trick(void) {
+  return screen_mgr_update_boot_ini_reboot_trick(true);
+}
+
+static bool screen_mgr_shutdown_integrity_check(char *out_report, size_t max_len) {
+  serial_log("[SHUTDOWN_CHECK] 1. Salvataggio impostazioni utente e registro...\n");
+  user_save_config();
+  registry_audit_log("SHUTDOWN_CHECK", "HKEY_LOCAL_MACHINE\\NEWOS", "*", "-",
+                     "Controllo variazioni registro e integrita' file critici pre-spegnimento",
+                     REG_RISK_LOW);
+  registry_save_to_disk();
+  vfs_flush();
+
+  const char *critical_rel[] = {
+      "NewOS/Boot/KERNEL.BIN",
+      "NewOS/Boot/BOOTSCR.MOD",
+      "NewOS/Boot/LOGIN.MOD",
+      "NewOS/Boot/LOGOUT.MOD",
+      "NewOS/Restore/RECBASIC.MOD",
+      "NewOS/Restore/RECADV.MOD",
+      "NewOS/SystemLibrary/EXPLORER.DLL",
+      "NewOS/SystemLibrary/NSCOMP.DLL",
+      "NewOS/SystemLibrary/NSMOTION.DLL",
+      "NewOS/SystemLibrary/THEMEMGR.DLL"
+  };
+  const char *fail_list[10];
+  int fail_count = 0;
+
+  for (int i = 0; i < (int)(sizeof(critical_rel) / sizeof(critical_rel[0])); i++) {
+    char cpath[160];
+    mini_snprintf(cpath, sizeof(cpath), "C:\\%s", critical_rel[i]);
+    for (int p = 0; cpath[p]; p++) {
+      if (cpath[p] == '/') cpath[p] = '\\';
+    }
+    uint32_t sz = 0;
+    uint8_t *buf = (uint8_t *)vfs_read_entire_file(cpath, &sz);
+    bool ok = (buf != NULL && sz > 0);
+    if (ok && (strstr(cpath, ".MOD") || strstr(cpath, ".DLL"))) {
+      const module_header_t *h = (const module_header_t *)buf;
+      if (sz < sizeof(module_header_t) || h->magic != MODULE_MAGIC_NEWOS) {
+        ok = false;
+      }
+    }
+    if (buf) kfree(buf);
+    if (!ok) {
+      fail_list[fail_count++] = critical_rel[i];
+      serial_log("[SHUTDOWN_CHECK] FailCheck rilevato su: ");
+      serial_log(cpath);
+      serial_log("\n");
+    }
+  }
+
+  int repaired = 0;
+  bool safe_ok = (fail_count == 0);
+  if (!safe_ok) {
+    repair_files_from_system_pak(fail_list, fail_count, &repaired);
+  }
+
+  if (out_report && max_len > 0) {
+    if (safe_ok) {
+      mini_snprintf(out_report, max_len, "SafeCheck OK (10/10 file critici integri)");
+    } else {
+      mini_snprintf(out_report, max_len, "FailCheck=%d, riparati %d da SYSTEM.PAK", fail_count, repaired);
+    }
+  }
+  serial_log("[SHUTDOWN_CHECK] Verifica completata.\n");
+  return safe_ok || (repaired == fail_count);
+}
+
+static uint32_t parse_u32_dec(const char *s) {
+  uint32_t v = 0;
+  while (s && *s >= '0' && *s <= '9') {
+    v = v * 10 + (uint32_t)(*s - '0');
+    s++;
+  }
+  return v;
+}
+
+static int hex_val(char c) {
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
+  if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
+  return -1;
+}
+
+static bool restore_from_catalog_ghosts(const char *cat_buf, uint32_t cat_sz,
+                                        const char *const *fail_rel_paths, int fail_count,
+                                        int *out_repaired) {
+  if (out_repaired) *out_repaired = 0;
+  if (!cat_buf || cat_sz == 0 || !fail_rel_paths || fail_count <= 0) return false;
+
+  int repaired = 0;
+  uint32_t pos = 0;
+  while (pos < cat_sz) {
+    while (pos < cat_sz && (cat_buf[pos] == '\r' || cat_buf[pos] == '\n')) pos++;
+    if (pos >= cat_sz) break;
+    uint32_t line_start = pos;
+    while (pos < cat_sz && cat_buf[pos] != '\r' && cat_buf[pos] != '\n') pos++;
+    uint32_t line_len = pos - line_start;
+    if (line_len < 10 || cat_buf[line_start] != 'G' || cat_buf[line_start + 1] != '|') continue;
+
+    /* Formato: G|<rel_path>|<size>|0x<crc32>|<hex_payload> */
+    const char *p = cat_buf + line_start + 2;
+    const char *end = cat_buf + line_start + line_len;
+    const char *sep1 = p;
+    while (sep1 < end && *sep1 != '|') sep1++;
+    if (sep1 >= end) continue;
+
+    size_t rel_len = (size_t)(sep1 - p);
+    if (rel_len == 0 || rel_len >= 256) continue;
+    char rel[256];
+    memcpy(rel, p, rel_len);
+    rel[rel_len] = '\0';
+
+    bool wanted = false;
+    for (int k = 0; k < fail_count; k++) {
+      if (strcasecmp(rel, fail_rel_paths[k]) == 0) {
+        wanted = true;
+        break;
+      }
+    }
+    if (!wanted) continue;
+
+    uint32_t gsize = parse_u32_dec(sep1 + 1);
+    const char *sep2 = sep1 + 1;
+    while (sep2 < end && *sep2 != '|') sep2++;
+    if (sep2 >= end) continue;
+    const char *sep3 = sep2 + 1;
+    while (sep3 < end && *sep3 != '|') sep3++;
+    if (sep3 >= end) continue;
+    const char *hex = sep3 + 1;
+    if ((uint32_t)(end - hex) < gsize * 2 || gsize == 0) continue;
+
+    uint8_t *raw = (uint8_t *)kmalloc(gsize);
+    if (!raw) continue;
+    bool hex_ok = true;
+    for (uint32_t i = 0; i < gsize; i++) {
+      int hi = hex_val(hex[i * 2]);
+      int lo = hex_val(hex[i * 2 + 1]);
+      if (hi < 0 || lo < 0) { hex_ok = false; break; }
+      raw[i] = (uint8_t)((hi << 4) | lo);
+    }
+
+    if (hex_ok) {
+      char dst_path[272];
+      mini_snprintf(dst_path, sizeof(dst_path), "C:\\%s", rel);
+      for (int dp = 0; dst_path[dp]; dp++) if (dst_path[dp] == '/') dst_path[dp] = '\\';
+      vfs_unlink(dst_path);
+      vfs_create(dst_path);
+      vfs_file_t *vf = vfs_open(dst_path);
+      if (vf) {
+        int32_t wr = vfs_write(vf, raw, gsize);
+        vfs_close(vf);
+        if (wr == (int32_t)gsize) {
+          repaired++;
+          serial_log("[CATALOG_GHOST] Ripristinato file di emergenza da copia fantasma: ");
+          serial_log(dst_path);
+          serial_log("\n");
+        }
+      }
+    }
+    kfree(raw);
+  }
+
+  if (repaired > 0) vfs_flush();
+  if (out_repaired) *out_repaired = repaired;
+  return (repaired > 0);
+}
+
+static bool screen_mgr_diagnose_from_catalog(bool only_critical, bool do_repair,
+                                             char *out_report, size_t max_len) {
+  const char *cat_paths[] = {
+      "C:\\NewOS\\Restore\\store.catalog",
+      "C:\\NewOS\\Boot\\store.catalog",
+      "C:\\NewOS\\SystemLibrary\\store.catalog",
+      "/NewOS/Restore/store.catalog"
+  };
+
+  uint32_t cat_sz = 0;
+  char *cat_buf = NULL;
+  for (int i = 0; i < 4; i++) {
+    cat_buf = (char *)vfs_read_entire_file(cat_paths[i], &cat_sz);
+    if (cat_buf && cat_sz > 0) break;
+    if (cat_buf) { kfree(cat_buf); cat_buf = NULL; }
+  }
+
+  /* Se store.catalog manca, prova prima a ripristinarlo da SYSTEM.PAK */
+  if (!cat_buf && do_repair) {
+    const char *cat_rel[1] = {"NewOS/Restore/store.catalog"};
+    int rep_cat = 0;
+    repair_from_system_pak_ex(cat_rel, 1, false, &rep_cat);
+    cat_buf = (char *)vfs_read_entire_file(cat_paths[0], &cat_sz);
+  }
+
+  if (!cat_buf || cat_sz == 0) {
+    if (cat_buf) kfree(cat_buf);
+    return false;
+  }
+
+  int total_dirs = 0;
+  int fixed_dirs = 0;
+  int checked_files = 0;
+  int fail_total = 0;
+  int repaired_total = 0;
+
+  char *fail_batch[32];
+  int batch_count = 0;
+
+  uint32_t pos = 0;
+  while (pos < cat_sz) {
+    while (pos < cat_sz && (cat_buf[pos] == '\r' || cat_buf[pos] == '\n')) pos++;
+    if (pos >= cat_sz) break;
+    uint32_t line_start = pos;
+    while (pos < cat_sz && cat_buf[pos] != '\r' && cat_buf[pos] != '\n') pos++;
+    uint32_t line_len = pos - line_start;
+    if (line_len < 3 || line_len >= 280) continue;
+
+    char line[280];
+    memcpy(line, cat_buf + line_start, line_len);
+    line[line_len] = '\0';
+
+    if (line[0] == 'D' && line[1] == '|') {
+      total_dirs++;
+      char dpath[272];
+      mini_snprintf(dpath, sizeof(dpath), "C:\\%s", line + 2);
+      for (int p = 0; dpath[p]; p++) if (dpath[p] == '/') dpath[p] = '\\';
+      if (!vfs_exists(dpath) && do_repair) {
+        if (vfs_mkdir(dpath)) fixed_dirs++;
+      }
+    } else if (line[0] == 'F' && line[1] == '|') {
+      char tier = line[2];
+      if (only_critical && tier != 'C') continue;
+      if (line[3] != '|') continue;
+
+      char *rel = line + 4;
+      char *sep1 = strchr(rel, '|');
+      if (!sep1) continue;
+      *sep1 = '\0';
+      uint32_t expected_sz = parse_u32_dec(sep1 + 1);
+
+      checked_files++;
+      char cpath[272];
+      mini_snprintf(cpath, sizeof(cpath), "C:\\%s", rel);
+      for (int p = 0; cpath[p]; p++) if (cpath[p] == '/') cpath[p] = '\\';
+
+      uint32_t actual_sz = 0;
+      uint8_t *fbuf = (uint8_t *)vfs_read_entire_file(cpath, &actual_sz);
+      bool ok = (fbuf != NULL && actual_sz == expected_sz && actual_sz > 0);
+      if (ok && (strstr(cpath, ".MOD") || strstr(cpath, ".DLL"))) {
+        const module_header_t *h = (const module_header_t *)fbuf;
+        if (actual_sz < sizeof(module_header_t) || h->magic != MODULE_MAGIC_NEWOS) {
+          ok = false;
+        }
+      }
+      if (fbuf) kfree(fbuf);
+
+      if (!ok) {
+        fail_total++;
+        if (do_repair) {
+          size_t rlen = strlen(rel) + 1;
+          char *copy = (char *)kmalloc(rlen);
+          if (copy) {
+            memcpy(copy, rel, rlen);
+            fail_batch[batch_count++] = copy;
+            if (batch_count == 32) {
+              int rep = 0;
+              repair_from_system_pak_ex((const char *const *)fail_batch, batch_count, false, &rep);
+              if (rep < batch_count) {
+                int grep = 0;
+                restore_from_catalog_ghosts(cat_buf, cat_sz, (const char *const *)fail_batch, batch_count, &grep);
+                rep += grep;
+              }
+              repaired_total += rep;
+              for (int b = 0; b < batch_count; b++) kfree(fail_batch[b]);
+              batch_count = 0;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (do_repair && batch_count > 0) {
+    int rep = 0;
+    repair_from_system_pak_ex((const char *const *)fail_batch, batch_count, false, &rep);
+    if (rep < batch_count) {
+      int grep = 0;
+      restore_from_catalog_ghosts(cat_buf, cat_sz, (const char *const *)fail_batch, batch_count, &grep);
+      rep += grep;
+    }
+    repaired_total += rep;
+    for (int b = 0; b < batch_count; b++) kfree(fail_batch[b]);
+    batch_count = 0;
+  }
+
+  kfree(cat_buf);
+
+  if (out_report && max_len > 0) {
+    if (fail_total == 0 && fixed_dirs == 0) {
+      mini_snprintf(out_report, max_len, "store.catalog OK (%d dir, %d/%d file integri)",
+                    total_dirs, checked_files, checked_files);
+    } else {
+      mini_snprintf(out_report, max_len, "store.catalog: %d dir fix, %d fail, %d riparati",
+                    fixed_dirs, fail_total, repaired_total);
+    }
+    if (vfs_exists("C:\\NewOS\\Restore")) {
+      const char *log_path = "C:\\NewOS\\Restore\\last_recovery.log";
+      vfs_unlink(log_path);
+      vfs_create(log_path);
+      vfs_file_t *lf = vfs_open(log_path);
+      if (lf) {
+        vfs_write(lf, out_report, (uint32_t)strlen(out_report));
+        vfs_close(lf);
+      }
+      vfs_flush();
+    }
+  }
+  return (fail_total == 0 || repaired_total == fail_total);
+}
+
+static bool screen_mgr_recovery_repair_system_pak(bool full_system_repair, char *out_report, size_t max_len) {
+  if (screen_mgr_diagnose_from_catalog(!full_system_repair, true, out_report, max_len)) {
+    return true;
+  }
+  /* Fallback nel caso store.catalog non sia ancora presente su disco */
+  if (!full_system_repair) {
+    return screen_mgr_shutdown_integrity_check(out_report, max_len);
+  }
+  int repaired = 0;
+  bool ok = repair_from_system_pak_ex(NULL, 0, true, &repaired);
+  if (out_report && max_len > 0) {
+    if (ok) {
+      mini_snprintf(out_report, max_len, "Ripristino completo NewOS/: %d file estratti da SYSTEM.PAK", repaired);
+    } else {
+      mini_snprintf(out_report, max_len, "Errore apertura/decifratura SYSTEM.PAK");
+    }
+  }
+  return ok;
+}
+
+static bool screen_mgr_recovery_reset_boot_flags(void) {
+  screen_mgr_update_boot_ini_reboot_trick(false);
+  if (vfs_exists("C:\\NewOS\\Boot\\logout_mode.ini")) {
+    vfs_unlink("C:\\NewOS\\Boot\\logout_mode.ini");
+  }
+  if (vfs_exists("C:\\NewOS\\Boot\\boot_action.ini")) {
+    vfs_unlink("C:\\NewOS\\Boot\\boot_action.ini");
+  }
+  vfs_flush();
+  return true;
+}
+
+int screen_mgr_consume_boot_recovery_mode(void) {
+  const char *path = "C:\\NewOS\\Boot\\boot.ini";
+  uint32_t sz = 0;
+  char *buf = (char *)vfs_read_entire_file(path, &sz);
+  if (!buf || sz == 0) {
+    if (buf) kfree(buf);
+    return 0;
+  }
+
+  int mode = 0;
+  if (strstr(buf, "RecoveryMode=ADVANCED") || strstr(buf, "RecoveryMode=advanced")) {
+    mode = 2;
+  } else if (strstr(buf, "RecoveryMode=BASIC") || strstr(buf, "RecoveryMode=basic")) {
+    mode = 1;
+  }
+
+  if (mode == 0) {
+    kfree(buf);
+    return 0;
+  }
+
+  /* Resetta RecoveryMode=NONE preservando tutte le altre chiavi di boot.ini */
+  char *out = (char *)kmalloc(sz + 64);
+  if (out) {
+    size_t out_len = 0;
+    uint32_t pos = 0;
+    while (pos < sz) {
+      uint32_t line_start = pos;
+      while (pos < sz && buf[pos] != '\r' && buf[pos] != '\n') pos++;
+      uint32_t line_len = pos - line_start;
+      if (line_len >= 13 && (strncmp(buf + line_start, "RecoveryMode=", 13) == 0 ||
+                            strncmp(buf + line_start, "recoverymode=", 13) == 0)) {
+        const char *rep = "RecoveryMode=NONE\r\n";
+        size_t rlen = strlen(rep);
+        memcpy(out + out_len, rep, rlen);
+        out_len += rlen;
+      } else if (line_len > 0) {
+        memcpy(out + out_len, buf + line_start, line_len);
+        out_len += line_len;
+        out[out_len++] = '\r';
+        out[out_len++] = '\n';
+      }
+      while (pos < sz && (buf[pos] == '\r' || buf[pos] == '\n')) pos++;
+    }
+    out[out_len] = '\0';
+    vfs_unlink(path);
+    vfs_create(path);
+    vfs_file_t *vf = vfs_open(path);
+    if (vf) {
+      vfs_write(vf, out, (uint32_t)out_len);
+      vfs_close(vf);
+    }
+    kfree(out);
+    vfs_flush();
+  }
+  kfree(buf);
+  return mode;
+}
+
+static const void *screen_mgr_get_service(const char *service_name) {
+  if (!service_name)
+    return NULL;
+  if (strcasecmp(service_name, "NSCOMP") == 0)
+    return nscomp_get_api();
+  if (strcasecmp(service_name, "NSMOTION") == 0)
+    return nsmotion_get_api();
+  if (strcasecmp(service_name, "COMCTL") == 0) {
+    extern const void *comctl_get_api(void);
+    return comctl_get_api();
+  }
+  return NULL;
+}
 
 extern void wm_focus_window(int32_t id);
 extern void wm_set_background_type(int bg_type);
@@ -683,6 +1347,14 @@ void screen_mgr_init(void) {
   g_kernel_ext_api.keyboard_set_layout = keyboard_set_layout;
   g_kernel_ext_api.keyboard_get_layout = keyboard_get_layout;
   g_kernel_ext_api.ac97_play_pcm = ac97_play_pcm;
+  g_kernel_ext_api.gfx_fill_rounded_glass = gfx_fill_rounded_glass;
+  g_kernel_ext_api.nscomp_apply_window_refraction = nscomp_apply_window_refraction;
+  g_kernel_ext_api.nsmotion_get_api = nsmotion_get_api;
+  g_kernel_ext_api.get_system_service = screen_mgr_get_service;
+  g_kernel_ext_api.system_shutdown_integrity_check = screen_mgr_shutdown_integrity_check;
+  g_kernel_ext_api.boot_set_reboot_trick = screen_mgr_set_reboot_trick;
+  g_kernel_ext_api.recovery_repair_system_pak = screen_mgr_recovery_repair_system_pak;
+  g_kernel_ext_api.recovery_reset_boot_flags = screen_mgr_recovery_reset_boot_flags;
   g_kernel_api.ext_api = &g_kernel_ext_api;
 
   g_api_initialized = true;
@@ -872,7 +1544,7 @@ loginscreen_result_t screen_mgr_run_loginscreen(void) {
   return loginscreen_fallback();
 }
 
-logoutscreen_result_t screen_mgr_run_logoutscreen(void) {
+logoutscreen_result_t screen_mgr_run_logoutscreen_mode(logout_mode_t mode) {
   screen_mgr_init();
 
   const char *paths[] = {"C:\\NewOS\\Boot\\LOGOUT.MOD",
@@ -898,7 +1570,8 @@ logoutscreen_result_t screen_mgr_run_logoutscreen(void) {
 
       user_profile_t *u = user_get_current();
       logoutscreen_params_t p = {
-          .current_user = (u && u->username[0]) ? u->username : "Morgan"};
+          .current_user = (u && u->username[0]) ? u->username : "Morgan",
+          .mode = mode};
       logoutscreen_result_t res =
           (logoutscreen_result_t)entry(&g_kernel_api, &p);
 
@@ -909,6 +1582,19 @@ logoutscreen_result_t screen_mgr_run_logoutscreen(void) {
   }
 
   return logoutscreen_fallback();
+}
+
+logoutscreen_result_t screen_mgr_run_logoutscreen(void) {
+  logout_mode_t m = LOGOUT_MODE_SHUTDOWN;
+  uint32_t msz = 0;
+  char *mbuf = (char *)vfs_read_entire_file("C:\\NewOS\\Boot\\logout_mode.ini", &msz);
+  if (mbuf && msz > 0) {
+    if (mbuf[0] >= '1' && mbuf[0] <= '5') {
+      m = (logout_mode_t)(mbuf[0] - '0');
+    }
+    kfree(mbuf);
+  }
+  return screen_mgr_run_logoutscreen_mode(m);
 }
 
 static bootsetup_result_t bootsetup_fallback(void) {
@@ -1214,4 +1900,55 @@ void app_installer_launch(void) {
   screen_mgr_run_bootsetup();
   wm_render();
   gfx_flip();
+}
+
+static recovery_result_t run_recovery_module(const char *const *paths, int num_paths,
+                                             uint32_t mod_type, const char *mod_name,
+                                             int trigger_source, bool auto_execute) {
+  screen_mgr_init();
+  uint8_t *mod_buf = NULL;
+  uint32_t mod_size = 0;
+
+  for (int i = 0; i < num_paths; i++) {
+    mod_buf = (uint8_t *)vfs_read_entire_file(paths[i], &mod_size);
+    if (mod_buf && mod_size > 0) break;
+  }
+
+  if (mod_buf && mod_size >= sizeof(module_header_t)) {
+    if (screen_mgr_verify_module(mod_buf, mod_size, mod_type, mod_name)) {
+      const module_header_t *h = (const module_header_t *)mod_buf;
+      recovery_entry_fn entry = (recovery_entry_fn)(mod_buf + h->entry_offset);
+      recovery_params_t p = {
+          .trigger_source = trigger_source,
+          .auto_execute = auto_execute
+      };
+      recovery_result_t res = (recovery_result_t)entry(&g_kernel_api, &p);
+      kfree(mod_buf);
+      return res;
+    }
+    kfree(mod_buf);
+  }
+
+  serial_log("[RECOVERY] Modulo non trovato o non valido: fallback a RECOVERY_ERROR.\n");
+  return RECOVERY_ERROR;
+}
+
+recovery_result_t screen_mgr_run_recovery_basic(void) {
+  const char *paths[] = {
+      "C:\\NewOS\\Restore\\RECBASIC.MOD",
+      "/NewOS/Restore/RECBASIC.MOD",
+      "C:\\NewOS\\Boot\\RECBASIC.MOD",
+      "RECBASIC.MOD"
+  };
+  return run_recovery_module(paths, 4, MODULE_TYPE_RECOVERY_BASIC, "RECBASIC.MOD", 0, true);
+}
+
+recovery_result_t screen_mgr_run_recovery_advanced(void) {
+  const char *paths[] = {
+      "C:\\NewOS\\Restore\\RECADV.MOD",
+      "/NewOS/Restore/RECADV.MOD",
+      "C:\\NewOS\\Boot\\RECADV.MOD",
+      "RECADV.MOD"
+  };
+  return run_recovery_module(paths, 4, MODULE_TYPE_RECOVERY_ADV, "RECADV.MOD", 0, false);
 }

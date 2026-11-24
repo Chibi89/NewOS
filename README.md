@@ -29,6 +29,15 @@
 <details>
 <summary><strong>Espandi per visualizzare gli aggiornamenti e i fix recenti</strong></summary>
 
+### 24 Novembre 2026
+- **Controllo `COMCTL_RIBBON_STYLE` in `COMCTL.DLL`**:
+  - Aggiunto il nuovo tipo di controllo [`COMCTL_RIBBON_STYLE`](SystemLibrary/comctl.h) in [comctl_dll.c](SystemLibrary/comctl_dll.c) con pulsante `File` (Backstage), strip di schede compatte, fascia comandi raggruppati con separatori verticali, gestione clic e correzione dell'entry point `.text.entry`.
+- **Sottosistema Grafico, Compositor, Blit & Motion (`DXBLIT.DLL`, `NSMOTION.DLL`, `NSCOMP.DLL`)**:
+  - Aggiunti i moduli out-of-kernel in [SystemLibrary/blit/](SystemLibrary/blit/), [SystemLibrary/motion/](SystemLibrary/motion/) e [SystemLibrary/compositor/](SystemLibrary/compositor/) con loader dedicato [nscomp_loader.c](kernel/gui/nscomp_loader.c) e header SDK [motion.h](SDK/include/newos/motion.h), [doc.h](SDK/include/newos/doc.h), [calc.h](SDK/include/newos/calc.h).
+- **Nuovi Wallpaper, Moduli Recovery & Miglioramenti Core**:
+  - Aggiunti i nuovi sfondi **Bloom** (`BLOOM_CORAL.JPG`, `BLOOM_MINT.JPG`, `BLOOM_NIGHT.JPG`, `BLOOM_SUNSET.JPG`) e **Geometric** (`GEO_HEX.JPG`, `GEO_MONO.JPG`, `GEO_PRISM.JPG`, `GEO_RINGS.JPG`) nei formati `4K`, `FHD` e `HD`.
+  - Integrati i moduli e piani per **Recovery** ([recovery/](recovery/), [RECOVERY_MODULES_PLAN.md](RECOVERY_MODULES_PLAN.md)), [LOGOUT_OVERVIEW.md](LOGOUT_OVERVIEW.md), aggiornamento `gdt.c`/`idt.c`/`sched.c`/`wm.c`/`graphics.c` e supporto `bootsect.asm`/`boot_menu.c`.
+
 ### 23 Novembre 2026
 - **NewOS Studio IDE (`STUDIO.DLL`), NewSoft SDK v3.0 (`NSRT.DLL`) & Gestione Progetti / Installer**:
   - Creato l'IDE out-of-kernel [studio.c](SystemLibrary/studio.c) (`STUDIO.DLL`, avviabile con `start studio`) a schermo intero stile Visual Studio con aggancio dinamico al motore temi (**Liquid Glass**, **Mica**, **Classic** + override **VS Dark**), **Form Designer `.xuiml`**, **Code Viewer** con **ScrollViewer** sottile e **Strumenti Codice** (analisi sintattica e autocompletamento SDK).

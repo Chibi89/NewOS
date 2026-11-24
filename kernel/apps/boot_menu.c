@@ -88,6 +88,8 @@ int boot_menu_show(void) {
                 else if (sc == 0x1C) key = '\n';
                 else if (sc == 0x11) key = 'w';
                 else if (sc == 0x1F) key = 's';
+                else if (sc == 0x13) key = 'r';
+                else if (sc == 0x1E) key = 'a';
             }
         }
         if (key) {
@@ -106,6 +108,8 @@ int boot_menu_show(void) {
         if (key == '8') { serial_log("[BOOT_MENU] Scelto 8 (Pannello Classico)\n"); return 8; }
         if (key == '9') { serial_log("[BOOT_MENU] Scelto 9 (Impostazioni Moderne)\n"); return 9; }
         if (key == '0') { serial_log("[BOOT_MENU] Scelto 0 (Proprieta' Mouse)\n"); return 10; }
+        if (key == 'r' || key == 'R') { serial_log("[BOOT_MENU] Scelto R (Ripristino Base)\n"); return 11; }
+        if (key == 'a' || key == 'A') { serial_log("[BOOT_MENU] Scelto A (Ripristino Avanzato)\n"); return 12; }
         if (key == '\n' || key == '\r') return selected;
         if (key == 'w' || key == 'W') selected = 1;
         if (key == 's' || key == 'S') selected = 2;
@@ -174,6 +178,17 @@ int boot_menu_show(void) {
         // ─── PULSANTI INFERIORI ───
         int32_t btn_y = by + bh - 42;
 
+        // Pulsanti Ripristino [R] Base / [A] Avanzato
+        int32_t rb_x = bx + 24;
+        int32_t ra_x = bx + 162;
+        gfx_fill_rect(rb_x, btn_y, 130, 26, COLOR_BTNFACE);
+        gfx_draw_bevel_rect(rb_x, btn_y, 130, 26, false);
+        gfx_draw_string(rb_x + 8, btn_y + 6, "[R] Ripr. Base", 0x055A3C, 0, true);
+
+        gfx_fill_rect(ra_x, btn_y, 146, 26, COLOR_BTNFACE);
+        gfx_draw_bevel_rect(ra_x, btn_y, 146, 26, false);
+        gfx_draw_string(ra_x + 8, btn_y + 6, "[A] Ripr. Avanz.", 0x7C2D12, 0, true);
+
         // Pulsante [ Avvia Live ]
         int32_t b1_x = bx + bw - 260;
         gfx_fill_rect(b1_x, btn_y, 115, 26, COLOR_BTNFACE);
@@ -187,6 +202,12 @@ int boot_menu_show(void) {
         gfx_draw_string(b2_x + 14, btn_y + 6, "Installa Ora", 0x0A246A, 0, true);
 
         if (clicked) {
+            if (mouse.x >= rb_x && mouse.x <= rb_x + 130 && mouse.y >= btn_y && mouse.y <= btn_y + 26) {
+                return 11;
+            }
+            if (mouse.x >= ra_x && mouse.x <= ra_x + 146 && mouse.y >= btn_y && mouse.y <= btn_y + 26) {
+                return 12;
+            }
             if (mouse.x >= b1_x && mouse.x <= b1_x + 115 && mouse.y >= btn_y && mouse.y <= btn_y + 26) {
                 return 1;
             }

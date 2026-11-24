@@ -105,6 +105,7 @@ void wm_toggle_maximize(int32_t id);
 
 void wm_set_background_type(int bg_type);
 int wm_get_background_type(void);
+void wm_animate_wallpaper_transition(bool enter);
 void wm_set_theme(int theme);
 void wm_set_start_menu_mode(int mode);
 int wm_get_start_menu_mode(void);

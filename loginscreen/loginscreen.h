@@ -2,6 +2,8 @@
 #define LOGINSCREEN_H
 
 #include <screen_modules.h>
+#include <kernel_ext_api.h>
+#include "../SystemLibrary/motion/nsmotion.h"
 
 // Entry point del modulo Loginscreen protetto
 int loginscreen_main(const kernel_api_t* api, const loginscreen_params_t* params);

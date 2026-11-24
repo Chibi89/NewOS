@@ -412,8 +412,22 @@ TUTTO IL CONTENUTO DI BUILD\\BIN E' VISIBILE DIRETTAMENTE SU QUESTO SUPPORTO.
     const jptl = buildPathTable(allDirs, true, false);
     const jptm = buildPathTable(allDirs, true, true);
 
-    // ─── 6. COSTRUZIONE VOLUME ISO TOTALE ───
-    const isoBuf = Buffer.alloc(totalCdSectors * SECTOR_SIZE, 0);
+    // ─── 6. COSTRUZIONE VOLUME ISO IN STREAMING (FINO A 4 GB MAX) ───
+    const MAX_ISO_BYTES = 4 * 1024 * 1024 * 1024; // 4 GB (limite massimo ISO 9660 uint32)
+    const totalIsoBytes = totalCdSectors * SECTOR_SIZE;
+    if (totalIsoBytes > MAX_ISO_BYTES) {
+        throw new Error(`[ISO] Dimensione ISO (${(totalIsoBytes / (1024 * 1024)).toFixed(2)} MB) supera il limite massimo di 4 GB!`);
+    }
+
+    let metaEndSector = 32;
+    for (const d of allDirs) {
+        metaEndSector = Math.max(
+            metaEndSector,
+            d.isoExtentSector + d.isoSectorCount,
+            d.jolietExtentSector + d.jolietSectorCount
+        );
+    }
+    const isoBuf = Buffer.alloc(metaEndSector * SECTOR_SIZE, 0);
 
     // Hybrid MBR al settore 0
     diskImgBuf.copy(isoBuf, 0, 0, 512);
@@ -557,30 +571,40 @@ TUTTO IL CONTENUTO DI BUILD\\BIN E' VISIBILE DIRETTAMENTE SU QUESTO SUPPORTO.
         }
     }
 
-    // Scrittura file data da build/bin
-    for (const d of allDirs) {
-        for (const f of d.files) {
-            if (f.name === 'NEWOS_V1.IMG') continue;
-            let fileBuf = f.buffer;
-            if (!fileBuf && f.fullPath) {
-                fileBuf = fs.readFileSync(f.fullPath);
-            }
-            if (fileBuf && fileBuf.length > 0) {
-                fileBuf.copy(isoBuf, f.extentSector * SECTOR_SIZE);
+    const tempOut = outIsoPath + '.tmp';
+    const fd = fs.openSync(tempOut, 'w');
+    try {
+        // 1. Scrive l'intero header metadati ISO/Joliet/ElTorito
+        fs.writeSync(fd, isoBuf, 0, isoBuf.length, 0);
+
+        // 2. Scrive i file data da build/bin direttamente al rispettivo offset
+        for (const d of allDirs) {
+            for (const f of d.files) {
+                if (f.name === 'NEWOS_V1.IMG') continue;
+                let fileBuf = f.buffer;
+                if (!fileBuf && f.fullPath) {
+                    fileBuf = fs.readFileSync(f.fullPath);
+                }
+                if (fileBuf && fileBuf.length > 0) {
+                    fs.writeSync(fd, fileBuf, 0, fileBuf.length, f.extentSector * SECTOR_SIZE);
+                }
             }
         }
+
+        // 3. Scrive Disk Image a BOOT_LBA (BIOS)
+        fs.writeSync(fd, diskImgBuf, 0, diskImgBuf.length, BOOT_LBA * SECTOR_SIZE);
+
+        // 4. Scrive EFI FAT Image a EFI_BOOT_LBA (UEFI)
+        if (efiFatBuf && EFI_BOOT_LBA > 0) {
+            fs.writeSync(fd, efiFatBuf, 0, efiFatBuf.length, EFI_BOOT_LBA * SECTOR_SIZE);
+        }
+
+        // 5. Allinea la dimensione finale esatta a totalIsoBytes
+        fs.ftruncateSync(fd, totalIsoBytes);
+    } finally {
+        fs.closeSync(fd);
     }
 
-    // Scrittura Disk Image a BOOT_LBA (BIOS)
-    diskImgBuf.copy(isoBuf, BOOT_LBA * SECTOR_SIZE);
-
-    // Scrittura EFI FAT Image a EFI_BOOT_LBA (UEFI)
-    if (efiFatBuf && EFI_BOOT_LBA > 0) {
-        efiFatBuf.copy(isoBuf, EFI_BOOT_LBA * SECTOR_SIZE);
-    }
-
-    const tempOut = outIsoPath + '.tmp';
-    fs.writeFileSync(tempOut, isoBuf);
     try {
         if (fs.existsSync(outIsoPath)) fs.unlinkSync(outIsoPath);
     } catch (e) {}
@@ -591,8 +615,8 @@ TUTTO IL CONTENUTO DI BUILD\\BIN E' VISIBILE DIRETTAMENTE SU QUESTO SUPPORTO.
         try { fs.unlinkSync(tempOut); } catch (e2) {}
     }
     console.log(`[ISO] Generata immagine ISO avviabile con successo: ${outIsoPath}`);
-    console.log(`[ISO] Dimensione: ${isoBuf.length} byte (${(isoBuf.length / (1024 * 1024)).toFixed(2)} MB), Settori CD: ${totalCdSectors}`);
-    return isoBuf.length;
+    console.log(`[ISO] Dimensione: ${totalIsoBytes} byte (${(totalIsoBytes / (1024 * 1024)).toFixed(2)} MB / max 4096 MB), Settori CD: ${totalCdSectors}`);
+    return totalIsoBytes;
 }
 
 function createIsoFromDiskImage(diskImgPath, outIsoPath, binDir) {

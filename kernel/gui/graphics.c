@@ -1339,3 +1339,5 @@ void gfx_draw_image(int32_t x, int32_t y, const image_t *img) {
     }
   }
 }
+
+uint32_t *gfx_get_backbuffer(void) { return lfb_back; }

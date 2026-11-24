@@ -8,6 +8,42 @@
 static idt_entry_t idt_entries[256];
 static idtr_t      idtr;
 static isr_handler_t interrupt_handlers[256];
+static uint64_t    g_ring3_crash_count = 0;
+static char        g_last_ring3_crash[128] = "Nessuno";
+
+static void idt_serial_puts(const char* s) {
+    if (!s) return;
+    while (*s) {
+        outb(0x3F8, *s++);
+    }
+}
+
+static const char* idt_exception_name(uint64_t vec) {
+    switch (vec) {
+        case 0:  return "#DE (Division by Zero)";
+        case 4:  return "#OF (Overflow)";
+        case 5:  return "#BR (Bound Range)";
+        case 6:  return "#UD (Invalid Opcode)";
+        case 7:  return "#NM (Device Not Available)";
+        case 10: return "#TS (Invalid TSS)";
+        case 11: return "#NP (Segment Not Present)";
+        case 12: return "#SS (Stack Fault)";
+        case 13: return "#GP (General Protection)";
+        case 14: return "#PF (Page Fault)";
+        case 16: return "#MF (x87 FPU Error)";
+        case 17: return "#AC (Alignment Check)";
+        case 19: return "#XM (SIMD FP Exception)";
+        default: return "CPU Exception";
+    }
+}
+
+uint64_t idt_get_ring3_crash_count(void) {
+    return g_ring3_crash_count;
+}
+
+const char* idt_get_last_ring3_crash(void) {
+    return g_last_ring3_crash;
+}
 
 // Dichiarazioni esterne per gli stubs assembly
 extern void isr0(void);
@@ -78,7 +114,33 @@ uint64_t isr_handler_main(interrupt_frame_t* frame) {
     if (interrupt_handlers[frame->int_no] != NULL) {
         interrupt_handlers[frame->int_no](frame);
     } else if (frame->int_no < 32) {
-        // Eccezione CPU non gestita -> BSOD diagnostica
+        /* Anti-Crash Ring 3: se l'eccezione proviene da User-Space (CPL=3),
+         * termina solo il processo colpevole e ripristina il kernel/desktop senza BSOD. */
+        if ((frame->cs & 3) == 3) {
+            uint64_t cr2 = 0;
+            if (frame->int_no == 14) {
+                __asm__ volatile("mov %%cr2, %0" : "=r"(cr2));
+            }
+            task_t* cur = sched_get_current_task();
+            g_ring3_crash_count++;
+            mini_snprintf(g_last_ring3_crash, sizeof(g_last_ring3_crash),
+                          "%s PID=%u (%s) RIP=0x%llx CR2=0x%llx",
+                          idt_exception_name(frame->int_no),
+                          cur ? cur->pid : 0,
+                          cur ? cur->name : "UserApp",
+                          (unsigned long long)frame->rip,
+                          (unsigned long long)cr2);
+            idt_serial_puts("[ANTI-CRASH RING3] ");
+            idt_serial_puts(g_last_ring3_crash);
+            idt_serial_puts(" -> Processo terminato, 0 BSOD!\n");
+
+            if (cur && cur->pid != 0) {
+                cur->state = TASK_STATE_TERMINATED;
+                cur->time_slice = 0;
+                return (uint64_t)sched_schedule(frame);
+            }
+        }
+        // Eccezione CPU in Ring 0 (Kernel) -> BSOD diagnostica
         bsod_from_exception(frame);
     }
 

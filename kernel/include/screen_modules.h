@@ -20,6 +20,8 @@
 #define MODULE_TYPE_UPDATE 6
 #define MODULE_TYPE_SYSTEM_LIBRARY 7
 #define MODULE_TYPE_OOBE 8
+#define MODULE_TYPE_RECOVERY_BASIC 9
+#define MODULE_TYPE_RECOVERY_ADV 10
 
 #define SEC_FLAG_PROTECTED 0x01
 #define SEC_FLAG_SYSTEM_SIGNED 0x02
@@ -245,16 +247,26 @@ typedef enum {
 } loginscreen_result_t;
 
 // Parametri e risultati Logoutscreen
+typedef enum {
+  LOGOUT_MODE_SHUTDOWN = 1,      /* Shutdown: salva, SafeCheck, SYSTEM.PAK, spegni */
+  LOGOUT_MODE_CHANGE_USER = 2,   /* ChangeUser: lascia sessione attiva, apri Login */
+  LOGOUT_MODE_CLOSE_SESSION = 3, /* CloseUserSession: chiudi sessione attiva, apri Login */
+  LOGOUT_MODE_REBOOT = 4,        /* Reboot: salva, SafeCheck, SYSTEM.PAK, riavvia */
+  LOGOUT_MODE_SUSPEND = 5        /* Suspend: standby schermo */
+} logout_mode_t;
+
 typedef struct {
   const char *current_user;
+  logout_mode_t mode;
 } logoutscreen_params_t;
 
 typedef enum {
-  LOGOUT_ACTION_DISCONNECT = 0,
-  LOGOUT_ACTION_SHUTDOWN = 1,
+  LOGOUT_ACTION_DISCONNECT = 0,  /* CloseUserSession: chiude sessione utente attivo */
+  LOGOUT_ACTION_SHUTDOWN = 1,    /* Shutdown: salva, verifica, ripara da SYSTEM.PAK, spegne */
   LOGOUT_ACTION_REBOOT = 2,
   LOGOUT_ACTION_SUSPEND = 3,
-  LOGOUT_ACTION_CANCEL = 4
+  LOGOUT_ACTION_CANCEL = 4,
+  LOGOUT_ACTION_CHANGE_USER = 5  /* ChangeUser: lascia sessione attiva, login altro utente */
 } logoutscreen_result_t;
 
 // Parametri e risultati BootSetup (Installer)
@@ -308,5 +320,21 @@ typedef enum {
 
 typedef int (*oobe_entry_fn)(const kernel_api_t *api,
                              const oobe_params_t *params);
+
+// Parametri e risultati Recovery Modules (RECBASIC.MOD / RECADV.MOD)
+typedef struct {
+  int trigger_source; // 0 = BootMenu, 1 = BootIniAuto
+  bool auto_execute;
+} recovery_params_t;
+
+typedef enum {
+  RECOVERY_CONTINUE = 0,
+  RECOVERY_REBOOT = 1,
+  RECOVERY_SHUTDOWN = 2,
+  RECOVERY_ERROR = -1
+} recovery_result_t;
+
+typedef int (*recovery_entry_fn)(const kernel_api_t *api,
+                                 const recovery_params_t *params);
 
 #endif // SCREEN_MODULES_H

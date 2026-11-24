@@ -31,5 +31,7 @@ void idt_init(void);
 void idt_set_gate(uint8_t num, uint64_t base, uint16_t sel, uint8_t flags);
 void register_interrupt_handler(uint8_t n, isr_handler_t handler);
 uint64_t isr_handler_main(interrupt_frame_t* frame);
+uint64_t idt_get_ring3_crash_count(void);
+const char* idt_get_last_ring3_crash(void);
 
 #endif // ARCH_IDT_H

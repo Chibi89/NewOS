@@ -4,7 +4,9 @@
 #ifndef NEWOS_SDK_GFX_H
 #define NEWOS_SDK_GFX_H
 
+#ifndef TYPES_H
 #include "types.h"
+#endif
 
 #define NS_RGB(r, g, b)       ((uint32_t)(0xFF000000u | (((uint32_t)(r) & 0xFF) << 16) | (((uint32_t)(g) & 0xFF) << 8) | ((uint32_t)(b) & 0xFF)))
 #define NS_RGBA(r, g, b, a)   ((uint32_t)((((uint32_t)(a) & 0xFF) << 24) | (((uint32_t)(r) & 0xFF) << 16) | (((uint32_t)(g) & 0xFF) << 8) | ((uint32_t)(b) & 0xFF)))

@@ -4,6 +4,7 @@
 #include <apps/player.h>
 #include <apps/whatsnew.h>
 #include <arch/x86_64/cpu.h>
+#include <arch/x86_64/gdt.h>
 #include <arch/x86_64/idt.h>
 #include <arch/x86_64/io.h>
 #include <arch/x86_64/pic.h>
@@ -63,6 +64,35 @@ static void sys_monitor_task(void *arg) {
   }
 }
 
+static void ring3_anticrash_selftest(void) {
+  uint64_t *u_pml4 = paging_create_address_space();
+  uint8_t *code_pg = (uint8_t *)kmalloc_aligned(4096, 4096);
+  void *stack_pg = kmalloc_aligned(4096, 4096);
+  if (!u_pml4 || !code_pg || !stack_pg) {
+    return;
+  }
+
+  const uint64_t u_code_va = 0x0000008000000000ULL;
+  const uint64_t u_stack_va = 0x0000008000010000ULL;
+  paging_map_page(u_pml4, u_code_va, (uint64_t)code_pg, PAGE_USER | PAGE_WRITABLE);
+  paging_map_page(u_pml4, u_stack_va, (uint64_t)stack_pg, PAGE_USER | PAGE_WRITABLE);
+
+  /* Codice Ring 3 di test: xor rax, rax; mov dword [rax], 0xDEAD; jmp $ */
+  const uint8_t bad_code[] = {0x48, 0x31, 0xC0, 0xC7, 0x00, 0xAD, 0xDE, 0x00, 0x00, 0xEB, 0xFE};
+  memcpy(code_pg, bad_code, sizeof(bad_code));
+
+  uint64_t before = idt_get_ring3_crash_count();
+  uint32_t pid = task_create_user("Ring3CrashTest", u_code_va, u_stack_va + 4080, (uint64_t)u_pml4, 0);
+  if (pid != 0) {
+    for (int i = 0; i < 8 && idt_get_ring3_crash_count() == before; i++) {
+      sched_yield();
+    }
+    if (idt_get_ring3_crash_count() > before) {
+      serial_puts("[ANTI-CRASH] Self-test Ring 3 superato: crash isolato, 0 BSOD!\n");
+    }
+  }
+}
+
 void kernel_main(BootInfo *binfo) {
   if (binfo) {
     memcpy(&g_boot_info, binfo, sizeof(BootInfo));
@@ -98,6 +128,7 @@ void kernel_main(BootInfo *binfo) {
   // Inizializza VFS e monta volume exFAT C:\ (LBA 2048)
   if (vfs_init()) {
     outb(0x3F8, 'F');
+    screen_mgr_update_boot_ini_reboot_trick(false);
   }
 
   // Pre-carica BSOD.DLL e KERNEL.SYM in RAM per gestione crash zero-disk
@@ -106,7 +137,8 @@ void kernel_main(BootInfo *binfo) {
   // Inizializza Sottosistema Modulare Driver (C:\SYSTEM\DRIVERS\)
   driver_mgr_init();
 
-  // 2. IDT
+  // 2. GDT (con segmenti Ring 3 + TSS RSP0) & IDT (con Anti-Crash Ring 3)
+  gdt_init();
   idt_init();
   outb(0x3F8, '2');
 
@@ -121,6 +153,7 @@ void kernel_main(BootInfo *binfo) {
   sched_init();
   ipc_init();
   syscall_init();
+  ring3_anticrash_selftest();
   task_create("SysMonitor", sys_monitor_task, NULL, 2);
   keyboard_init();
   mouse_init(binfo->width, binfo->height);
@@ -153,6 +186,20 @@ void kernel_main(BootInfo *binfo) {
   // 7. Esecuzione Modulo Bootscreen Esterno Protetto (Splash Screen ufficiale
   // con logo NewOS)
   screen_mgr_init();
+
+  // Controllo trigger automatico RecoveryMode=BASIC/ADVANCED da boot.ini
+  // (VFS, framebuffer e input sono gia' attivi; nessuna dipendenza bloccante da .DLL)
+  int auto_recovery = screen_mgr_consume_boot_recovery_mode();
+  if (auto_recovery == 1) {
+    recovery_result_t rres = screen_mgr_run_recovery_basic();
+    if (rres == RECOVERY_REBOOT) power_reboot();
+    else if (rres == RECOVERY_SHUTDOWN) power_shutdown();
+  } else if (auto_recovery == 2) {
+    recovery_result_t rres = screen_mgr_run_recovery_advanced();
+    if (rres == RECOVERY_REBOOT) power_reboot();
+    else if (rres == RECOVERY_SHUTDOWN) power_shutdown();
+  }
+
   screen_mgr_run_bootscreen();
 
   // 7b. Controllo Azione Straordinaria di Aggiornamento Fuori Sessione
@@ -194,11 +241,17 @@ void kernel_main(BootInfo *binfo) {
 
   if (bypass_boot && !force_boot_menu) {
     boot_action_set_direct_login();
-    loginscreen_result_t login_res = screen_mgr_run_loginscreen();
-    if (login_res == LOGIN_SHUTDOWN) {
-      power_shutdown();
-    } else if (login_res == LOGIN_REBOOT) {
-      power_reboot();
+    while (1) {
+      loginscreen_result_t login_res = screen_mgr_run_loginscreen();
+      if (login_res == LOGIN_SHUTDOWN) {
+        logoutscreen_result_t lout = screen_mgr_run_logoutscreen();
+        if (lout == LOGOUT_ACTION_SHUTDOWN) power_shutdown();
+        else if (lout == LOGOUT_ACTION_REBOOT) power_reboot();
+        else if (lout == LOGOUT_ACTION_CANCEL) continue;
+      } else if (login_res == LOGIN_REBOOT) {
+        power_reboot();
+      }
+      break;
     }
   } else {
     // Schermata iniziale di Selezione Boot ("1. Live" o "2. Installa NewOS V1")
@@ -210,7 +263,15 @@ void kernel_main(BootInfo *binfo) {
     // ed estrae tutti i file. 2° Eredita UI classic Win2000 con sfondo
     // LOGIN.BMP. 3° Terminato il setup ed estratti i file, procede direttamente
     // all'avvio dell'OOBE.
-    if (boot_choice == 2) {
+    if (boot_choice == 11) {
+      recovery_result_t rres = screen_mgr_run_recovery_basic();
+      if (rres == RECOVERY_REBOOT) power_reboot();
+      else if (rres == RECOVERY_SHUTDOWN) power_shutdown();
+    } else if (boot_choice == 12) {
+      recovery_result_t rres = screen_mgr_run_recovery_advanced();
+      if (rres == RECOVERY_REBOOT) power_reboot();
+      else if (rres == RECOVERY_SHUTDOWN) power_shutdown();
+    } else if (boot_choice == 2) {
       bootsetup_result_t setup_res = screen_mgr_run_bootsetup();
       if (setup_res == BOOTSETUP_CANCELLED) {
         power_reboot();
@@ -236,11 +297,17 @@ void kernel_main(BootInfo *binfo) {
           power_reboot();
         }
       } else {
-        loginscreen_result_t login_res = screen_mgr_run_loginscreen();
-        if (login_res == LOGIN_SHUTDOWN) {
-          power_shutdown();
-        } else if (login_res == LOGIN_REBOOT) {
-          power_reboot();
+        while (1) {
+          loginscreen_result_t login_res = screen_mgr_run_loginscreen();
+          if (login_res == LOGIN_SHUTDOWN) {
+            logoutscreen_result_t lout = screen_mgr_run_logoutscreen();
+            if (lout == LOGOUT_ACTION_SHUTDOWN) power_shutdown();
+            else if (lout == LOGOUT_ACTION_REBOOT) power_reboot();
+            else if (lout == LOGOUT_ACTION_CANCEL) continue;
+          } else if (login_res == LOGIN_REBOOT) {
+            power_reboot();
+          }
+          break;
         }
       }
     }
@@ -270,6 +337,7 @@ void kernel_main(BootInfo *binfo) {
     theme_mgr_apply(g_idx);
   else
     theme_mgr_apply(1);
+  wm_animate_wallpaper_transition(true);
   cursor_loader_init();
   // Riproduce il suono di avvio reale .WAV da disco exFAT
   if (!sound_play_wav_file("C:\\NewOS\\Resources\\Sounds\\STARTUP.WAV") &&
